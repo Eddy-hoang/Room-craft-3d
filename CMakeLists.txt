@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RoomCraft3D
-    VERSION 0.4.0
+    VERSION 0.5.0
     DESCRIPTION "RoomCraft 3D - Desktop 3D Interior Design and Room Planner"
     LANGUAGES C CXX
 )
@@ -226,13 +226,14 @@ else()
 endif()
 
 # ==============================================================================
-# 1. roomcraft_math (CPU-only): Transform, Camera (+Auto-Fit), BoundingBox, MeshValidation
+# 1. roomcraft_math (CPU-only): Transform, Camera (+Auto-Fit), BoundingBox, Ray/Plane/Intersection, MeshValidation
 # ==============================================================================
 add_library(roomcraft_math STATIC
     src/scene/Transform.cpp
     src/graphics/Camera.cpp
     src/graphics/MeshValidation.cpp
     src/math/BoundingBox.cpp
+    src/math/Intersection.cpp
 )
 target_include_directories(roomcraft_math PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -279,13 +280,18 @@ target_link_libraries(roomcraft_assets PUBLIC
 
 # ==============================================================================
 # 4. roomcraft_scene (CPU-only, KHÔNG phụ thuộc OpenGL/FreeGLUT/ImGui):
-#    ObjectId, SceneObject, RoomSettings, Room, Scene, SelectionState, PlacementSystem, ScenePresets
+#    Scene/Room/Presets + M5 CameraController, PickingSystem, TransformController, InputManager, ViewportInteraction
 # ==============================================================================
 add_library(roomcraft_scene STATIC
     src/scene/Room.cpp
     src/scene/Scene.cpp
     src/scene/ScenePresets.cpp
     src/systems/PlacementSystem.cpp
+    src/systems/CameraController.cpp
+    src/systems/PickingSystem.cpp
+    src/systems/TransformController.cpp
+    src/core/InputManager.cpp
+    src/editor/ViewportInteraction.cpp
 )
 target_include_directories(roomcraft_scene PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -412,16 +418,29 @@ add_executable(RoomCraft3D_SceneUnitTests
 )
 target_link_libraries(RoomCraft3D_SceneUnitTests PRIVATE roomcraft_scene)
 
+# 5. M5 Camera, Ray Casting, Object Picking & Interaction Unit Tests (CPU-only, không cần OpenGL context)
+add_executable(RoomCraft3D_InteractionUnitTests
+    tests/unit/InteractionTestMain.cpp
+    tests/unit/RayTests.cpp
+    tests/unit/IntersectionTests.cpp
+    tests/unit/CameraControllerTests.cpp
+    tests/unit/PickingTests.cpp
+    tests/unit/InteractionTests.cpp
+)
+target_link_libraries(RoomCraft3D_InteractionUnitTests PRIVATE roomcraft_scene)
+
 if(MSVC)
     target_compile_options(RoomCraft3D_UnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_GeometryUnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_AssetUnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_SceneUnitTests PRIVATE /W4 /permissive- /utf-8)
+    target_compile_options(RoomCraft3D_InteractionUnitTests PRIVATE /W4 /permissive- /utf-8)
 else()
     target_compile_options(RoomCraft3D_UnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_GeometryUnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_AssetUnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_SceneUnitTests PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(RoomCraft3D_InteractionUnitTests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 if(MINGW)
@@ -429,6 +448,7 @@ if(MINGW)
     target_link_options(RoomCraft3D_GeometryUnitTests PRIVATE -static)
     target_link_options(RoomCraft3D_AssetUnitTests PRIVATE -static)
     target_link_options(RoomCraft3D_SceneUnitTests PRIVATE -static)
+    target_link_options(RoomCraft3D_InteractionUnitTests PRIVATE -static)
 endif()
 
 add_test(NAME M0_SmokeTest             COMMAND $<TARGET_FILE:RoomCraft3D> --smoke-test)
@@ -440,3 +460,5 @@ add_test(NAME M3_AssetUnitTests        COMMAND $<TARGET_FILE:RoomCraft3D_AssetUn
 add_test(NAME M3_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m3-smoke-test)
 add_test(NAME M4_SceneUnitTests        COMMAND $<TARGET_FILE:RoomCraft3D_SceneUnitTests>)
 add_test(NAME M4_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m4-smoke-test)
+add_test(NAME M5_InteractionUnitTests  COMMAND $<TARGET_FILE:RoomCraft3D_InteractionUnitTests>)
+add_test(NAME M5_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m5-smoke-test)

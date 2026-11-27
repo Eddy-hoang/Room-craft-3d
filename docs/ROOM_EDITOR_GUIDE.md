@@ -39,5 +39,17 @@ Mặc định chương trình mở trực tiếp **Room Editor (M4)** với căn
 
 RoomCraft 3D không ép mọi vật thể ở `Y = 0`:
 - Ví dụ `Procedural Desk` có chiều cao mặt bàn mặc định `0.75 m`.
-- Chọn `Computer Setup` hoặc `Desk Lamp` trong **Scene Hierarchy**, đặt `Position Y = 0.750` trong **Properties Inspector** để đặt khít lên mặt bàn.
+- Chọn `Computer Setup` hoặc `Desk Lamp` trong **Scene Hierarchy** (hoặc click trực tiếp trong Viewport 3D), đặt `Position Y = 0.750` trong **Properties Inspector** — hoặc giữ phím `Y` trong chế độ `Move (G)` để kéo lên/xuống.
+- Khi kéo vật thể trên mặt phẳng ngang bằng chuột trái, hệ thống tự động giữ nguyên cao độ `Y` hiện tại của vật thể (không rơi xuống sàn).
 - Với thảm (`Minimalist Carpet`), mặc định `Position Y = 0.003` (3 mm) để tránh hiện tượng z-fighting với mặt sàn `Y = 0`.
+
+## 4. Thao tác trực tiếp bằng Chuột & Phím tắt (Milestone M5)
+
+- **Chuột phải kéo**: Orbit Camera quanh mục tiêu.
+- **Chuột giữa kéo**: Pan Camera.
+- **Con lăn chuột**: Zoom vào/ra.
+- **Click chuột trái**: Chọn vật thể trực tiếp trong không gian 3D (Ray–AABB + Möller–Trumbore Ray–Triangle + Wall Occlusion).
+- **Kéo chuột trái**: Thực hiện `Move (G)`, `Rotate (R)` hoặc `Scale (S)` ngay trên Viewport; nhấn `X / Y / Z` để khóa trục, nhấn **`Esc`** để hủy và khôi phục Transform ban đầu.
+- **Khóa vật thể (`Locked`)**: Đánh dấu checkbox `Locked` trong Inspector để khóa vật thể (vẫn có thể chọn xem thông tin nhưng không thể kéo/xoay/scale/xóa nhầm).
+
+Xem bảng phím tắt đầy đủ và máy trạng thái tương tác tại [`docs/INTERACTION_GUIDE.md`](INTERACTION_GUIDE.md).

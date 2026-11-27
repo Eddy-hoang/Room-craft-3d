@@ -128,3 +128,18 @@ Tại Milestone M4, ứng dụng mở rộng từ hiển thị một vật thể
 - **World-Space AABB (`SceneObject::getWorldBounds`)**: Biến đổi cả 8 góc của `localBounds` bằng $M_{\text{object}}$ để xác định phạm vi thế giới chính xác sau khi xoay/co giãn, phục vụ `Fit Selected Object` và kiểm tra sơ bộ vượt biên phòng.
 
 Xem chi tiết sơ đồ lớp, sơ đồ tuần tự và luồng render tại [`docs/SCENE_MANAGEMENT.md`](SCENE_MANAGEMENT.md).
+
+---
+
+## 10. Milestone M5 — Orbit Camera, Ray Casting, Picking 2 Giai đoạn & Ray–Plane Drag
+
+- **Tọa độ cầu (Orbit Camera)**: Vị trí camera quanh mục tiêu $\mathbf{T}$ với khoảng cách $r$, yaw $\theta$, pitch $\phi \in [-85^\circ, +85^\circ]$:
+  $$\mathbf{P} = \mathbf{T} + \big(r\cos\phi\cos\theta,\; r\sin\phi,\; r\cos\phi\sin\theta\big)$$
+- **Screen-to-World Ray**: Ánh xạ tọa độ chuột trong `ViewportRect` sang OpenGL NDC $[-1, +1]$ (lật trục $Y$), giải chiếu `Near (z = -1)` và `Far (z = +1)` bằng $(P \cdot V)^{-1}$ kèm phép chia thuần nhất cho $w$ — hoạt động thống nhất cho cả **Perspective** (tia tỏa ra) và **Orthographic** (gốc tia thay đổi theo chuột, hướng tia song song).
+- **Picking 2 giai đoạn & Che khuất tường**:
+  1. **Broad-phase (`Slab Method`)**: Giao tia với World-space AABB trên 3 trục $X, Y, Z$, xử lý an toàn tia song song không chia cho $0$.
+  2. **Narrow-phase (`Möller–Trumbore`)**: Kiểm tra giao tia với từng tam giác thực của sub-mesh (áp dụng $M_{\text{world\_part}}$ một lần duy nhất), xuyên qua khoảng trống gầm bàn/ghế.
+  3. **Wall Occlusion**: Loại bỏ các ứng viên bị che khuất sau tường đang hiển thị (`t_hit > t_wall`); tường ẩn trong `Cutaway View` không chặn tia.
+- **Kéo thả trên mặt phẳng ngang (`Ray–Plane`)**: Tính $t = \frac{(P_0 - \mathbf{O})\cdot\mathbf{N}}{\mathbf{D}\cdot\mathbf{N}}$ trên mặt phẳng $y = y_{\text{initial}}$ kèm `grabOffset`, bảo toàn cao độ $Y$ cho vật đặt trên bàn/kệ.
+
+Xem phân tích toán học đầy đủ, mã giả và sơ đồ tại [`docs/CAMERA_SYSTEM.md`](CAMERA_SYSTEM.md), [`docs/OBJECT_PICKING.md`](OBJECT_PICKING.md) và [`docs/INTERACTION_GUIDE.md`](INTERACTION_GUIDE.md).

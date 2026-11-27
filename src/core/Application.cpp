@@ -3,8 +3,12 @@
 #include "roomcraft/geometry/GeometryUtils.hpp"
 #include "roomcraft/geometry/PrimitiveGenerator.hpp"
 #include "roomcraft/geometry/RevolutionSurface.hpp"
+#include "roomcraft/math/Ray.hpp"
+#include "roomcraft/systems/PickingSystem.hpp"
+#include "roomcraft/systems/TransformController.hpp"
 
 #include <glad/glad.h>
+#include <GL/freeglut.h>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -93,36 +97,78 @@ bool Application::initialize(int& argc, char** argv)
         if (m_imguiInitialized) {
             ImGui_ImplGLUT_KeyboardUpFunc(key, x, y);
         }
+        m_inputManager.onKeyUp(key);
     };
     callbacks.onSpecial = [this](int key, int x, int y) {
         if (m_imguiInitialized) {
             ImGui_ImplGLUT_SpecialFunc(key, x, y);
+        }
+        const int mods = glutGetModifiers();
+        const bool ctrl = (mods & GLUT_ACTIVE_CTRL) != 0;
+        const bool shift = (mods & GLUT_ACTIVE_SHIFT) != 0;
+        const bool alt = (mods & GLUT_ACTIVE_ALT) != 0;
+        SpecialKey sk = SpecialKey::None;
+        if (key == GLUT_KEY_HOME) sk = SpecialKey::Home;
+        else if (key == GLUT_KEY_END) sk = SpecialKey::End;
+        else if (key == GLUT_KEY_UP) sk = SpecialKey::Up;
+        else if (key == GLUT_KEY_DOWN) sk = SpecialKey::Down;
+        else if (key == GLUT_KEY_LEFT) sk = SpecialKey::Left;
+        else if (key == GLUT_KEY_RIGHT) sk = SpecialKey::Right;
+        if (sk != SpecialKey::None) {
+            m_inputManager.onSpecialKeyDown(sk, ctrl, shift, alt);
         }
     };
     callbacks.onSpecialUp = [this](int key, int x, int y) {
         if (m_imguiInitialized) {
             ImGui_ImplGLUT_SpecialUpFunc(key, x, y);
         }
+        SpecialKey sk = SpecialKey::None;
+        if (key == GLUT_KEY_HOME) sk = SpecialKey::Home;
+        else if (key == GLUT_KEY_END) sk = SpecialKey::End;
+        else if (key == GLUT_KEY_UP) sk = SpecialKey::Up;
+        else if (key == GLUT_KEY_DOWN) sk = SpecialKey::Down;
+        else if (key == GLUT_KEY_LEFT) sk = SpecialKey::Left;
+        else if (key == GLUT_KEY_RIGHT) sk = SpecialKey::Right;
+        if (sk != SpecialKey::None) {
+            m_inputManager.onSpecialKeyUp(sk);
+        }
     };
     callbacks.onMouse = [this](int button, int state, int x, int y) {
         if (m_imguiInitialized) {
             ImGui_ImplGLUT_MouseFunc(button, state, x, y);
+        }
+        const bool down = (state == GLUT_DOWN);
+        if (button == GLUT_LEFT_BUTTON) {
+            m_inputManager.onMouseButton(MouseButton::Left, down, static_cast<float>(x), static_cast<float>(y));
+        } else if (button == GLUT_MIDDLE_BUTTON) {
+            m_inputManager.onMouseButton(MouseButton::Middle, down, static_cast<float>(x), static_cast<float>(y));
+        } else if (button == GLUT_RIGHT_BUTTON) {
+            m_inputManager.onMouseButton(MouseButton::Right, down, static_cast<float>(x), static_cast<float>(y));
+        } else if (button == 3 && down) {
+            // Dự phòng cuộn chuột lên trên một số cấu hình FreeGLUT
+            m_inputManager.onMouseWheel(1.0f);
+        } else if (button == 4 && down) {
+            m_inputManager.onMouseWheel(-1.0f);
         }
     };
     callbacks.onMouseWheel = [this](int wheel, int direction, int x, int y) {
         if (m_imguiInitialized) {
             ImGui_ImplGLUT_MouseWheelFunc(wheel, direction, x, y);
         }
+        m_inputManager.onMouseMove(static_cast<float>(x), static_cast<float>(y));
+        m_inputManager.onMouseWheel(static_cast<float>(direction));
     };
     callbacks.onMotion = [this](int x, int y) {
         if (m_imguiInitialized) {
             ImGui_ImplGLUT_MotionFunc(x, y);
         }
+        m_inputManager.onMouseMove(static_cast<float>(x), static_cast<float>(y));
     };
     callbacks.onPassiveMotion = [this](int x, int y) {
         if (m_imguiInitialized) {
             ImGui_ImplGLUT_MotionFunc(x, y);
         }
+        m_inputManager.onMouseMove(static_cast<float>(x), static_cast<float>(y));
     };
     m_window.setCallbacks(std::move(callbacks));
 
@@ -229,6 +275,21 @@ int Application::run()
         std::cout << "[M4-BENCH] Benchmark suite       : " << (m_m4BenchmarkPassed ? "PASS" : "FAIL") << std::endl;
         std::cout << "[M4-BENCH] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
         const bool passed = m_m4BenchmarkExecuted && m_m4BenchmarkPassed && !m_glErrorDetected;
+        return passed ? 0 : 1;
+    }
+
+    if (m_config.mode == ApplicationMode::SmokeTestM5) {
+        const auto& stats = m_renderer.getLastFrameStats();
+        std::cout << "[M5-SMOKE] Frames rendered       : " << m_frameCount << std::endl;
+        std::cout << "[M5-SMOKE] Last frame draw calls : " << stats.drawCalls
+                  << " (vertices=" << stats.vertexCount << ", indices=" << stats.indexCount
+                  << ", triangles=" << stats.triangleCount << ")" << std::endl;
+        std::cout << "[M5-SMOKE] Integration suite     : " << (m_m5SuitePassed ? "PASS" : "FAIL") << std::endl;
+        std::cout << "[M5-SMOKE] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
+
+        const bool passed = (m_frameCount >= m_config.smokeTestFrames) &&
+                            m_m5SuiteExecuted && m_m5SuitePassed && !m_glErrorDetected;
+        std::cout << "[M5-SMOKE] Final Result          : " << (passed ? "PASS" : "FAIL") << std::endl;
         return passed ? 0 : 1;
     }
 
@@ -820,6 +881,15 @@ void Application::renderFrame()
         return;
     }
 
+    if (m_config.mode == ApplicationMode::SmokeTestM5 && !m_m5SuiteExecuted) {
+        m_m5SuiteExecuted = true;
+        m_m5SuitePassed = runM5IntegrationSuiteOnce();
+        m_workspace = InteractiveWorkspace::RoomEditorM4;
+        m_framebuffer.resize(800, 600);
+        m_camera.setAspectRatio(800.0f / 600.0f);
+        m_roomEditor.initialize(m_assetManager, m_camera);
+    }
+
     renderInteractiveFrame();
 
     if (m_config.mode == ApplicationMode::SmokeTestM1) {
@@ -834,7 +904,8 @@ void Application::renderFrame()
 
     if (m_config.mode == ApplicationMode::SmokeTestM2 ||
         m_config.mode == ApplicationMode::SmokeTestM3 ||
-        m_config.mode == ApplicationMode::SmokeTestM4) {
+        m_config.mode == ApplicationMode::SmokeTestM4 ||
+        m_config.mode == ApplicationMode::SmokeTestM5) {
         if (m_frameCount >= m_config.smokeTestFrames) {
             m_window.requestClose();
             return;
@@ -1071,14 +1142,15 @@ void Application::renderInteractiveFrame()
     renderTopWorkspaceBar();
 
     if (m_workspace == InteractiveWorkspace::RoomEditorM4) {
-        m_roomEditor.renderUi(m_window.getWidth(),
-                              m_window.getHeight(),
-                              ImGui::GetFrameHeight(),
-                              m_assetManager,
-                              m_camera,
-                              m_framebuffer,
-                              m_currentFps,
-                              m_frameTimeMs);
+        m_roomEditor.renderUiAndProcessInput(m_window.getWidth(),
+                                             m_window.getHeight(),
+                                             ImGui::GetFrameHeight(),
+                                             m_inputManager,
+                                             m_assetManager,
+                                             m_camera,
+                                             m_framebuffer,
+                                             m_currentFps,
+                                             m_frameTimeMs);
     } else if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
         renderAssetBrowserUi();
     } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2) {
@@ -1106,6 +1178,7 @@ void Application::renderInteractiveFrame()
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+    m_inputManager.endFrame();
     drainAndCheckOpenGlErrors();
     m_window.swapBuffers();
 }
@@ -1113,7 +1186,7 @@ void Application::renderInteractiveFrame()
 void Application::renderTopWorkspaceBar()
 {
     if (ImGui::BeginMainMenuBar()) {
-        ImGui::TextUnformatted("RoomCraft 3D v0.4.0");
+        ImGui::TextUnformatted("RoomCraft 3D v0.5.0");
         ImGui::Separator();
 
         const bool isM4 = (m_workspace == InteractiveWorkspace::RoomEditorM4);
@@ -1121,8 +1194,9 @@ void Application::renderTopWorkspaceBar()
         const bool isM2 = (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2);
         const bool isM1 = (m_workspace == InteractiveWorkspace::ReferenceSceneM1);
 
-        if (ImGui::MenuItem("Room Editor (M4)", nullptr, isM4)) {
+        if (ImGui::MenuItem("Room Editor (M4/M5)", nullptr, isM4)) {
             m_workspace = InteractiveWorkspace::RoomEditorM4;
+            m_inputManager.resetAll();
             m_roomEditor.setPerspective3DCamera(m_camera);
         }
         if (ImGui::MenuItem("Asset Browser (M3)", nullptr, isM3)) {
@@ -2373,6 +2447,190 @@ bool Application::runM4IntegrationSuiteOnce()
     return allPassed;
 }
 
+bool Application::runM5IntegrationSuiteOnce()
+{
+    bool allPassed = true;
+    const auto report = [&allPassed](const char* id, const char* desc, bool ok) {
+        std::cout << "[" << id << "] " << desc << ": " << (ok ? "PASS" : "FAIL") << std::endl;
+        if (!ok) allPassed = false;
+    };
+
+    graphics::Framebuffer fbo;
+    if (!fbo.create(640, 480) || !fbo.isComplete()) {
+        report("TC-M5-38", "Create 640x480 FBO for M5 GPU integration suite", false);
+        return false;
+    }
+
+    scene::Scene testScene;
+    systems::SelectionState selection;
+    systems::CameraController camCtrl;
+    systems::InteractionState interaction;
+    graphics::SceneRenderer sceneRenderer;
+
+    std::string err;
+    const bool presetLoaded = scene::ScenePresets::applyPreset(
+        scene::ScenePresetType::GamingWorkspace, testScene, m_assetManager.getCatalog(), &err);
+
+    graphics::Camera cam;
+    cam.setAspectRatio(640.0f / 480.0f);
+    camCtrl.setPerspectivePreset(testScene.getRoom().getExteriorBounds(), cam);
+
+    const auto assetLookup = [this](const std::string& assetId) -> const assets::AssetData* {
+        auto gpu = m_assetManager.getOrLoadAsset(assetId, nullptr);
+        return gpu ? &gpu->cpuData : nullptr;
+    };
+
+    // Helper chiếu điểm thế giới 3D sang tọa độ màn hình nằm trong ViewportRect
+    auto projectWorldToViewport = [](const glm::vec3& worldPos,
+                                     const graphics::Camera& c,
+                                     const math::ViewportRect& vp,
+                                     glm::vec2& outScreen) -> bool {
+        const glm::vec4 clip = c.getProjectionMatrix() * c.getViewMatrix() * glm::vec4(worldPos, 1.0f);
+        if (std::fabs(clip.w) < 1e-6f) return false;
+        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        outScreen.x = vp.minX + (ndc.x * 0.5f + 0.5f) * vp.getWidth();
+        outScreen.y = vp.minY + (0.5f - ndc.y * 0.5f) * vp.getHeight();
+        return vp.contains(outScreen.x, outScreen.y);
+    };
+
+    math::ViewportRect vp;
+    vp.minX = 280.0f;
+    vp.minY = 72.0f;
+    vp.maxX = vp.minX + 640.0f;
+    vp.maxY = vp.minY + 480.0f;
+    vp.framebufferWidth = 640.0f;
+    vp.framebufferHeight = 480.0f;
+
+    // Tìm đối tượng Computer Setup (đang đặt trên mặt bàn y = 0.75m) và Bookshelf
+    scene::ObjectId computerId = scene::kInvalidObjectId;
+    scene::ObjectId bookshelfId = scene::kInvalidObjectId;
+    for (const auto& obj : testScene.getObjects()) {
+        if (obj.assetId == "blender-computer-setup") computerId = obj.id;
+        if (obj.assetId == "procedural-bookshelf") bookshelfId = obj.id;
+    }
+
+    // 1. Chiếu điểm trung tâm của Bookshelf -> phát tia Screen-to-World -> Picking trả đúng ObjectId
+    bool pickBookshelfOk = false;
+    if (const auto* bs = testScene.findObject(bookshelfId)) {
+        const auto* bsAsset = assetLookup(bs->assetId);
+        const glm::vec3 center = bs->getWorldBounds(bsAsset->localBounds).getCenter();
+        glm::vec2 screenPt(0.0f);
+        math::Ray ray;
+        if (projectWorldToViewport(center, cam, vp, screenPt) &&
+            math::Ray::screenToWorldRay(screenPt.x, screenPt.y, vp, cam.getViewMatrix(), cam.getProjectionMatrix(), ray)) {
+            const auto pick = systems::PickingSystem::pickObject(ray, testScene, assetLookup);
+            pickBookshelfOk = pick.hit && (pick.objectId == bookshelfId) && pick.usedTriangleRefinement;
+        }
+    }
+    report("TC-M5-05/11/14", "Projected screen point -> Perspective Ray -> exact Ray-Triangle pick of Bookshelf",
+           presetLoaded && pickBookshelfOk);
+
+    // 2. Ẩn Bookshelf -> tia cùng vị trí không được chọn đối tượng bị ẩn nữa
+    bool hiddenExcludedOk = false;
+    if (const auto* bs = testScene.findObject(bookshelfId)) {
+        const auto* bsAsset = assetLookup(bs->assetId);
+        const glm::vec3 center = bs->getWorldBounds(bsAsset->localBounds).getCenter();
+        testScene.setObjectVisibility(bookshelfId, false);
+        glm::vec2 screenPt(0.0f);
+        math::Ray ray;
+        if (projectWorldToViewport(center, cam, vp, screenPt) &&
+            math::Ray::screenToWorldRay(screenPt.x, screenPt.y, vp, cam.getViewMatrix(), cam.getProjectionMatrix(), ray)) {
+            const auto pick = systems::PickingSystem::pickObject(ray, testScene, assetLookup);
+            hiddenExcludedOk = (!pick.hit || pick.objectId != bookshelfId);
+        }
+        testScene.setObjectVisibility(bookshelfId, true);
+    }
+    report("TC-M5-15", "Hidden object excluded from viewport picking", hiddenExcludedOk);
+
+    // 3. Chuyển Orthographic Top View + resize viewport 960x540 -> vẫn pick đúng Computer Setup
+    const bool fboResized = fbo.resize(960, 540) && fbo.isComplete();
+    cam.setAspectRatio(960.0f / 540.0f);
+    camCtrl.setTopViewPreset(testScene.getRoom().getExteriorBounds(), cam);
+    vp.maxX = vp.minX + 960.0f;
+    vp.maxY = vp.minY + 540.0f;
+    vp.framebufferWidth = 960.0f;
+    vp.framebufferHeight = 540.0f;
+
+    bool orthoResizePickOk = false;
+    if (const auto* pc = testScene.findObject(computerId)) {
+        const auto* pcAsset = assetLookup(pc->assetId);
+        const glm::vec3 pcTop = pc->getWorldBounds(pcAsset->localBounds).getCenter();
+        glm::vec2 screenPt(0.0f);
+        math::Ray ray;
+        if (projectWorldToViewport(pcTop, cam, vp, screenPt) &&
+            math::Ray::screenToWorldRay(screenPt.x, screenPt.y, vp, cam.getViewMatrix(), cam.getProjectionMatrix(), ray)) {
+            const auto pick = systems::PickingSystem::pickObject(ray, testScene, assetLookup);
+            orthoResizePickOk = pick.hit && (pick.objectId == computerId);
+        }
+    }
+    report("TC-M5-06/36", "Orthographic Top View & viewport resize (960x540) picking on Computer Setup",
+           fboResized && orthoResizePickOk);
+
+    // 4. Mô phỏng thao tác kéo Computer Setup (đang ở y = 0.75m) -> giữ nguyên y = 0.75m, rồi Cancel khôi phục vị trí cũ
+    bool dragAndCancelOk = false;
+    if (const auto* pc = testScene.findObject(computerId)) {
+        const glm::vec3 initialPos = pc->transform.position;
+        const auto* pcAsset = assetLookup(pc->assetId);
+        const glm::vec3 pcCenter = pc->getWorldBounds(pcAsset->localBounds).getCenter();
+
+        glm::vec2 startPt(0.0f);
+        math::Ray startRay;
+        math::Ray movedRay;
+        if (projectWorldToViewport(pcCenter, cam, vp, startPt) &&
+            math::Ray::screenToWorldRay(startPt.x, startPt.y, vp, cam.getViewMatrix(), cam.getProjectionMatrix(), startRay) &&
+            math::Ray::screenToWorldRay(startPt.x + 80.0f, startPt.y + 40.0f, vp, cam.getViewMatrix(), cam.getProjectionMatrix(), movedRay, false)) {
+            const bool started = systems::TransformController::beginMove(testScene, computerId, startRay, startPt, interaction);
+            const bool updated = systems::TransformController::updateMove(testScene, movedRay, startPt + glm::vec2(80.0f, 40.0f), interaction);
+            const glm::vec3 draggedPos = testScene.findObject(computerId)->transform.position;
+            const bool movedAndKeptY = started && updated &&
+                                       (std::fabs(draggedPos.y - initialPos.y) < 1e-4f) &&
+                                       (glm::length(glm::vec2(draggedPos.x - initialPos.x, draggedPos.z - initialPos.z)) > 0.10f);
+
+            const bool cancelled = systems::TransformController::cancelInteraction(testScene, interaction);
+            const glm::vec3 restoredPos = testScene.findObject(computerId)->transform.position;
+            const bool restoredOk = cancelled && (glm::length(restoredPos - initialPos) < 1e-4f) && interaction.isIdle();
+            dragAndCancelOk = movedAndKeptY && restoredOk;
+        }
+    }
+    report("TC-M5-27/31", "Simulated Move drag preserves Y=0.75m elevation & Esc Cancel restores initial transform",
+           dragAndCancelOk);
+
+    // 5. Render cảnh với đối tượng đang chọn (BoundingBox Highlight màu cyan) vào FBO và kiểm chứng pixel thực tế
+    camCtrl.setPerspectivePreset(testScene.getRoom().getExteriorBounds(), cam);
+    camCtrl.orbit(35.0f, -15.0f, cam);
+    selection.selectObject(computerId);
+
+    graphics::SceneRenderOptions opts;
+    opts.showSelectedBoundingBox = true;
+    const glm::vec4 clearCol(0.06f, 0.07f, 0.09f, 1.0f);
+    fbo.bind();
+    const auto metrics = sceneRenderer.renderScene(testScene, m_assetManager, selection, cam, m_renderer,
+                                                   m_meshShader, m_gridShader,
+                                                   &m_axisXMesh, &m_axisYMesh, &m_axisZMesh,
+                                                   fbo.getWidth(), fbo.getHeight(), clearCol, opts);
+    std::vector<unsigned char> pixels(static_cast<std::size_t>(fbo.getWidth() * fbo.getHeight() * 4), 0);
+    glReadPixels(0, 0, fbo.getWidth(), fbo.getHeight(), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    fbo.unbind();
+
+    int cyanHighlightPixels = 0;
+    for (int i = 0; i < fbo.getWidth() * fbo.getHeight(); ++i) {
+        const std::size_t idx = static_cast<std::size_t>(i * 4);
+        // Selected BoundingBox highlight color = (0.20, 0.88, 1.00) -> RGB ~(51, 224, 255)
+        if (pixels[idx] < 90 && pixels[idx + 1] > 180 && pixels[idx + 2] > 210) {
+            ++cyanHighlightPixels;
+        }
+    }
+    report("TC-M5-38", "Post-orbit FBO render & selected object cyan BoundingBox highlight pixels verified",
+           (metrics.visibleObjects == 7) && (cyanHighlightPixels > 20));
+
+    sceneRenderer.destroyGpuResources();
+    fbo.destroy();
+
+    drainAndCheckOpenGlErrors();
+    report("TC-M5-39", "Zero unexpected OpenGL errors during M5 GPU integration suite", !m_glErrorDetected);
+    return allPassed;
+}
+
 void Application::handleReshape(int width, int height)
 {
     if (width <= 0 || height <= 0) {
@@ -2395,12 +2653,21 @@ void Application::handleKeyboard(unsigned char key, int x, int y)
 {
     if (m_imguiInitialized) {
         ImGui_ImplGLUT_KeyboardFunc(key, x, y);
-        if (ImGui::GetIO().WantCaptureKeyboard) {
-            return;
-        }
     }
 
-    if (key == 27) {
+    const int mods = glutGetModifiers();
+    const bool ctrl = (mods & GLUT_ACTIVE_CTRL) != 0;
+    const bool shift = (mods & GLUT_ACTIVE_SHIFT) != 0;
+    const bool alt = (mods & GLUT_ACTIVE_ALT) != 0;
+    m_inputManager.onKeyDown(key, ctrl, shift, alt);
+
+    if (m_imguiInitialized && ImGui::GetIO().WantTextInput) {
+        return;
+    }
+
+    // Trong Room Editor (M4/M5), phím Esc ưu tiên hủy tương tác đang diễn ra (do ViewportInteraction xử lý),
+    // KHÔNG đóng ứng dụng đột ngột khi người dùng đang chỉnh sửa đối tượng.
+    if (key == 27 && m_workspace != InteractiveWorkspace::RoomEditorM4) {
         m_window.requestClose();
     }
 }

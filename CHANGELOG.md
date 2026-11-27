@@ -4,6 +4,29 @@ Tất cả các thay đổi đáng chú ý của dự án được ghi nhận tr
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-28 (Milestone M5: Camera, Object Picking & Interactive Transformation)
+### Added
+- Mở rộng thư viện toán học thuần CPU **`roomcraft_math`**:
+  - `math::ViewportRect` & `math::Ray` (`Ray.hpp`): ánh xạ tọa độ chuột → viewport cục bộ → DPI/framebuffer → OpenGL NDC `[-1, 1]` và `Ray::screenToWorldRay()` giải chiếu Near/Far thống nhất cho cả **Perspective** và **Orthographic**.
+  - `math::Plane` (`Plane.hpp`) & `math::Intersection` (`Intersection.hpp/cpp`): **Ray–AABB Slab Method**, **Ray–Plane Intersection** và **Möller–Trumbore Ray–Triangle Intersection**.
+- Mở rộng thư viện thuần CPU **`roomcraft_scene`**:
+  - `core::InputManager` (`InputManager.hpp/cpp`): phân biệt sự kiện 1-frame (`Pressed`/`Released`) với `Held`, chống lặp phím auto-repeat.
+  - `systems::InteractionState` (`InteractionState.hpp`): máy trạng thái tương tác đơn luồng (`Idle`, `Orbiting`, `Panning`, `Moving`, `Rotating`, `Scaling`) + `AxisConstraint` (`X/Y/Z`).
+  - `systems::CameraController` (`CameraController.hpp/cpp`): Orbit Camera tọa độ cầu (clamp pitch `[-85°, +85°]`), Pan theo `right`/`trueUp`, Zoom cho cả Perspective & Orthographic, tự động `syncFromCamera()` sau mọi preset và `Fit Room` / `Fit Selected`.
+  - `systems::PickingSystem` (`PickingSystem.hpp/cpp`): Picking 2 giai đoạn (**Ray–AABB Broad-phase** + **Möller–Trumbore Ray–Triangle Narrow-phase**) kết hợp **Wall Occlusion** (tường hiện chặn tia, tường ẩn Cutaway không chặn tia), bỏ qua hidden objects và tôn trọng chính sách locked objects.
+  - `systems::TransformController` (`TransformController.hpp/cpp`): kéo thả trên mặt phẳng ngang giữ nguyên `grabOffset` và cao độ `Y`, Grid Snapping tính từ target chưa snap (không tích lũy sai số), xoay quanh `Y` kèm angle snap `15°`, phóng to/thu nhỏ dương kẹp `[0.1, 10.0]`, hủy thao tác (`Esc`) khôi phục nguyên `initialTransform`.
+  - `editor::ViewportInteraction` (`ViewportInteraction.hpp/cpp`): định tuyến đầu vào chuột/phím tắt an toàn khỏi Dear ImGui (`WantTextInput`, Popup, active widgets, viewport image rect).
+- Nâng cấp `RoomEditor`, `Application` & `main.cpp`:
+  - Thanh công cụ `Sel(Q)`, `Move(G)`, `Rotate(R)`, `Scale(S)`, checkbox `Locked` trong Inspector, Status Bar hiển thị chế độ tương tác, trục khóa và tọa độ thế giới con trỏ `(X, Z)`.
+  - Phím tắt `Q/G/R/S`, `X/Y/Z`, `F`, `Home`, `Delete`, `Ctrl+D`, `1/2/3`, `Esc` (ưu tiên hủy thao tác, không đóng app đột ngột).
+  - Bổ sung bộ CPU Unit Test `RoomCraft3D_InteractionUnitTests` (`M5_InteractionUnitTests`, 30 checks) và `M5_IntegrationSmokeTest` (`--m5-smoke-test`) vào CTest.
+- Tạo mới [`docs/CAMERA_SYSTEM.md`](docs/CAMERA_SYSTEM.md), [`docs/OBJECT_PICKING.md`](docs/OBJECT_PICKING.md), [`docs/INTERACTION_GUIDE.md`](docs/INTERACTION_GUIDE.md) và cập nhật toàn bộ tài liệu dự án (đồng thời đối chiếu đúng bằng chứng OBJ import của `TC-M3-02` trong `TEST_RESULTS.md`).
+
+### Verified
+- Build Debug thành công (`0` errors, `0` project warnings dưới `-Wall -Wextra -Wpedantic`); `RoomCraft3D.exe` chỉ link 7 DLL hệ thống Windows.
+- Toàn bộ **`11/11` CTest suites đạt `PASS` trong `4.17s`** (`M0`–`M5`), chạy độc lập ngoài PATH WinLibs (`M5_UNIT_EXIT=0`, `M5_SMOKE_EXIT=0`), `OpenGL errors: NONE`.
+- Kiểm thử tương tác GUI thủ công (`TC-M5-MANUAL` và các manual test M0–M4) giữ trạng thái `NOT VERIFIED` chờ người dùng xác nhận.
+
 ## [0.4.0] - 2026-11-28 (Milestone M4: Scene Management & Room Editor)
 ### Added
 - Tạo thư viện tĩnh thuần CPU **`roomcraft_scene`** (KHÔNG phụ thuộc OpenGL/FreeGLUT/ImGui):

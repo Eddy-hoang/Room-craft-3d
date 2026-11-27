@@ -1,6 +1,7 @@
 #pragma once
 
 #include "roomcraft/assets/AssetManager.hpp"
+#include "roomcraft/core/InputManager.hpp"
 #include "roomcraft/core/Window.hpp"
 #include "roomcraft/editor/RoomEditor.hpp"
 #include "roomcraft/geometry/BezierCurve.hpp"
@@ -27,15 +28,16 @@
 
 namespace roomcraft::core {
 
-// Chế độ chạy của ứng dụng RoomCraft 3D tại Milestone M4
+// Chế độ chạy của ứng dụng RoomCraft 3D tại Milestone M5
 enum class ApplicationMode {
-    InteractiveApp, // Giao diện tương tác (mặc định mở Room Editor M4, có thể chuyển sang M3/M2/M1)
+    InteractiveApp, // Giao diện tương tác (mặc định mở Room Editor M4/M5, có thể chuyển sang M3/M2/M1)
     SmokeTestM0,    // Regression smoke test M0
     SmokeTestM1,    // Regression GPU integration smoke test M1
     SmokeTestM2,    // Regression GPU integration smoke test M2
     SmokeTestM3,    // Regression GPU integration smoke test M3
-    SmokeTestM4,    // GPU integration & runtime smoke test M4 (Room, Multi-Object, Cache, Presets, Benchmark)
-    BenchmarkM4     // Chế độ đo hiệu năng thực tế 10 / 30 / 100 vật thể tại 1280x720
+    SmokeTestM4,    // Regression GPU integration smoke test M4
+    BenchmarkM4,    // Chế độ đo hiệu năng thực tế 10 / 30 / 100 vật thể tại 1280x720
+    SmokeTestM5     // GPU integration & runtime smoke test M5 (Ray Casting, Picking, Drag, Cancel, Camera)
 };
 
 // Không gian làm việc đang chọn trong chế độ tương tác
@@ -56,7 +58,7 @@ enum class PlaygroundCategory {
 struct ApplicationConfig {
     int width = 1280;
     int height = 720;
-    std::string title = "RoomCraft 3D - M4 Room Editor (OpenGL 3.3 Core)";
+    std::string title = "RoomCraft 3D - M5 Interactive Room Editor (OpenGL 3.3 Core)";
     ApplicationMode mode = ApplicationMode::InteractiveApp;
     int smokeTestFrames = 10;
 };
@@ -153,6 +155,7 @@ private:
     bool runM4IntegrationSuiteOnce();
     bool runM4BenchmarkSuiteOnce();
     bool benchmarkSingleObjectCount(std::size_t objectCount, int warmupFrames, int measuredFrames);
+    bool runM5IntegrationSuiteOnce();
 
     // Sự kiện cửa sổ
     void handleReshape(int width, int height);
@@ -165,6 +168,7 @@ private:
     std::filesystem::path m_executableDir;
 
     Window m_window;
+    InputManager m_inputManager;
     graphics::Renderer m_renderer;
     graphics::Camera m_camera;
     graphics::Framebuffer m_framebuffer;
@@ -317,6 +321,9 @@ private:
 
     bool m_m4BenchmarkExecuted = false;
     bool m_m4BenchmarkPassed = false;
+
+    bool m_m5SuiteExecuted = false;
+    bool m_m5SuitePassed = false;
 };
 
 } // namespace roomcraft::core

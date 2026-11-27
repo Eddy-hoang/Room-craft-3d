@@ -21,6 +21,8 @@ void RoomEditor::applyPresetImmediate(scene::ScenePresetType preset,
                                       assets::AssetManager& assetManager,
                                       graphics::Camera& camera)
 {
+    m_interactionState.resetToIdle();
+
     std::string err;
     if (!scene::ScenePresets::applyPreset(preset, m_scene, assetManager.getCatalog(), &err)) {
         m_errorMessage = err;
@@ -36,6 +38,7 @@ void RoomEditor::applyPresetImmediate(scene::ScenePresetType preset,
     m_renameSyncedObjectId = scene::kInvalidObjectId;
     m_sceneDirty = false;
     m_errorMessage.clear();
+    m_interactionState.warningMessage.clear();
     m_statusMessage = std::string("Loaded preset: ") + scene::scenePresetTypeToString(preset);
 
     setPerspective3DCamera(camera);
@@ -43,6 +46,7 @@ void RoomEditor::applyPresetImmediate(scene::ScenePresetType preset,
 
 void RoomEditor::createNewEmptyRoom(graphics::Camera& camera)
 {
+    m_interactionState.resetToIdle();
     m_scene.clearObjects();
     m_scene.getRoom().resetToDefault();
     m_roomDraft = m_scene.getRoom().getSettings();
@@ -50,6 +54,7 @@ void RoomEditor::createNewEmptyRoom(graphics::Camera& camera)
     m_renameSyncedObjectId = scene::kInvalidObjectId;
     m_sceneDirty = false;
     m_errorMessage.clear();
+    m_interactionState.warningMessage.clear();
     m_statusMessage = "Created default empty room (5.0 x 6.0 x 3.0 m).";
     setPerspective3DCamera(camera);
 }
@@ -58,6 +63,7 @@ void RoomEditor::requestPresetChange(scene::ScenePresetType preset,
                                      assets::AssetManager& assetManager,
                                      graphics::Camera& camera)
 {
+    m_interactionState.resetToIdle();
     if (m_sceneDirty && m_scene.getObjectCount() > 0) {
         m_pendingPreset = preset;
         m_pendingNewEmptyRoom = false;
@@ -67,13 +73,12 @@ void RoomEditor::requestPresetChange(scene::ScenePresetType preset,
     }
 }
 
-void RoomEditor::fitCameraToRoom(graphics::Camera& camera) const
+void RoomEditor::fitCameraToRoom(graphics::Camera& camera)
 {
-    const math::BoundingBox bounds = m_scene.getRoom().getExteriorBounds();
-    camera.fitBoundingBox(bounds, 1.22f);
+    m_cameraController.fitBoundingBox(m_scene.getRoom().getExteriorBounds(), camera, 1.22f);
 }
 
-void RoomEditor::fitCameraToSelected(assets::AssetManager& assetManager, graphics::Camera& camera) const
+void RoomEditor::fitCameraToSelected(assets::AssetManager& assetManager, graphics::Camera& camera)
 {
     if (!m_selection.hasSelection()) {
         fitCameraToRoom(camera);
@@ -90,37 +95,28 @@ void RoomEditor::fitCameraToSelected(assets::AssetManager& assetManager, graphic
     }
     const math::BoundingBox worldBox = obj->getWorldBounds(gpuAsset->cpuData.localBounds);
     if (worldBox.isValid()) {
-        camera.fitBoundingBox(worldBox, 1.35f);
+        m_cameraController.fitBoundingBox(worldBox, camera, 1.35f);
     }
 }
 
-void RoomEditor::setPerspective3DCamera(graphics::Camera& camera) const
+void RoomEditor::setPerspective3DCamera(graphics::Camera& camera)
 {
-    camera.setProjectionMode(graphics::ProjectionMode::Perspective);
-    camera.lookAt(glm::vec3(5.5f, 4.8f, 6.2f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    fitCameraToRoom(camera);
+    m_cameraController.setPerspectivePreset(m_scene.getRoom().getExteriorBounds(), camera);
 }
 
-void RoomEditor::setIsometricCamera(graphics::Camera& camera) const
+void RoomEditor::setIsometricCamera(graphics::Camera& camera)
 {
-    camera.setProjectionMode(graphics::ProjectionMode::Orthographic);
-    camera.lookAt(glm::vec3(7.0f, 6.2f, 7.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    fitCameraToRoom(camera);
+    m_cameraController.setIsometricPreset(m_scene.getRoom().getExteriorBounds(), camera);
 }
 
-void RoomEditor::setTopViewCamera(graphics::Camera& camera) const
+void RoomEditor::setTopViewCamera(graphics::Camera& camera)
 {
-    camera.setProjectionMode(graphics::ProjectionMode::Orthographic);
-    camera.lookAt(glm::vec3(0.0f, 12.0f, 0.001f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
-    fitCameraToRoom(camera);
+    m_cameraController.setTopViewPreset(m_scene.getRoom().getExteriorBounds(), camera);
 }
 
-void RoomEditor::setFrontViewCamera(graphics::Camera& camera) const
+void RoomEditor::setFrontViewCamera(graphics::Camera& camera)
 {
-    camera.setProjectionMode(graphics::ProjectionMode::Orthographic);
-    const float halfH = m_scene.getRoom().getSettings().height * 0.5f;
-    camera.lookAt(glm::vec3(0.0f, halfH, 10.0f), glm::vec3(0.0f, halfH, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    fitCameraToRoom(camera);
+    m_cameraController.setFrontViewPreset(m_scene.getRoom().getExteriorBounds(), camera);
 }
 
 void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
@@ -140,6 +136,7 @@ void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
     }
 
     m_selection.reconcileWithScene(m_scene);
+    m_interactionState.abortIfInvalid(m_scene);
 
     graphics::SceneRenderOptions opts;
     opts.wireframe = m_wireframe;
@@ -167,16 +164,19 @@ void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
     framebuffer.unbind();
 }
 
-void RoomEditor::renderUi(int windowWidth,
-                          int windowHeight,
-                          float topBarHeight,
-                          assets::AssetManager& assetManager,
-                          graphics::Camera& camera,
-                          graphics::Framebuffer& framebuffer,
-                          float fps,
-                          float frameTimeMs)
+bool RoomEditor::renderUiAndProcessInput(int windowWidth,
+                                         int windowHeight,
+                                         float topBarHeight,
+                                         const core::InputManager& input,
+                                         assets::AssetManager& assetManager,
+                                         graphics::Camera& camera,
+                                         graphics::Framebuffer& framebuffer,
+                                         float fps,
+                                         float frameTimeMs)
 {
     m_selection.reconcileWithScene(m_scene);
+    m_interactionState.abortIfInvalid(m_scene);
+    m_interactionState.gridSnapEnabled = m_gridSnapEnabled;
 
     constexpr float kToolbarH = 38.0f;
     constexpr float kStatusH = 28.0f;
@@ -193,9 +193,40 @@ void RoomEditor::renderUi(int windowWidth,
     renderToolbar(windowWidth, topBarHeight, kToolbarH, assetManager, camera);
     renderLeftPanel(0.0f, contentY, leftW, contentH, assetManager);
     renderViewportPanel(leftW, contentY, centerW, contentH, framebuffer, camera);
+
+    // Định tuyến và xử lý toàn bộ tương tác Viewport 3D ngay sau khi đo được image rectangle thực tế
+    // để Inspector và Status Bar phản ánh trạng thái mới ngay trong cùng khung hình.
+    const auto assetLookup = [&assetManager](const std::string& assetId) -> const assets::AssetData* {
+        auto gpuAsset = assetManager.getOrLoadAsset(assetId, nullptr);
+        return gpuAsset ? &gpuAsset->cpuData : nullptr;
+    };
+
+    const auto outcome = ViewportInteraction::processInput(
+        input,
+        m_viewportInputCtx,
+        m_scene,
+        m_selection,
+        m_cameraController,
+        camera,
+        m_interactionState,
+        assetLookup);
+
+    if (outcome.sceneModified) {
+        m_sceneDirty = true;
+    }
+    if (!outcome.statusMessage.empty()) {
+        m_statusMessage = outcome.statusMessage;
+        m_errorMessage.clear();
+    }
+    if (!outcome.errorMessage.empty()) {
+        m_errorMessage = outcome.errorMessage;
+    }
+
     renderRightPanel(leftW + centerW, contentY, rightW, contentH, assetManager, camera);
-    renderStatusBar(windowWidth, contentY + contentH, kStatusH, assetManager, fps, frameTimeMs);
+    renderStatusBar(windowWidth, contentY + contentH, kStatusH, assetManager, camera, fps, frameTimeMs);
     renderConfirmPresetModal(assetManager, camera);
+
+    return outcome.consumedEscape;
 }
 
 void RoomEditor::renderToolbar(int windowWidth,
@@ -211,7 +242,35 @@ void RoomEditor::renderToolbar(int windowWidth,
                                    ImGuiWindowFlags_NoScrollbar;
     ImGui::Begin("##RoomEditorToolbar", nullptr, flags);
 
-    if (ImGui::Button("New Room")) {
+    // Chế độ tương tác M5: Select / Move / Rotate / Scale
+    auto toolButton = [&](const char* label, systems::TransformMode mode) {
+        const bool active = (m_interactionState.activeTool == mode);
+        if (active) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.52f, 0.86f, 1.0f));
+        }
+        if (ImGui::Button(label)) {
+            m_interactionState.activeTool = mode;
+            m_interactionState.axisConstraint = systems::AxisConstraint::None;
+            m_statusMessage = std::string("Tool: ") + systems::transformModeToString(mode);
+        }
+        if (active) {
+            ImGui::PopStyleColor();
+        }
+    };
+
+    toolButton("Sel(Q)", systems::TransformMode::Select);
+    ImGui::SameLine();
+    toolButton("Move(G)", systems::TransformMode::Move);
+    ImGui::SameLine();
+    toolButton("Rot(R)", systems::TransformMode::Rotate);
+    ImGui::SameLine();
+    toolButton("Scale(S)", systems::TransformMode::Scale);
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+
+    if (ImGui::Button("New")) {
         if (m_sceneDirty && m_scene.getObjectCount() > 0) {
             m_pendingNewEmptyRoom = true;
             m_openConfirmModal = true;
@@ -238,7 +297,7 @@ void RoomEditor::renderToolbar(int windowWidth,
 
     const bool hasSel = m_selection.hasSelection();
     if (!hasSel) ImGui::BeginDisabled();
-    if (ImGui::Button("Duplicate")) {
+    if (ImGui::Button("Dup")) {
         std::string err;
         const auto newId = m_scene.duplicateObject(m_selection.getSelectedObjectId(), glm::vec3(0.45f, 0.0f, 0.45f), &err);
         if (scene::isValidObjectId(newId)) {
@@ -251,9 +310,13 @@ void RoomEditor::renderToolbar(int windowWidth,
         }
     }
     ImGui::SameLine();
-    if (ImGui::Button("Delete")) {
+    if (ImGui::Button("Del")) {
         const auto delId = m_selection.getSelectedObjectId();
-        if (m_scene.removeObject(delId)) {
+        const auto* obj = m_scene.findObject(delId);
+        if (obj != nullptr && obj->locked) {
+            m_errorMessage = "Cannot delete locked object '" + obj->name + "'.";
+        } else if (m_scene.removeObject(delId)) {
+            m_interactionState.abortIfInvalid(m_scene);
             m_selection.clearSelection();
             m_sceneDirty = true;
             m_errorMessage.clear();
@@ -270,7 +333,7 @@ void RoomEditor::renderToolbar(int windowWidth,
     ImGui::SameLine();
     if (ImGui::Button("Iso")) setIsometricCamera(camera);
     ImGui::SameLine();
-    if (ImGui::Button("Top 2D")) setTopViewCamera(camera);
+    if (ImGui::Button("Top")) setTopViewCamera(camera);
     ImGui::SameLine();
     if (ImGui::Button("Front")) setFrontViewCamera(camera);
     ImGui::SameLine();
@@ -390,7 +453,6 @@ void RoomEditor::renderLeftPanel(float posX,
                 continue;
             }
 
-            // Dùng Stable ObjectId làm ImGui ID để không bao giờ xung đột khi 2 object trùng tên
             ImGui::PushID(static_cast<int>(obj.id));
 
             bool vis = obj.visible;
@@ -401,8 +463,9 @@ void RoomEditor::renderLeftPanel(float posX,
             ImGui::SameLine();
 
             const bool selected = m_selection.isSelected(obj.id);
-            const std::string label = obj.name + " [#" + std::to_string(obj.id) + "]";
-            if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_AllowOverlap, ImVec2(ImGui::GetContentRegionAvail().x - 52.0f, 0.0f))) {
+            const std::string label = (obj.locked ? "[L] " : "") + obj.name + " [#" + std::to_string(obj.id) + "]";
+            if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_AllowOverlap,
+                                  ImVec2(ImGui::GetContentRegionAvail().x - 52.0f, 0.0f))) {
                 m_selection.selectObject(obj.id);
             }
 
@@ -430,10 +493,16 @@ void RoomEditor::renderLeftPanel(float posX,
             }
         }
         if (scene::isValidObjectId(pendingDeleteId)) {
-            m_scene.removeObject(pendingDeleteId);
-            m_selection.reconcileWithScene(m_scene);
-            m_sceneDirty = true;
-            m_statusMessage = "Removed object ID #" + std::to_string(pendingDeleteId);
+            const auto* target = m_scene.findObject(pendingDeleteId);
+            if (target != nullptr && target->locked) {
+                m_errorMessage = "Cannot delete locked object '" + target->name + "'.";
+            } else {
+                m_scene.removeObject(pendingDeleteId);
+                m_interactionState.abortIfInvalid(m_scene);
+                m_selection.reconcileWithScene(m_scene);
+                m_sceneDirty = true;
+                m_statusMessage = "Removed object ID #" + std::to_string(pendingDeleteId);
+            }
         }
 
         ImGui::TreePop();
@@ -453,7 +522,8 @@ void RoomEditor::renderViewportPanel(float posX,
     ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
+                                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
+                                   ImGuiWindowFlags_NoScrollWithMouse;
     ImGui::Begin("3D Room Viewport", nullptr, flags);
 
     const ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -469,10 +539,27 @@ void RoomEditor::renderViewportPanel(float posX,
 
     if (framebuffer.isComplete()) {
         const ImTextureID texId = static_cast<ImTextureID>(static_cast<std::uintptr_t>(framebuffer.getColorTextureId()));
-        // Lật trục V (uv0=(0,1), uv1=(1,0)) theo quy ước OpenGL -> Dear ImGui
         ImGui::Image(texId, ImVec2(static_cast<float>(targetW), static_cast<float>(targetH)),
                      ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+
+        // Ghi nhận chính xác hình chữ nhật ảnh viewport hiển thị trong Dear ImGui để định tuyến đầu vào M5
+        const ImVec2 rectMin = ImGui::GetItemRectMin();
+        const ImVec2 rectMax = ImGui::GetItemRectMax();
+        m_viewportInputCtx.viewportRect.minX = rectMin.x;
+        m_viewportInputCtx.viewportRect.minY = rectMin.y;
+        m_viewportInputCtx.viewportRect.maxX = rectMax.x;
+        m_viewportInputCtx.viewportRect.maxY = rectMax.y;
+        m_viewportInputCtx.viewportRect.framebufferWidth = static_cast<float>(framebuffer.getWidth());
+        m_viewportInputCtx.viewportRect.framebufferHeight = static_cast<float>(framebuffer.getHeight());
+        m_viewportInputCtx.viewportImageHovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+    } else {
+        m_viewportInputCtx.viewportRect = math::ViewportRect{};
+        m_viewportInputCtx.viewportImageHovered = false;
     }
+
+    m_viewportInputCtx.uiWantsTextInput = ImGui::GetIO().WantTextInput;
+    m_viewportInputCtx.uiPopupOpen = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId);
+    m_viewportInputCtx.anyUiWidgetActive = ImGui::IsAnyItemActive();
 
     ImGui::End();
 }
@@ -496,7 +583,15 @@ void RoomEditor::renderRightPanel(float posX,
             if (obj == nullptr) {
                 ImGui::TextDisabled("No furniture object selected.");
                 ImGui::Spacing();
-                ImGui::TextWrapped("Select an object in Scene Hierarchy or add one from Furniture Library.");
+                ImGui::TextWrapped("Left-click an object in the 3D Viewport or Scene Hierarchy to select it.");
+                ImGui::Spacing();
+                ImGui::TextDisabled("Viewport Controls:");
+                ImGui::BulletText("Left Drag: Pick / Transform");
+                ImGui::BulletText("Right Drag: Orbit Camera");
+                ImGui::BulletText("Middle Drag: Pan Camera");
+                ImGui::BulletText("Wheel: Zoom");
+                ImGui::BulletText("G/R/S/Q: Move/Rot/Scale/Sel");
+                ImGui::BulletText("X/Y/Z: Axis | Esc: Cancel");
             } else {
                 if (m_renameSyncedObjectId != obj->id) {
                     std::snprintf(m_renameBuf.data(), m_renameBuf.size(), "%s", obj->name.c_str());
@@ -529,9 +624,23 @@ void RoomEditor::renderRightPanel(float posX,
                     m_scene.setObjectVisibility(obj->id, vis);
                     m_sceneDirty = true;
                 }
+                ImGui::SameLine();
+                if (ImGui::Checkbox("Locked", &obj->locked)) {
+                    m_sceneDirty = true;
+                    if (obj->locked) {
+                        m_interactionState.abortIfInvalid(m_scene);
+                    }
+                }
+
+                if (obj->locked) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.25f, 1.0f),
+                                       "Object is locked (unlock to transform/delete).");
+                }
 
                 ImGui::Separator();
                 ImGui::TextColored(ImVec4(0.45f, 0.80f, 1.0f, 1.0f), "Transform (drag or double-click)");
+
+                if (obj->locked) ImGui::BeginDisabled();
 
                 scene::Transform edited = obj->transform;
                 bool changed = false;
@@ -552,12 +661,12 @@ void RoomEditor::renderRightPanel(float posX,
                 ImGui::Checkbox("Uniform Scale", &m_uniformScale);
                 if (m_uniformScale) {
                     float uni = edited.scale.x;
-                    if (ImGui::DragFloat("Scale", &uni, 0.02f, 0.05f, 10.0f, "%.3f")) {
+                    if (ImGui::DragFloat("Scale", &uni, 0.02f, 0.10f, 10.0f, "%.3f")) {
                         edited.scale = glm::vec3(uni, uni, uni);
                         changed = true;
                     }
                 } else {
-                    if (ImGui::DragFloat3("Scale", &edited.scale.x, 0.02f, 0.05f, 10.0f, "%.3f")) {
+                    if (ImGui::DragFloat3("Scale", &edited.scale.x, 0.02f, 0.10f, 10.0f, "%.3f")) {
                         changed = true;
                     }
                 }
@@ -578,8 +687,10 @@ void RoomEditor::renderRightPanel(float posX,
                     m_scene.setObjectTransform(obj->id, resetTr);
                     m_sceneDirty = true;
                 }
+                if (obj->locked) ImGui::EndDisabled();
+
                 ImGui::SameLine();
-                if (ImGui::Button("Fit Object")) {
+                if (ImGui::Button("Fit Object (F)")) {
                     fitCameraToSelected(assetManager, camera);
                 }
 
@@ -666,6 +777,10 @@ void RoomEditor::renderRightPanel(float posX,
         ImGui::EndTabBar();
     }
 
+    if (!m_interactionState.warningMessage.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.25f, 1.0f), "Notice: %s", m_interactionState.warningMessage.c_str());
+    }
     if (!m_errorMessage.empty()) {
         ImGui::Separator();
         ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "Error: %s", m_errorMessage.c_str());
@@ -678,6 +793,7 @@ void RoomEditor::renderStatusBar(int windowWidth,
                                  float posY,
                                  float height,
                                  const assets::AssetManager& assetManager,
+                                 const graphics::Camera& camera,
                                  float fps,
                                  float frameTimeMs)
 {
@@ -689,15 +805,26 @@ void RoomEditor::renderStatusBar(int windowWidth,
     ImGui::Begin("##RoomEditorStatusBar", nullptr, flags);
 
     const auto& m = m_sceneRenderer.getLastMetrics();
-    ImGui::Text("FPS: %.1f (%.2f ms) | Objects: %zu/%zu | Unique Assets: %zu (Cache: %zu) | Draws: %u | Tris: %u | %s",
+    const char* camModeStr = (camera.getProjectionMode() == graphics::ProjectionMode::Perspective) ? "Persp" : "Ortho";
+
+    std::string hoverStr = "--";
+    if (m_interactionState.hoverWorldPos.has_value()) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "(%.2f, %.2f)", m_interactionState.hoverWorldPos->x, m_interactionState.hoverWorldPos->z);
+        hoverStr = buf;
+    }
+
+    ImGui::Text("FPS: %.1f (%.1fms) | Tool: %s [%s] | State: %s | Cam: %s | Grid: %.2fm | Cursor XZ: %s | Draws: %u | Cache: %zu | %s",
                 fps,
                 frameTimeMs,
-                m.visibleObjects,
-                m.totalObjects,
-                m.uniqueAssetsUsed,
-                assetManager.getCachedAssetCount(),
+                systems::transformModeToString(m_interactionState.activeTool),
+                systems::axisConstraintToString(m_interactionState.axisConstraint),
+                systems::interactionPhaseToString(m_interactionState.phase),
+                camModeStr,
+                m_scene.getRoom().getSettings().gridSpacing,
+                hoverStr.c_str(),
                 m.submittedDrawCalls,
-                m.submittedTriangles,
+                assetManager.getCachedAssetCount(),
                 m_statusMessage.c_str());
 
     ImGui::End();
@@ -731,6 +858,7 @@ void RoomEditor::renderConfirmPresetModal(assets::AssetManager& assetManager, gr
 
 void RoomEditor::shutdownGpuResources()
 {
+    m_interactionState.resetToIdle();
     m_sceneRenderer.destroyGpuResources();
 }
 

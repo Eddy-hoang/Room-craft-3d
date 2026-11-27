@@ -1,6 +1,8 @@
 #pragma once
 
 #include "roomcraft/assets/AssetManager.hpp"
+#include "roomcraft/core/InputManager.hpp"
+#include "roomcraft/editor/ViewportInteraction.hpp"
 #include "roomcraft/graphics/Camera.hpp"
 #include "roomcraft/graphics/Framebuffer.hpp"
 #include "roomcraft/graphics/Mesh.hpp"
@@ -9,6 +11,8 @@
 #include "roomcraft/graphics/Shader.hpp"
 #include "roomcraft/scene/Scene.hpp"
 #include "roomcraft/scene/ScenePresets.hpp"
+#include "roomcraft/systems/CameraController.hpp"
+#include "roomcraft/systems/InteractionState.hpp"
 #include "roomcraft/systems/SelectionState.hpp"
 
 #include <glm/vec4.hpp>
@@ -18,22 +22,21 @@
 
 namespace roomcraft::editor {
 
-// Lớp RoomEditor đóng gói toàn bộ trạng thái và giao diện Dear ImGui cho chế độ M4 Room Editor
-// (tách khỏi Application.cpp để giữ mã nguồn gọn gàng, dễ bảo trì).
+// Lớp RoomEditor đóng gói toàn bộ trạng thái và giao diện Dear ImGui cho chế độ Room Editor (M4 + M5).
 class RoomEditor {
 public:
     RoomEditor() = default;
 
-    // Khởi tạo phòng mặc định (Modern Bedroom Preset) và căn camera Fit Room
+    // Khởi tạo phòng mặc định (Modern Bedroom Preset) và căn camera Fit Room (đồng bộ CameraController)
     void initialize(assets::AssetManager& assetManager, graphics::Camera& camera);
 
-    // Chuyển góc nhìn Camera theo căn phòng hoặc đối tượng đang chọn
-    void fitCameraToRoom(graphics::Camera& camera) const;
-    void fitCameraToSelected(assets::AssetManager& assetManager, graphics::Camera& camera) const;
-    void setIsometricCamera(graphics::Camera& camera) const;
-    void setTopViewCamera(graphics::Camera& camera) const;
-    void setFrontViewCamera(graphics::Camera& camera) const;
-    void setPerspective3DCamera(graphics::Camera& camera) const;
+    // Chuyển góc nhìn Camera thông qua CameraController (luôn đồng bộ Orbit/Pan/Zoom state)
+    void fitCameraToRoom(graphics::Camera& camera);
+    void fitCameraToSelected(assets::AssetManager& assetManager, graphics::Camera& camera);
+    void setIsometricCamera(graphics::Camera& camera);
+    void setTopViewCamera(graphics::Camera& camera);
+    void setFrontViewCamera(graphics::Camera& camera);
+    void setPerspective3DCamera(graphics::Camera& camera);
 
     // Render toàn bộ scene vào Framebuffer hiện tại
     void renderSceneToFramebuffer(assets::AssetManager& assetManager,
@@ -48,15 +51,16 @@ public:
                                   const glm::vec4& clearColor,
                                   float faceContrast);
 
-    // Render toàn bộ giao diện Dear ImGui của Room Editor (Toolbar, Library, Hierarchy, Viewport, Inspector, Room Settings, Status Bar)
-    void renderUi(int windowWidth,
-                  int windowHeight,
-                  float topBarHeight,
-                  assets::AssetManager& assetManager,
-                  graphics::Camera& camera,
-                  graphics::Framebuffer& framebuffer,
-                  float fps,
-                  float frameTimeMs);
+    // Render toàn bộ giao diện Dear ImGui và định tuyến tương tác chuột/phím M5 (trả về true nếu đã tiêu thụ Esc)
+    bool renderUiAndProcessInput(int windowWidth,
+                                 int windowHeight,
+                                 float topBarHeight,
+                                 const core::InputManager& input,
+                                 assets::AssetManager& assetManager,
+                                 graphics::Camera& camera,
+                                 graphics::Framebuffer& framebuffer,
+                                 float fps,
+                                 float frameTimeMs);
 
     void shutdownGpuResources();
 
@@ -64,6 +68,11 @@ public:
     const scene::Scene& getScene() const { return m_scene; }
     systems::SelectionState& getSelection() { return m_selection; }
     const systems::SelectionState& getSelection() const { return m_selection; }
+    systems::CameraController& getCameraController() { return m_cameraController; }
+    const systems::CameraController& getCameraController() const { return m_cameraController; }
+    systems::InteractionState& getInteractionState() { return m_interactionState; }
+    const systems::InteractionState& getInteractionState() const { return m_interactionState; }
+    const ViewportInputContext& getViewportInputContext() const { return m_viewportInputCtx; }
     graphics::SceneRenderer& getSceneRenderer() { return m_sceneRenderer; }
 
 private:
@@ -101,6 +110,7 @@ private:
                          float posY,
                          float height,
                          const assets::AssetManager& assetManager,
+                         const graphics::Camera& camera,
                          float fps,
                          float frameTimeMs);
     void renderConfirmPresetModal(assets::AssetManager& assetManager, graphics::Camera& camera);
@@ -108,6 +118,9 @@ private:
 private:
     scene::Scene m_scene;
     systems::SelectionState m_selection;
+    systems::CameraController m_cameraController;
+    systems::InteractionState m_interactionState;
+    ViewportInputContext m_viewportInputCtx;
     graphics::SceneRenderer m_sceneRenderer;
 
     scene::RoomSettings m_roomDraft;
@@ -136,7 +149,7 @@ private:
     scene::ObjectId m_renameSyncedObjectId = scene::kInvalidObjectId;
     std::array<char, 128> m_renameBuf{};
 
-    std::string m_statusMessage = "Room Editor ready.";
+    std::string m_statusMessage = "Room Editor ready (Right-drag: Orbit | Mid-drag: Pan | Wheel: Zoom | Left-drag: Pick/Transform).";
     std::string m_errorMessage;
 };
 

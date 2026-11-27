@@ -1,15 +1,15 @@
 # Kiến trúc phần mềm — RoomCraft 3D (Architecture)
 
-## 1. Kiến trúc tổng thể theo tầng (Milestone M0–M4)
+## 1. Kiến trúc tổng thể theo tầng (Milestone M0–M5)
 
 ```mermaid
 flowchart TD
-    UI["Presentation Layer\n(Dear ImGui: M4 Room Editor · M3 Asset Browser · M2 Geometry Playground · M1 Reference Scene)"] --> APP["Application Layer\n(Application + Window + RoomEditor)"]
+    UI["Presentation Layer\n(Dear ImGui: M4/M5 Interactive Room Editor · M3 Asset Browser · M2 Geometry Playground · M1 Reference Scene)"] --> APP["Application Layer\n(Application + Window + RoomEditor)"]
     APP --> GFX["Core Graphics & Runtime Layer (roomcraft_engine)\n(Renderer, SceneRenderer, Shader, Mesh, TextureManager, AssetManager, Framebuffer)"]
-    GFX --> SCENE["Scene Management Layer (roomcraft_scene - CPU only)\n(Scene, SceneObject, ObjectId, Room, RoomSettings, SelectionState, PlacementSystem, ScenePresets)"]
+    GFX --> SCENE["Scene & Interaction Layer (roomcraft_scene - CPU only)\n(Scene, Room, SceneObject, SelectionState, PlacementSystem, CameraController, PickingSystem, TransformController, InputManager, ViewportInteraction)"]
     SCENE --> ASSETS["Asset Pipeline Layer (roomcraft_assets - CPU only)\n(AssetData, ModelLoader [Assimp], AssetNormalizer, FurnitureCatalog)"]
     ASSETS --> GEO["Procedural Geometry Engine (roomcraft_geometry - CPU only)\n(MeshData, PrimitiveGenerator, BezierCurve/Surface, RevolutionSurface, FurnitureGenerator)"]
-    GEO --> MATH["Math & Validation Layer (roomcraft_math - CPU only)\n(Transform, Camera + Auto-Fit, BoundingBox, Vertex, MeshValidation)"]
+    GEO --> MATH["Math & Intersection Layer (roomcraft_math - CPU only)\n(Transform, Camera + Auto-Fit, BoundingBox, Ray, Plane, Slab/Plane/Triangle Intersection, Vertex)"]
     GFX --> MATH
     GFX --> GL["OpenGL 3.3 Core · GLSL 330 · GLAD · GLM · stb_image"]
     APP --> GLUT["FreeGLUT Window & Event Loop"]
@@ -18,7 +18,7 @@ flowchart TD
 ## 2. Phân tách thư viện trong CMake (Acyclic Dependency Graph)
 
 1. **`roomcraft_math` (CPU-only, chỉ phụ thuộc `GLM`)**:
-   - `Transform`, `Camera` (kèm `fitBoundingBox()`), `BoundingBox`, `Vertex`, `MeshValidation`.
+   - `Transform`, `Camera` (`fitBoundingBox`), `BoundingBox`, `Ray`, `ViewportRect`, `Plane`, `Intersection` (Slab AABB, Ray–Plane, Möller–Trumbore Triangle), `Vertex`, `MeshValidation`.
    - Kiểm thử bởi `RoomCraft3D_UnitTests` (`M1_UnitTests`).
 2. **`roomcraft_geometry` (CPU-only, phụ thuộc `roomcraft_math`)**:
    - `MeshData`, `GeometryUtils`, `PrimitiveGenerator`, `BezierCurve`, `BezierSurface`, `RevolutionSurface`, `FurnitureGenerator`.
@@ -27,19 +27,18 @@ flowchart TD
    - `AssetData`, `ModelLoader`, `AssetNormalizer`, `FurnitureCatalog`.
    - Kiểm thử bởi `RoomCraft3D_AssetUnitTests` (`M3_AssetUnitTests`).
 4. **`roomcraft_scene` (CPU-only, phụ thuộc `roomcraft_assets`, KHÔNG phụ thuộc OpenGL/FreeGLUT/ImGui)**:
-   - `ObjectId`, `SceneObject`, `RoomSettings`, `Room`, `Scene`, `SelectionState`, `PlacementSystem`, `ScenePresets`.
-   - Kiểm thử bởi `RoomCraft3D_SceneUnitTests` (`M4_SceneUnitTests`) — tạo nền tảng sạch cho Collision (M8), Undo/Redo (M6) và JSON Serialization (M8).
+   - Quản lý cảnh M4: `ObjectId`, `SceneObject`, `RoomSettings`, `Room`, `Scene`, `SelectionState`, `PlacementSystem`, `ScenePresets`.
+   - Tương tác M5: `InputManager`, `InteractionState`, `CameraController`, `PickingSystem`, `TransformController`, `ViewportInteraction`.
+   - Kiểm thử bởi `RoomCraft3D_SceneUnitTests` (`M4_SceneUnitTests`) và `RoomCraft3D_InteractionUnitTests` (`M5_InteractionUnitTests`).
 5. **`roomcraft_engine` (GPU + Window + ImGui, phụ thuộc `roomcraft_scene`, `stb_image`, `GLAD`, `FreeGLUT`, `ImGui`, `OpenGL`)**:
    - `Window`, `Shader`, `Mesh`, `Material`, `Texture`, `TextureManager`, `AssetManager`, `Framebuffer`, `Renderer`, `SceneRenderer`, `RoomEditor`, `Application`.
-6. **`RoomCraft3D`**: Executable chính hỗ trợ 7 chế độ chạy:
-   - Mặc định: **M4 Room Editor** tương tác (chuyển đổi trực tiếp qua M3/M2/M1 trên thanh menu).
-   - `--smoke-test`, `--m1-smoke-test`, `--m2-smoke-test`, `--m3-smoke-test`, `--m4-smoke-test`, `--m4-benchmark`.
+6. **`RoomCraft3D`**: Executable chính hỗ trợ 8 chế độ chạy:
+   - Mặc định: **M4/M5 Interactive Room Editor** (chuyển đổi trực tiếp qua M3/M2/M1 trên thanh menu).
+   - `--smoke-test`, `--m1-smoke-test`, `--m2-smoke-test`, `--m3-smoke-test`, `--m4-smoke-test`, `--m4-benchmark`, `--m5-smoke-test`.
 
-## 3. Quản lý tài nguyên GPU, Cache & Vòng đời an toàn
+## 3. Luồng Định tuyến Đầu vào (FreeGLUT → ImGui + InputManager → ViewportInteraction)
 
-- **Chia sẻ tài nguyên GPU (Shared GPU Assets)**: `SceneObject` chỉ lưu `assetId` và `Transform`. `SceneRenderer` tra cứu `std::shared_ptr<GpuAsset>` từ `AssetManager` mỗi khung hình (O(1) hash lookup), bảo đảm nhiều bản sao của cùng nội thất dùng chung VAO/VBO/EBO/Texture và luôn an toàn sau `reloadAsset()`.
-- **Đồng bộ lưới phòng theo Revision**: `SceneRenderer::syncRoomGpuMeshes()` chỉ upload lại sàn/tường/trần/lưới khi `Room::getGeometryRevision()` tăng (tức khi kích thước/độ dày/grid thay đổi), không upload lại khi chỉ đổi màu sắc hay ẩn/hiện tường.
-- **Transactional updates**: `Room::applySettings()`, `AssetManager::reloadAsset()` và `regenerateActivePlaygroundGeometry()` đều tạo dữ liệu tạm và xác thực trước khi hoán đổi.
-- **Shutdown trước khi hủy context**: `Application::shutdownGraphics()` giải phóng tường minh `RoomEditor` (`SceneRenderer`), `AssetManager`, `TextureManager`, `Framebuffer`, `Shader` và Dear ImGui ngay trong `glutCloseFunc` trước khi FreeGLUT hủy OpenGL context.
+- FreeGLUT callbacks trong `Application` luôn chuyển tiếp đầy đủ mọi sự kiện chuột/bàn phím tới `ImGui_ImplGLUT_*` đồng thời cập nhật `InputManager` (phân biệt `Pressed` 1-frame với `Held`).
+- `RoomEditor::renderViewportPanel()` đo chính xác `ImGui::GetItemRectMin()` / `Max()` và `IsItemHovered()`, đóng gói vào `ViewportInputContext` rồi gọi `ViewportInteraction::processInput()` trong cùng khung hình để Inspector, Hierarchy và Viewport luôn đồng bộ tức thì.
 
-Xem chi tiết kiến trúc Scene Management tại [`docs/SCENE_MANAGEMENT.md`](SCENE_MANAGEMENT.md) và Asset Pipeline tại [`docs/ASSET_PIPELINE.md`](ASSET_PIPELINE.md).
+Xem thêm chi tiết tại [`docs/CAMERA_SYSTEM.md`](CAMERA_SYSTEM.md), [`docs/OBJECT_PICKING.md`](OBJECT_PICKING.md) và [`docs/INTERACTION_GUIDE.md`](INTERACTION_GUIDE.md).

@@ -2,51 +2,58 @@
 
 ## 1. Chiến lược kiểm thử
 
-Dự án áp dụng mô hình kiểm thử 3 tầng:
-1. **Unit Testing thuần CPU**:
-   - `RoomCraft3D_UnitTests` (`M1_UnitTests`): `Transform`, `Camera`, `MeshValidation`.
-   - `RoomCraft3D_GeometryUnitTests` (`M2_GeometryUnitTests`): Primitives, Bézier Curve/Surface, Revolution Surface, BoundingBox, 6 Procedural Furniture models.
-   - `RoomCraft3D_AssetUnitTests` (`M3_AssetUnitTests`): `ModelLoader`, `AssetNormalizer`, `FurnitureCatalog`, 8 Blender assets & fixtures.
-   - `RoomCraft3D_SceneUnitTests` (`M4_SceneUnitTests`): `Room`, `RoomSettings`, `Scene`, `SceneObject`, `ObjectId`, `SelectionState`, `PlacementSystem`, `ScenePresets`.
-2. **Integration, Runtime Smoke & Benchmark Testing**:
-   - `--smoke-test`, `--m1-smoke-test`, `--m2-smoke-test`, `--m3-smoke-test`, `--m4-smoke-test`, `--m4-benchmark`.
+Dự án áp dụng mô hình kiểm thử 3 tầng với **11 bộ kiểm thử CTest**:
+1. **Unit Testing thuần CPU** (`M1_UnitTests`, `M2_GeometryUnitTests`, `M3_AssetUnitTests`, `M4_SceneUnitTests`, `M5_InteractionUnitTests`): Kiểm thử độc lập toán học, sinh hình học, Assimp import, quản lý cảnh, tọa độ cầu camera, Ray Casting, Slab Method, Möller–Trumbore, Wall Occlusion, InputManager và TransformController không cần OpenGL context.
+2. **GPU Integration & Runtime Smoke Testing** (`M0_SmokeTest`..`M5_IntegrationSmokeTest` + `--m4-benchmark`): Chạy trên ngữ cảnh OpenGL 3.3 Core thật.
 3. **Manual GUI Testing**: Người dùng chạy trực tiếp `RoomCraft3D.exe` và xác nhận checklist trực quan.
 
-## 2. Danh mục Test Case — Regression M0, M1, M2, M3
+## 2. Regression M0–M4 (`9/9` CTest)
 
-- **M0 (`TC-M0-01`..`TC-M0-07`)**, **M1 (`TC-M1-01`..`TC-M1-16`)**, **M2 (`TC-M2-01`..`TC-M2-23`)**, **M3 (`TC-M3-01`..`TC-M3-27`)**: Toàn bộ 7 bộ CTest trước phải tiếp tục đạt `PASS`.
+Toàn bộ 9 bộ kiểm thử từ M0 đến M4 (`TC-M0-01`..`TC-M4-29`) phải tiếp tục đạt `PASS`.
 
-## 3. Danh mục Test Case — Milestone M4 (Scene Management & Room Editor)
+## 3. Danh mục Test Case — Milestone M5 (Camera, Object Picking & Interactive Transformation)
 
 | Test ID | Hạng mục | Kịch bản kiểm thử | Kết quả mong đợi |
 |---|---|---|---|
-| **TC-M4-01** | Regression M0–M3 | Chạy lại 7 bộ CTest từ M0 đến M3 | Toàn bộ 7/7 bộ test cũ đạt `PASS` |
-| **TC-M4-02** | Default Room Dimensions | Khởi tạo `Room` mặc định | `5.0 × 6.0 × 3.0 m`, tường `0.15 m`, sàn `0.10 m`, grid `0.50 m`, diện tích `30 m²`, thể tích `90 m³` |
-| **TC-M4-03** | Room Interior Bounds | Gọi `Room::getInteriorBounds()` | `X ∈ [-2.5, 2.5]`, `Y ∈ [0, 3.0]`, `Z ∈ [-3.0, 3.0]` |
-| **TC-M4-04** | Floor Geometry & `y = 0` | Kiểm tra BBox & `validate()` của `FloorMesh` | Mặt trên tại `y = 0`, mặt dưới tại `y = -0.10`, kích thước ngoài `5.30 × 6.30 m` |
-| **TC-M4-05** | Wall Geometry & Dimensions | Kiểm tra BBox & `validate()` của 4 bức tường | Dựng ngoài biên sử dụng, cao `3.0 m`, tường Bắc/Nam phủ góc `5.30 m`, Đông/Tây dài `6.0 m`, không khe hở |
-| **TC-M4-06** | Room Resize | Đổi màu/visibility rồi đổi kích thước sang `7×8×3.5 m` | Đổi màu không tăng `geometryRevision`; đổi kích thước tăng `geometryRevision` và cập nhật interior bounds |
-| **TC-M4-07** | Invalid Room Parameters | Áp dụng width âm, height `0`, length `NaN` | Từ chối sạch, giữ nguyên kích thước & lưới hợp lệ trước đó |
-| **TC-M4-08** | Wall Visibility | Kiểm tra `CutawayView` và `Manual` toggles | Ẩn/hiện đúng tường & trần theo chế độ, KHÔNG thay đổi interior bounds |
-| **TC-M4-09** | Add Procedural Object | Thêm `procedural-desk` vào `Scene` | Trả về `ObjectId` hợp lệ, `objectCount` tăng 1 |
-| **TC-M4-10** | Add Imported Object | Thêm `blender-gaming-chair` vào `Scene` | Trả về `ObjectId` hợp lệ, tham chiếu đúng `assetId` |
-| **TC-M4-11** | Unique Object ID | Thêm & nhân bản nhiều vật thể, xóa rồi thêm tiếp | Mọi ID duy nhất, tăng đơn điệu, không tái sử dụng ID đã xóa |
-| **TC-M4-12** | Remove Object | Xóa ID tồn tại và thử xóa lại / xóa ID không tồn tại | Xóa hợp lệ trả `true`, thao tác ID không tồn tại trả `false` không crash |
-| **TC-M4-13** | Duplicate Object | Nhân bản đối tượng với offset `(0.5, 0, 0.5)` | Tạo ID mới, giữ `assetId`, vị trí dịch đúng offset |
-| **TC-M4-14** | Rename Object | Đổi tên có khoảng trắng thừa và thử tên rỗng | Cắt khoảng trắng sạch, từ chối tên rỗng/ID không tồn tại |
-| **TC-M4-15** | Object Visibility | Tắt `visible` của 1 đối tượng | `getVisibleObjectCount()` giảm, `getObjectCount()` giữ nguyên, giảm draw calls |
-| **TC-M4-16** | Transform Independence | Xoay/scale ghế #1 trong 3 ghế cùng `assetId` | Ghế #2 và #3 giữ nguyên transform ban đầu |
-| **TC-M4-17** | Invalid Transform Rejection | Đặt scale `0`, scale âm, position `NaN` | Từ chối sạch, không làm hỏng đối tượng |
-| **TC-M4-18** | Invalid Asset ID Rejection | Thêm đối tượng với `assetId` không có trong catalog | Trả về `kInvalidObjectId`, không thêm rác vào `Scene` |
-| **TC-M4-19** | SelectionState | Chọn, kiểm tra `isSelected`, xóa chọn | Hoạt động chính xác theo `ObjectId` |
-| **TC-M4-20** | Delete Selected Safely | Xóa đối tượng đang chọn + gọi `reconcileWithScene()` | Selection tự xóa an toàn, không truy cập dữ liệu đã hủy |
-| **TC-M4-21** | Shared GPU Asset Reuse | Render 3 `blender-gaming-chair` + desk + computer | `AssetManager` trả cùng `GpuAsset*`, `uniqueAssetsUsed == 3` cho 5 objects |
-| **TC-M4-22** | Multi-Object Rendering | Render đồng thời phòng + 5 vật thể vào FBO | Đúng `roomDrawCalls`, `objectDrawCalls`, diện tích phủ pixel thực tế `> 5000 px` |
-| **TC-M4-23** | Parent & Submesh Transforms | Đặt `Computer Setup` ở `y = 0.75` trên bàn và render | Kết hợp `M_object * M_asset_part` chính xác, an toàn sau `reloadAsset()` |
-| **TC-M4-24** | Scene Preset Validation | Nạp & render cả 3 preset (`Bedroom`, `Gaming`, `Living`) | 3/3 preset hợp lệ (7 objects/preset, đặt vật đúng độ cao bàn, thảm lệch `3mm`), FBO phủ `> 5000 px` |
-| **TC-M4-25** | Room Camera Fit | Gọi `Camera::fitBoundingBox()` cho `Room::getExteriorBounds()` | Hoạt động đúng ở cả Perspective và Top Orthographic |
-| **TC-M4-26** | Clear Scene & Lifecycle | Gọi `clearObjects()` và kiểm tra render + cleanup | `objectDrawCalls == 0`, giải phóng GPU sạch không double-delete |
-| **TC-M4-27** | Framebuffer Resize | Resize FBO sang `960×540` và vẽ lại scene | FBO complete, kích thước đúng, pixel coverage `> 5000 px` |
-| **TC-M4-28** | 30-Object Benchmark Execution | Chạy benchmark 30 vật thể tại `1280×720` | Thực thi hoàn chỉnh, ghi nhận thời gian khung hình và FPS thực tế |
-| **TC-M4-29** | OpenGL Errors & Safe Shutdown | Quét `glGetError()` và đóng cửa sổ | `OpenGL errors: NONE`, thoát mã `0` |
-| **TC-M4-MANUAL** | Room Editor Manual GUI | Người dùng chạy `RoomCraft3D.exe` kiểm tra 12 kịch bản nghiệm thu M4 | Xác nhận trực quan bởi người dùng |
+| **TC-M5-01** | Regression M0–M4 | Chạy lại 9 bộ CTest từ M0 đến M4 | 9/9 PASS |
+| **TC-M5-02** | Mouse Coord Conversion | Chuyển `(screenX, screenY)` sang tọa độ cục bộ viewport | Chính xác theo `rectMin` |
+| **TC-M5-03** | Viewport-local → NDC | Ánh xạ tâm, góc trên-trái, góc dưới-phải sang OpenGL NDC `[-1, 1]` | Lật trục Y đúng (`top=+1`, `bottom=-1`) |
+| **TC-M5-04** | Framebuffer / DPI Scaling | Display `800×600`, FBO `1600×1200` (2× DPI) | Tâm quy đổi đúng `(800, 600)` |
+| **TC-M5-05** | Perspective Ray Gen | Phát tia từ tâm & cạnh phải viewport ở Perspective | Tâm đi thẳng `-Z`, cạnh phải hướng `+X` |
+| **TC-M5-06** | Orthographic Ray Gen | Phát 2 tia ở 2 vị trí chuột khác nhau trong Top Ortho | Hướng tia song song (`dot=1`), gốc tia khác nhau theo chuột |
+| **TC-M5-07** | Invalid Viewport / Matrix | Viewport 0×0, chuột ngoài vùng, ma trận suy biến, vector 0/NaN | Từ chối an toàn, trả `false` |
+| **TC-M5-08** | Ray Normalization | Kiểm tra độ dài vector hướng sau `Ray::create` & `screenToWorldRay` | `|length(D) - 1| < 1e-3` |
+| **TC-M5-09** | Ray–AABB Hit | Tia từ `(0,1,5)` hướng `-Z` vào hộp `[-1,1]×[0,2]×[-1,1]` | Trúng chính xác tại `t = 4.0`, `z = 1.0` |
+| **TC-M5-10** | Ray–AABB Miss / Behind | Tia lệch ra ngoài & tia hướng ngược ra xa box | Không giao (`false`) |
+| **TC-M5-11** | Parallel Ray | Tia song song trục nằm trong slab & ngoài slab | Trong slab trúng `t = 4.0`; ngoài slab trượt không chia 0 |
+| **TC-M5-12** | Ray Inside Box | Gốc tia nằm tại tâm hộp `(0,1,0)` | Trúng với `startedInside = true`, `tHit = 0` |
+| **TC-M5-13** | Negative Direction & Invalid Box | Tia hướng `(-1, 0, -1)` & hộp bao chưa khởi tạo | Hướng âm trúng đúng; hộp lỗi bị từ chối |
+| **TC-M5-14** | Nearest Object Selection | Hai kệ sách thẳng hàng trước/sau dọc trục `-Z` | Chọn kệ gần hơn |
+| **TC-M5-15** | Hidden Object Exclusion | Ẩn kệ phía trước rồi bắn tia cùng hướng | Bỏ qua kệ ẩn, chọn trúng kệ phía sau |
+| **TC-M5-16** | Locked Object Policy | Khóa đối tượng rồi thử bắt đầu Rotate/Move/Delete | Cho chọn xem thông tin, chặn chỉnh sửa kèm cảnh báo |
+| **TC-M5-17** | Empty-space Clearing | Bắn tia vào vùng trống | Trả `hit = false`, `kInvalidObjectId` |
+| **TC-M5-18** | Rotated/Scaled Bounds | Bàn xoay `90° Y`, scale X `1.5×`, bắn tia vào phần kéo dài | Trúng đúng `ObjectId` |
+| **TC-M5-19** | Camera Orbit | Orbit `(60, 20)` quanh target | Giữ nguyên bán kính & target, đổi vị trí trên cầu |
+| **TC-M5-20** | Camera Pitch Limits | Orbit cực đại lên/xuống | Kẹp chặt trong `[-85°, +85°]`, không kỳ dị |
+| **TC-M5-21** | Camera Pan | Pan `(120, -60)` | `position` và `target` dịch chuyển cùng vector |
+| **TC-M5-22** | Perspective Zoom | Zoom vào/ra quá ngưỡng min/max | Kẹp trong `[0.5, 60.0] m`, clip planes hợp lệ |
+| **TC-M5-23** | Orthographic Zoom | Zoom vào/ra trong Top Ortho | Thay đổi `orthoHalfHeight`, không scale cảnh |
+| **TC-M5-24** | Camera Preset Sync | Chuyển Preset / Fit rồi Orbit nhẹ `1 px` | Không nhảy ngược về vị trí cũ |
+| **TC-M5-25** | Focus Selected | Gọi `fitBoundingBox` vào AABB đối tượng | Target chuyển tới tâm đối tượng |
+| **TC-M5-26** | Ray–Plane Intersection | Giao tiêu chuẩn, song song, gốc trên mặt phẳng, phía sau tia | Đúng tất cả 4 trường hợp |
+| **TC-M5-27** | Drag Preserves Y & Offset | Kéo vật ở `Y = 0.75 m` với con trỏ lệch tâm | Giữ nguyên `Y = 0.75 m` và `grabOffset` |
+| **TC-M5-28** | Grid Snapping | Kéo vật sang tọa độ âm `(-1.18, -0.77)` khi bật Snap `0.5 m` | Làm tròn đúng `(-1.0, 0.75, -1.0)` |
+| **TC-M5-29** | Rotation Interaction | Xoay `90°` & `180°` với angle snap `15°` | Đúng góc quay quanh trục `Y` |
+| **TC-M5-30** | Scaling Interaction | Kéo phóng to & kéo cực âm | Luôn dương, kẹp `[0.1, 10.0]` |
+| **TC-M5-31** | Cancel Transform | Hủy khi đang kéo / xoay / scale (`Esc`) | Khôi phục nguyên `initialTransform`, về `Idle` |
+| **TC-M5-32** | Delete Selected Safely | Nhấn `Delete` khi đang tương tác | Xóa object, xóa selection, đưa state về `Idle` |
+| **TC-M5-33** | Duplicate Selection | Nhấn `Ctrl + D` và giữ phím qua frame sau | Nhân bản đúng 1 lần (không auto-repeat), chọn bản mới |
+| **TC-M5-34** | Input Routing & GUI Capture | Nhấn `Delete`/`G` khi `uiWantsTextInput = true` | Không xóa object, không đổi tool |
+| **TC-M5-35** | Selection / Inspector Sync | Chọn từ Viewport / Hierarchy / Duplicate / Delete | Dùng chung `SelectionState`, đồng bộ cùng frame |
+| **TC-M5-36** | Viewport Resize & Picking | Resize FBO sang `960×540` ở Top Ortho và pick Computer Setup | Chọn trúng chính xác `ObjectId` |
+| **TC-M5-37** | Invalid Interaction Recovery | Xóa/khóa đối tượng trong lúc đang biến đổi | Tự hủy tương tác về `Idle` an toàn |
+| **TC-M5-38** | GPU Render & Highlight | Orbit camera & render Selected BBox cyan vào FBO | Xác nhận pixel cyan `> 20 px` |
+| **TC-M5-39** | OpenGL Errors & Shutdown | Quét `glGetError()` và đóng cửa sổ | `OpenGL errors: NONE`, thoát mã `0` |
+| **TC-M5-TRI** | Ray–Triangle Refinement (P1) | Bắn tia qua khoảng trống dưới gầm bàn | AABB trúng nhưng Ray–Triangle trượt sạch |
+| **TC-M5-OCC** | Wall Occlusion Policy | Bắn tia từ ngoài tường Nam ở `CutawayView` vs `AllWalls` | Tường ẩn cho chọn; tường hiện chặn chọn (`occludedByWall=true`) |
+| **TC-M5-MANUAL** | Interactive Editor GUI | Người dùng kiểm thử chuột/phím trực tiếp trên `RoomCraft3D.exe` | Xác nhận trực quan bởi người dùng |

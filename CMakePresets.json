@@ -1,0 +1,66 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "mingw-x64-debug",
+      "displayName": "Windows x64 MinGW-w64 (Debug)",
+      "description": "Build Windows x64 Debug với WinLibs MinGW-w64 UCRT + Ninja + Pinned FetchContent",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/mingw-x64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "x86_64-w64-mingw32-gcc",
+        "CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-g++",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        "ROOMCRAFT_USE_VCPKG": "OFF"
+      }
+    },
+    {
+      "name": "mingw-x64-release",
+      "displayName": "Windows x64 MinGW-w64 (Release)",
+      "description": "Build Windows x64 Release với WinLibs MinGW-w64 UCRT + Ninja + Pinned FetchContent",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/mingw-x64-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "x86_64-w64-mingw32-gcc",
+        "CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-g++",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        "ROOMCRAFT_USE_VCPKG": "OFF"
+      }
+    },
+    {
+      "name": "msvc-x64-vcpkg-debug",
+      "displayName": "Windows x64 MSVC + vcpkg (Debug)",
+      "description": "Build Windows x64 Debug với Visual Studio / MSVC và vcpkg manifest (yêu cầu VCPKG_ROOT)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/msvc-x64-vcpkg",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "ROOMCRAFT_USE_VCPKG": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "mingw-x64-debug",
+      "configurePreset": "mingw-x64-debug"
+    },
+    {
+      "name": "mingw-x64-release",
+      "configurePreset": "mingw-x64-release"
+    },
+    {
+      "name": "msvc-x64-vcpkg-debug",
+      "configurePreset": "msvc-x64-vcpkg-debug",
+      "configuration": "Debug"
+    }
+  ]
+}

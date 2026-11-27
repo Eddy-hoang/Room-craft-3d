@@ -1,0 +1,38 @@
+# Build directories
+/build/
+/out/
+/cmake-build-*/
+CMakeUserPresets.json
+
+# vcpkg installed artifacts
+/vcpkg_installed/
+
+# IDE and Editor files
+.vs/
+.vscode/ipch/
+*.user
+*.suo
+*.sln.docstates
+.idea/
+*.swp
+*~
+
+# Compiled binaries and artifacts
+*.exe
+*.dll
+*.lib
+*.a
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary test outputs and runtime state
+*.log
+imgui.ini

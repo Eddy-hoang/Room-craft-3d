@@ -1,0 +1,198 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(RoomCraft3D
+    VERSION 0.0.1
+    DESCRIPTION "RoomCraft 3D - Desktop 3D Interior Design and Room Planner"
+    LANGUAGES C CXX
+)
+
+# Bắt buộc chuẩn C++17 trên toàn bộ project
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Cho phép các thư viện CMake cũ tương thích khi dùng CMake 4.x
+if(NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+endif()
+
+# Tự động phát hiện nếu đang cấu hình qua vcpkg toolchain
+set(_default_use_vcpkg OFF)
+if(DEFINED VCPKG_TOOLCHAIN OR (DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg"))
+    set(_default_use_vcpkg ON)
+endif()
+option(ROOMCRAFT_USE_VCPKG "Use dependencies resolved via vcpkg manifest" ${_default_use_vcpkg})
+
+find_package(OpenGL REQUIRED)
+
+if(ROOMCRAFT_USE_VCPKG)
+    message(STATUS "[RoomCraft3D] Dependency mode: vcpkg")
+    find_package(FreeGLUT CONFIG REQUIRED)
+    find_package(glad CONFIG REQUIRED)
+    find_package(imgui CONFIG REQUIRED)
+
+    if(TARGET FreeGLUT::freeglut)
+        set(ROOMCRAFT_FREEGLUT_TARGET FreeGLUT::freeglut)
+    elseif(TARGET FreeGLUT::freeglut_static)
+        set(ROOMCRAFT_FREEGLUT_TARGET FreeGLUT::freeglut_static)
+    else()
+        message(FATAL_ERROR "FreeGLUT target not found via vcpkg")
+    endif()
+
+    set(ROOMCRAFT_GLAD_TARGET glad::glad)
+    set(ROOMCRAFT_IMGUI_TARGET imgui::imgui)
+else()
+    message(STATUS "[RoomCraft3D] Dependency mode: Pinned FetchContent (locked commits/tags)")
+    include(FetchContent)
+
+    # 1. FreeGLUT v3.8.0 (khóa commit SHA để đảm bảo tính tái lập build)
+    set(FREEGLUT_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+    set(FREEGLUT_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+    set(FREEGLUT_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(FREEGLUT_GLES OFF CACHE BOOL "" FORCE)
+    set(FREEGLUT_REPLACE_GLUT OFF CACHE BOOL "" FORCE)
+    set(INSTALL_PDB OFF CACHE BOOL "" FORCE)
+
+    FetchContent_Declare(
+        freeglut
+        GIT_REPOSITORY https://github.com/FreeGLUTProject/freeglut.git
+        GIT_TAG        3db1649ce1f5e42f1338b51e3fa14849be547d5d # v3.8.0
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(freeglut)
+
+    # Tạo wrapper INTERFACE target để xuất đúng macro FREEGLUT_STATIC và include dir
+    # mà không làm thay đổi install(EXPORT) nội bộ của FreeGLUT
+    if(TARGET freeglut_static)
+        add_library(roomcraft_freeglut INTERFACE)
+        target_link_libraries(roomcraft_freeglut INTERFACE freeglut_static)
+        target_compile_definitions(roomcraft_freeglut INTERFACE FREEGLUT_STATIC)
+        target_include_directories(roomcraft_freeglut INTERFACE
+            "${freeglut_SOURCE_DIR}/include"
+            "${freeglut_BINARY_DIR}/include"
+        )
+        set(ROOMCRAFT_FREEGLUT_TARGET roomcraft_freeglut)
+    else()
+        message(FATAL_ERROR "Expected freeglut_static target from FreeGLUT FetchContent")
+    endif()
+
+    # 2. GLAD v0.1.36 (OpenGL 3.3 Core Profile, khóa commit SHA)
+    # Sinh trực tiếp mã nguồn C bằng Python3 để tương thích cả CMake 3.x và CMake 4.x
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+    if(POLICY CMP0169)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+
+    FetchContent_Declare(
+        glad_src
+        GIT_REPOSITORY https://github.com/Dav1dde/glad.git
+        GIT_TAG        1ecd45775d96f35170458e6b148eb0708967e402 # v0.1.36
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_GetProperties(glad_src)
+    if(NOT glad_src_POPULATED)
+        FetchContent_Populate(glad_src)
+    endif()
+
+    set(GLAD_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/glad")
+    if(NOT EXISTS "${GLAD_OUT_DIR}/src/glad.c" OR NOT EXISTS "${GLAD_OUT_DIR}/include/glad/glad.h")
+        message(STATUS "[RoomCraft3D] Generating GLAD OpenGL 3.3 Core loader...")
+        execute_process(
+            COMMAND "${Python3_EXECUTABLE}" -m glad
+                --profile core
+                --api gl=3.3
+                --generator c
+                --spec gl
+                --reproducible
+                --out-path "${GLAD_OUT_DIR}"
+            WORKING_DIRECTORY "${glad_src_SOURCE_DIR}"
+            RESULT_VARIABLE GLAD_GEN_RESULT
+            OUTPUT_VARIABLE GLAD_GEN_OUT
+            ERROR_VARIABLE  GLAD_GEN_ERR
+        )
+        if(NOT GLAD_GEN_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to generate GLAD OpenGL 3.3 Core loader:\n${GLAD_GEN_OUT}\n${GLAD_GEN_ERR}")
+        endif()
+    endif()
+
+    add_library(glad STATIC "${GLAD_OUT_DIR}/src/glad.c")
+    target_include_directories(glad PUBLIC "${GLAD_OUT_DIR}/include")
+    set(ROOMCRAFT_GLAD_TARGET glad)
+
+    # 3. Dear ImGui v1.93.0-docking (khóa commit SHA, backend FreeGLUT + OpenGL3)
+    FetchContent_Declare(
+        imgui_src
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG        b916186e66aa3c02b72c6ca17455516512ed8049 # v1.93.0-docking
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(imgui_src)
+
+    add_library(imgui STATIC
+        "${imgui_src_SOURCE_DIR}/imgui.cpp"
+        "${imgui_src_SOURCE_DIR}/imgui_draw.cpp"
+        "${imgui_src_SOURCE_DIR}/imgui_tables.cpp"
+        "${imgui_src_SOURCE_DIR}/imgui_widgets.cpp"
+        "${imgui_src_SOURCE_DIR}/backends/imgui_impl_glut.cpp"
+        "${imgui_src_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp"
+    )
+    target_include_directories(imgui PUBLIC
+        "${imgui_src_SOURCE_DIR}"
+        "${imgui_src_SOURCE_DIR}/backends"
+    )
+    target_link_libraries(imgui PUBLIC
+        ${ROOMCRAFT_FREEGLUT_TARGET}
+        OpenGL::GL
+    )
+    set(ROOMCRAFT_IMGUI_TARGET imgui)
+endif()
+
+# Executable chính cho Milestone M0
+add_executable(RoomCraft3D
+    src/main.cpp
+    src/core/Application.cpp
+)
+
+target_include_directories(RoomCraft3D PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+target_link_libraries(RoomCraft3D PRIVATE
+    ${ROOMCRAFT_GLAD_TARGET}
+    ${ROOMCRAFT_FREEGLUT_TARGET}
+    ${ROOMCRAFT_IMGUI_TARGET}
+    OpenGL::GL
+)
+
+if(WIN32)
+    target_link_libraries(RoomCraft3D PRIVATE winmm gdi32 user32)
+endif()
+
+# Bật cảnh báo biên dịch chặt cho mã nguồn project
+if(MSVC)
+    target_compile_options(RoomCraft3D PRIVATE /W4 /permissive- /utf-8)
+else()
+    target_compile_options(RoomCraft3D PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Với MinGW-w64 trên Windows, liên kết tĩnh runtime GCC/C++ và winpthread để file thực thi
+# có thể chạy độc lập ngay cả khi mở trực tiếp từ Windows Explorer
+if(MINGW)
+    target_link_options(RoomCraft3D PRIVATE -static)
+endif()
+
+# Sao chép thư mục assets (chứa shader) cạnh file thực thi để tránh hardcode đường dẫn
+add_custom_command(TARGET RoomCraft3D POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:RoomCraft3D>/assets"
+    COMMENT "Copying RoomCraft 3D assets next to executable"
+)
+
+# Đăng ký kiểm thử tự động (CTest) cho Milestone M0
+enable_testing()
+add_test(
+    NAME M0_SmokeTest
+    COMMAND $<TARGET_FILE:RoomCraft3D> --smoke-test
+)

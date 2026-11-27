@@ -86,3 +86,15 @@ Mặc định OpenGL vẽ thẳng vào *Default Framebuffer* (màn hình). Để
 Tài nguyên GPU (`VAO`, `VBO`, `EBO`, `Shader Program`, `FBO`, `Texture`, `RBO`) là các handle số nguyên gắn chặt với OpenGL context:
 - Áp dụng **RAII** kết hợp quy tắc **Non-copyable, Movable** (`= delete` cho copy constructor/assignment; dùng `std::exchange(other.handle, 0)` cho move) để mỗi handle luôn chỉ có **một chủ sở hữu duy nhất**, ngăn chặn lỗi giải phóng trùng (double-delete) hoặc giải phóng sớm khi bản sao tạm bị hủy.
 - Với **FreeGLUT**, `glutMainLoop()` mặc định có thể hủy OpenGL context trước khi hàm trả về. RoomCraft 3D thiết lập `GLUT_ACTION_GLUTMAINLOOP_RETURNS` và gọi `shutdownGraphics()` ngay trong `glutCloseFunc` **trước khi context bị phá hủy**, đảm bảo mọi lời gọi `glDelete*` và `ImGui_ImplOpenGL3_Shutdown()` đều hợp lệ.
+
+---
+
+## 7. Milestone M2 — Procedural & Parametric Geometry
+
+Tại Milestone M2, hệ thống bổ sung module `roomcraft_geometry` thuần CPU triển khai:
+- **Primitives tham số**: `Plane`, `Cube/Cuboid` (24 đỉnh phẳng), `Cylinder` (pháp tuyến tỏa tròn + nắp phẳng tách đỉnh), `Sphere` (tọa độ cầu + xử lý cực không suy biến), `Cone/Frustum` (pháp tuyến mặt bên nghiêng vuông góc đường sinh).
+- **Đường cong & mặt cong Bézier**: Cubic Bézier Curve (Bernstein + de Casteljau + đạo hàm $B'(t)$) và Bicubic Bézier Surface $4 \times 4$ với pháp tuyến tính từ tích có hướng hai đạo hàm riêng $\frac{\partial S}{\partial u} \times \frac{\partial S}{\partial v}$.
+- **Mặt tròn xoay (Surface of Revolution)**: Xoay đường cong biên 2D quanh trục $+Y$, chuẩn hóa UV theo độ dài cung và xử lý cực $r = 0$.
+- **Hierarchical Modeling & AABB**: Tổ hợp đa thành phần bằng $M_{\text{world\_part}} = M_{\text{parent}} \cdot M_{\text{local\_part}}$ với gốc nội thất tại tâm đáy ($y = 0$).
+
+Xem phân tích toán học đầy đủ, sơ đồ lớp và mã giả (pseudocode) tại [`docs/GEOMETRY_ALGORITHMS.md`](GEOMETRY_ALGORITHMS.md).

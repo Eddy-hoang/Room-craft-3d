@@ -1,148 +1,50 @@
 # Kiến trúc phần mềm — RoomCraft 3D (Architecture)
 
-## 1. Kiến trúc tổng thể theo tầng (Layered Modular Architecture)
+## 1. Kiến trúc tổng thể theo tầng (Milestone M0–M2)
 
 ```mermaid
 flowchart TD
-    UI["Presentation Layer\n(Dear ImGui: Diagnostics + 3D Viewport)"] --> APP["Application Layer\n(Application + Window + Demo Scene)"]
-    APP --> GFX["Core Graphics Engine\n(Renderer, Shader, Mesh, Vertex, Camera, Framebuffer)"]
-    APP --> SCENE["Scene Math Layer\n(Transform)"]
+    UI["Presentation Layer\n(Dear ImGui: Geometry Playground + 3D Viewport)"] --> APP["Application Layer\n(Application + Window)"]
+    APP --> GFX["Core Graphics Engine (roomcraft_engine)\n(Renderer, Shader, Mesh, Framebuffer)"]
+    APP --> GEO["Procedural Geometry Engine (roomcraft_geometry - CPU only)\n(MeshData, PrimitiveGenerator, BezierCurve/Surface, RevolutionSurface, FurnitureGenerator)"]
+    GEO --> MATH["Math & Validation Layer (roomcraft_math - CPU only)\n(Transform, Camera, BoundingBox, Vertex, MeshValidation)"]
+    GFX --> MATH
     GFX --> GL["OpenGL 3.3 Core · GLSL 330 · GLAD · GLM"]
     APP --> GLUT["FreeGLUT Window & Event Loop"]
 ```
 
-## 2. Sơ đồ lớp Core Graphics Engine (Milestone M1)
+## 2. Phân tách thư viện trong CMake (Acyclic Dependency Graph)
 
-```mermaid
-classDiagram
-    class Application {
-        -Window m_window
-        -Renderer m_renderer
-        -Camera m_camera
-        -Framebuffer m_framebuffer
-        -Shader m_meshShader
-        -Shader m_gridShader
-        -Mesh m_cubeMesh
-        +initialize(argc, argv) bool
-        +run() int
-        -shutdownGraphics() void
-    }
+1. **`roomcraft_math` (CPU-only, chỉ phụ thuộc `GLM`)**:
+   - `Transform`, `Camera`, `BoundingBox`, `Vertex`, `MeshValidation`.
+   - Liên kết trực tiếp bởi `RoomCraft3D_UnitTests` (`M1_UnitTests`).
+2. **`roomcraft_geometry` (CPU-only, chỉ phụ thuộc `roomcraft_math`, KHÔNG phụ thuộc OpenGL/FreeGLUT/ImGui)**:
+   - `MeshData`, `GeometryUtils`, `PrimitiveGenerator`, `BezierCurve`, `BezierSurface`, `RevolutionSurface`, `FurnitureGenerator`.
+   - Liên kết trực tiếp bởi `RoomCraft3D_GeometryUnitTests` (`M2_GeometryUnitTests`) — chạy hoàn toàn không cần OpenGL context.
+3. **`roomcraft_engine` (GPU + Window + ImGui, phụ thuộc `roomcraft_geometry`, `GLAD`, `FreeGLUT`, `ImGui`, `OpenGL`)**:
+   - `Window`, `Shader`, `Mesh`, `Framebuffer`, `Renderer`, `Application`.
+4. **`RoomCraft3D`**: Executable chính hỗ trợ 4 chế độ chạy:
+   - Mặc định: **M2 Geometry Playground** tương tác.
+   - `--smoke-test`: M0 Regression (`M0_SmokeTest`).
+   - `--m1-smoke-test`: M1 Regression (`M1_IntegrationSmokeTest`).
+   - `--m2-smoke-test`: M2 Procedural Geometry GPU Integration (`M2_IntegrationSmokeTest`).
 
-    class Window {
-        -GpuInfo m_gpuInfo
-        -int m_width
-        -int m_height
-        +initialize(argc, argv) bool
-        +setCallbacks(callbacks) void
-        +runMainLoop() void
-        +requestClose() void
-        +swapBuffers() void
-    }
-
-    class Renderer {
-        -RenderStats m_lastFrameStats
-        +beginFrame(w, h, clearColor, depthTest) void
-        +drawMesh(mesh, shader, transform, camera, color) void
-        +drawLines(lineMesh, shader, model, camera, color) void
-        +endFrame() void
-        +getLastFrameStats() RenderStats
-    }
-
-    class Shader {
-        -unsigned int m_programId
-        +loadFromFiles(vertPath, fragPath) bool
-        +loadFromSource(vertSrc, fragSrc) bool
-        +bind() void
-        +setMat4(name, value) void
-        +setVec4(name, value) void
-        +destroy() void
-    }
-
-    class Mesh {
-        -unsigned int m_vao
-        -unsigned int m_vbo
-        -unsigned int m_ebo
-        -uint32_t m_vertexCount
-        -uint32_t m_indexCount
-        +validateData(vertices, indices, topology)$ bool
-        +create(vertices, indices, topology) bool
-        +draw() void
-        +destroy() void
-    }
-
-    class Vertex {
-        +glm::vec3 position
-        +glm::vec3 normal
-        +glm::vec2 texCoord
-    }
-
-    class Transform {
-        +glm::vec3 position
-        +glm::vec3 rotationDegrees
-        +glm::vec3 scale
-        +getModelMatrix() glm::mat4
-        +reset() void
-    }
-
-    class Camera {
-        -glm::vec3 m_position
-        -glm::vec3 m_target
-        -ProjectionMode m_projectionMode
-        +lookAt(pos, target, up) bool
-        +getViewMatrix() glm::mat4
-        +getProjectionMatrix() glm::mat4
-        +reset() void
-    }
-
-    class Framebuffer {
-        -unsigned int m_fbo
-        -unsigned int m_colorTexture
-        -unsigned int m_depthStencilRbo
-        +create(w, h) bool
-        +resize(w, h) bool
-        +bind() void
-        +unbind()$ void
-        +isComplete() bool
-        +destroy() void
-    }
-
-    Application *-- Window
-    Application *-- Renderer
-    Application *-- Camera
-    Application *-- Framebuffer
-    Application *-- Shader
-    Application *-- Mesh
-    Application *-- Transform
-    Mesh ..> Vertex : uploads
-    Renderer ..> Mesh : draws
-    Renderer ..> Shader : binds
-    Renderer ..> Transform : reads Model
-    Renderer ..> Camera : reads View/Proj
-```
-
-## 3. Luồng Graphics Pipeline (Off-screen Framebuffer -> Dear ImGui Viewport)
+## 3. Luồng sinh hình học & hiển thị (CPU → GPU Pipeline)
 
 ```mermaid
 flowchart LR
-    CPU["CPU Geometry\n(Vertex + Indices)"] --> VAL["Mesh::validateData()"]
-    VAL --> GPU["VAO + VBO + EBO\n(GPU Static Buffers)"]
-    GPU --> VS["Vertex Shader\n(mesh.vert / grid.vert)\np_clip = P * V * M * p_local"]
-    VS --> RAST["Primitive Assembly\n& Rasterization"]
-    RAST --> FS["Fragment Shader\n(mesh.frag / grid.frag)"]
-    FS --> DEPTH["Depth Testing\n(GL_DEPTH_TEST, GL_LESS)"]
-    DEPTH --> FBO["Off-screen Framebuffer\n(RGBA8 Texture + DEPTH24_STENCIL8)"]
-    FBO --> IMGUI["ImGui::Image\n(UV flipped: 0,1 -> 1,0)"]
-    IMGUI --> SCREEN["Default Framebuffer\n& glutSwapBuffers()"]
+    PARAMS["Tham số hình học\n(UI / API)"] --> GEN["roomcraft_geometry\n(Sinh MeshData trên CPU)"]
+    GEN --> VALID["MeshData::validate()\nNormal≈1, UV hữu hạn,\nKhông chỉ mục lỗi/suy biến"]
+    VALID --> UPLOAD["Application::uploadPlaygroundParts()\nChỉ chạy khi tham số đổi"]
+    UPLOAD --> GPU["graphics::Mesh\n(VAO + VBO + EBO)"]
+    GPU --> RENDER["Renderer::drawMeshWithMatrix()\nM_world = M_parent * M_local\nSolid / Wireframe (khôi phục GL_FILL)"]
+    RENDER --> FBO["Off-screen Framebuffer\n(RGBA8 + DEPTH24_STENCIL8)"]
+    FBO --> IMGUI["ImGui::Image\n(UV lật: 0,1 -> 1,0)"]
 ```
 
-## 4. Tách lớp thư viện trong CMake (M1)
+## 4. Quản lý tài nguyên GPU & Regeneration an toàn
 
-Để hỗ trợ kiểm thử đơn vị (Unit Testing) độc lập với GPU/OpenGL:
-- `roomcraft_math`: Chỉ chứa `Transform`, `Camera` và `MeshValidation` (chỉ phụ thuộc `GLM`). Được liên kết trực tiếp bởi `RoomCraft3D_UnitTests` để chạy nhanh, không cần tạo cửa sổ hay OpenGL context.
-- `roomcraft_engine`: Chứa toàn bộ lớp điều khiển OpenGL/FreeGLUT/ImGui (`Window`, `Shader`, `Mesh`, `Framebuffer`, `Renderer`, `Application`).
-- `RoomCraft3D`: Executable chính liên kết `roomcraft_engine`, hỗ trợ chế độ tương tác mặc định, `--smoke-test` (M0 regression) và `--m1-smoke-test` (M1 GPU integration).
-
-## 5. Nguyên tắc quản lý vòng đời tài nguyên GPU
-
-- Toàn bộ lớp sở hữu GPU handle (`Shader`, `Mesh`, `Framebuffer`) áp dụng **RAII**: cấm copy (`= delete`), hỗ trợ move (`std::exchange(..., 0)`) và có phương thức `destroy()` idempotent (chống double-delete).
-- Callback `Window::onClose` gọi `Application::shutdownGraphics()` **trước khi** FreeGLUT hủy OpenGL context để mọi lệnh `glDelete*` và `ImGui_ImplOpenGL3_Shutdown()` luôn thực thi trên context hợp lệ.
+- **Không sinh lại mỗi frame**: `regenerateActivePlaygroundGeometry()` chỉ chạy khi tham số thay đổi (với `Auto-regenerate`), người dùng nhấn `Regenerate Mesh` hoặc đổi loại hình học.
+- **Transactional swap**: Mọi `Mesh` mới được tạo trên vector tạm; nếu tham số không hợp lệ hoặc upload thất bại, mesh hợp lệ trước đó vẫn được giữ nguyên và hiển thị cảnh báo lỗi.
+- **Wireframe state restoration**: `Renderer::endFrame()` luôn khôi phục `glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)` để không ảnh hưởng tới Dear ImGui hay các render pass tiếp theo.
+- **Shutdown trước khi hủy context**: `Window::onClose` gọi `Application::shutdownGraphics()` giải phóng toàn bộ `m_activeParts`, overlay meshes, `Framebuffer`, `Shader` và Dear ImGui trước khi FreeGLUT hủy OpenGL context.

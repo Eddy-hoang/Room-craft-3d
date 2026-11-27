@@ -8,44 +8,42 @@ Cập nhật lần cuối: **2026-11-27**
 - **GPU**: `Intel(R) UHD Graphics` (Vendor: `Intel`, Driver: `32.0.101.7088`)
 - **OpenGL Runtime**: `3.3.0 - Build 32.0.101.7088` (`Core Profile`), GLSL `3.30 - Build 32.0.101.7088`
 - **Toolchain**: `x86_64-w64-mingw32-g++ 16.2.0` (WinLibs UCRT), `CMake 4.4.4`, `Ninja 1.13.2`, `GLM 1.0.1`
-- **CTest tổng hợp**: `ctest --test-dir build/mingw-x64-debug --output-on-failure -V` → **`3/3 Passed (1.37 sec)`**
+- **CTest tổng hợp**: `ctest --test-dir build/mingw-x64-debug --output-on-failure -V` → **`5/5 Passed (3.24 sec)`**
 
 ---
 
-## 2. Kết quả kiểm thử Milestone M0 (Project Foundation)
+## 2. Kết quả kiểm thử Milestone M2 (Procedural Geometry & Modeling)
 
-| Test ID | Module | Kết quả mong đợi | Kết quả thực tế | Trạng thái |
+| Test ID | Hạng mục | Kết quả mong đợi | Kết quả thực tế & Bằng chứng | Trạng thái |
 |---|---|---|---|---|
-| **TC-M0-01** | Foundation | CMake Configure không lỗi | `-- Configuring done`, `-- Generating done`, exit code `0` | **PASS** |
-| **TC-M0-02** | Foundation | Build Debug tạo `RoomCraft3D.exe` | Build 0 lỗi, 0 cảnh báo trên code project; liên kết tĩnh runtime | **PASS** |
-| **TC-M0-03** | Foundation | Khởi tạo OpenGL 3.3 Core + thông tin GPU | `Intel(R) UHD Graphics`, `OpenGL 3.3.0 (Core Profile)`, `GLSL 3.30` | **PASS** |
-| **TC-M0-04** | Renderer (M0) | Render tam giác bằng VAO/VBO/GLSL 330 | `Center RGB=(140,147,160)`, `OpenGL errors: NONE` | **PASS** |
-| **TC-M0-05** | Window | Resize cửa sổ `960x540` | `[SMOKE] Resize verified: YES (960x540)` | **PASS** |
-| **TC-M0-06** | Dear ImGui | Tích hợp `imgui_impl_glut` + `imgui_impl_opengl3` | Khởi tạo và render không lỗi GL | **PASS** |
-| **TC-M0-07** | Lifecycle | Giải phóng GPU/ImGui trước khi hủy context | `GPU & Dear ImGui resources released cleanly`, exit code `0` | **PASS** |
-| **TC-M0-MSVC** | Build MSVC | `cmake --preset msvc-x64-vcpkg-debug` | Máy chưa cài MSVC Build Tools và `vcpkg` | **NOT RUN** |
-| **TC-M0-MANUAL** | Manual GUI | Người dùng kiểm thử thủ công 8 mục M0 | Chưa nhận bằng chứng xác nhận thủ công từ người dùng | **NOT VERIFIED** |
+| **TC-M2-01** | Regression M0/M1 | `M0_SmokeTest`, `M1_UnitTests`, `M1_IntegrationSmokeTest` PASS | Cả 3 bộ test đạt `PASS` trong đợt chạy `5/5` CTest (`M0_SmokeTest`, `M1_UnitTests` 23/23, `M1_IntegrationSmokeTest` 10/10) | **PASS** |
+| **TC-M2-02** | Plane | `3×2m`, normal `+Y`, CCW, UV | `M2_GeometryUnitTests`: `[Primitives] TC-M2-02 Plane ... PASS` (12 verts, 36 indices) | **PASS** |
+| **TC-M2-03** | Cube / Cuboid | 24 verts, 36 indices, bottom pivot | `[Primitives] TC-M2-03 Cuboid ... PASS` + `Cube delegates to Cuboid ... PASS` | **PASS** |
+| **TC-M2-04** | Cylinder | Capped/open topology, UV seam, normals | `[Primitives] TC-M2-04 Cylinder capped/open topology, UV seam, outward normals & winding: PASS` | **PASS** |
+| **TC-M2-05** | Sphere | Radius, analytic normals, non-degenerate poles | `[Primitives] TC-M2-05 Sphere radius, analytic normals, non-degenerate poles & CCW winding: PASS` | **PASS** |
+| **TC-M2-06** | Cone / Frustum | Apex hợp lệ, sloped normals | `[Primitives] TC-M2-06 Cone apex (finite sloped normals, no degenerate tris) & Frustum: PASS` | **PASS** |
+| **TC-M2-07** | Bézier Curve Endpoints | `B(0)=P0`, `B(1)=P3`, khớp de Casteljau | `[BezierCurve] TC-M2-07 Endpoints B(0)==P0, B(1)==P3 and de Casteljau agreement: PASS` | **PASS** |
+| **TC-M2-08** | Bézier Curve Derivatives | Đạo hàm, thẳng hàng, lấy mẫu, reject `t` lỗi | `[BezierCurve] TC-M2-08 Derivatives, collinearity, sampling count & invalid t rejection: PASS` | **PASS** |
+| **TC-M2-09** | Bézier Surface Corners | Khớp 4 góc control grid | `[BezierSurface] TC-M2-09 BezierSurface matches all 4 corner control points: PASS` | **PASS** |
+| **TC-M2-10** | Bézier Surface Normals & Topology | Flat/curved normals, winding, reject suy biến | `[BezierSurface] TC-M2-10 Flat/Curved normals, topology counts, winding & invalid patch rejection: PASS` | **PASS** |
+| **TC-M2-11** | Revolution Surface | Rings, UV seam, cap, cực `r=0` | `[RevolutionSurface] TC-M2-11 Bezier revolution rings, UV seam, bottom cap & zero-radius pole: PASS` | **PASS** |
+| **TC-M2-12** | Normal Validation | Độ dài `≈ 1`, hữu hạn trên mọi mesh | Đạt trong `MeshData::validate()` + `checkAllNormalsUnitAndUvFinite()` ở tất cả generator | **PASS** |
+| **TC-M2-13** | UV Validation | UV hữu hạn `[0,1]` + UV seam | Đạt trên toàn bộ primitives, Bézier Surface và Revolution Surface | **PASS** |
+| **TC-M2-14** | Index Bounds & Degenerates | Không vượt biên, không tam giác diện tích 0 | `MeshData::validate(..., checkDegenerateTriangles=true)` đạt 100% trên mọi mesh sinh ra | **PASS** |
+| **TC-M2-15** | Invalid Parameter Handling | Từ chối tham số âm/0/NaN/vượt giới hạn | 3 nhóm test `TC-M2-15` (Primitives, RevolutionSurface, Furniture) đều `PASS` | **PASS** |
+| **TC-M2-16** | BoundingBox | `min/max/center/size` + xoay 90° Y | `[BoundingBox] TC-M2-16` (2 assertions) `PASS` | **PASS** |
+| **TC-M2-17** | Furniture Hierarchy | `M_parent * M_local` cho toàn bộ Desk parts | `[Furniture] TC-M2-17 Hierarchy M_parent * M_local propagates accurately to all desk parts: PASS` | **PASS** |
+| **TC-M2-18** | ≥ 5 Procedural Furniture Models | 6 mô hình hợp lệ, đứng trên `y = 0` | Desk (`144v/72t`), Chair (`492v/420t`), Bookshelf (`192v/96t`), Desk Lamp (`529v/672t`), Vase (`727v/1312t`), Curved Chair (`447v/508t`) đều `PASS` | **PASS** |
+| **TC-M2-19** | Mesh Regeneration | Regen `8->32` segs & giữ mesh cũ khi lỗi | `[TC-M2-19] Mesh regeneration (8->32 segs) and prior-mesh preservation on invalid input: PASS` | **PASS** |
+| **TC-M2-20** | GPU Rendering Categories | Render & kiểm tra BBox pixel coverage 12 mục | Cả 12 mục (Cuboid `19058px`, Cylinder `14216px`, Sphere `10963px`, Frustum `11234px`, BezierSurface `15849px`, Revolution `7471px`, Desk `6407px`, Chair `2846px`, Bookshelf `15182px`, Lamp `4295px`, Vase `4889px`, CurvedChair `3835px`, `cornerBg=OK`) đều `PASS` | **PASS** |
+| **TC-M2-21** | Wireframe State Restoration | Khôi phục `GL_FILL` sau `endFrame()` | `[TC-M2-21] Wireframe polygon mode restored to GL_FILL after endFrame(): PASS` | **PASS** |
+| **TC-M2-22** | GPU Resource Lifecycle | Tái sinh 5 chu kỳ qua 6 mô hình & shutdown | `[TC-M2-22] Repeated GPU upload/release lifecycle across furniture models: PASS` | **PASS** |
+| **TC-M2-23** | OpenGL Errors & Safe Exit | `GL_NO_ERROR`, thoát mã `0` | `[M2-SMOKE] Frames rendered: 10`, `OpenGL errors: NONE`, `M2_SMOKE_EXIT=0`, `M2_UNIT_EXIT=0` (chạy độc lập ngoài PATH WinLibs) | **PASS** |
+| **TC-M2-MANUAL** | Geometry Playground GUI | Kiểm thử tương tác thủ công M2 | Chưa được người dùng chạy kiểm chứng trực quan | **NOT VERIFIED** |
 
 ---
 
-## 3. Kết quả kiểm thử Milestone M1 (Core Graphics Engine)
+## 3. Tóm tắt trạng thái M0 & M1 (Giữ nguyên không tự ý đổi `NOT VERIFIED`)
 
-| Test ID | Module | Kết quả mong đợi | Kết quả thực tế & Bằng chứng | Trạng thái |
-|---|---|---|---|---|
-| **TC-M1-01** | Regression M0 | `M0_SmokeTest` vẫn PASS sau refactor | `Test #1: M0_SmokeTest Passed (0.82 sec)` — `Center RGB=140,147,160`, `Resize 960x540`, `OpenGL errors: NONE` | **PASS** |
-| **TC-M1-02** | Shader | Compile & link `mesh.*` và `grid.*` thành công | `[TC-M1-02] Valid 3D & Grid shaders compiled and linked: PASS` | **PASS** |
-| **TC-M1-03** | Shader | Shader sai cú pháp báo lỗi rõ ràng | Driver Intel trả về `ERROR: 0:2: 'INVALID_SYNTAX_TOKEN' : undeclared identifier`; `loadFromSource` trả về `false`, handle `0` | **PASS** |
-| **TC-M1-04** | Mesh | Upload và vẽ indexed cube (24 verts, 36 indices) | `[TC-M1-04] Indexed cube mesh uploaded (24 vertices, 36 indices): PASS` | **PASS** |
-| **TC-M1-05** | Mesh Validation | Từ chối chỉ mục vượt biên, buffer rỗng, sai topology, NaN | Unit test (`MeshValidationTests`, 6/6 PASS) + Integration (`index=99, vertexCount=3` bị từ chối sạch) | **PASS** |
-| **TC-M1-06** | Transform | Translation chính xác | `M1_UnitTests`: `[Transform] TC-M1-06 Translation: PASS` | **PASS** |
-| **TC-M1-07** | Transform | Rotation +90° quanh X, Y, Z chính xác | `M1_UnitTests`: cả 3 trục X, Y, Z đều `PASS` (`epsilon = 1e-4`) | **PASS** |
-| **TC-M1-08** | Transform | Uniform/Non-uniform Scaling, `M=T*R*S`, từ chối scale lỗi | `M1_UnitTests`: Uniform 2x, Non-uniform `(2,0.5,3)`, Combined `T*R*S`, Reset, Invalid scale (0/âm/NaN) đều `PASS` | **PASS** |
-| **TC-M1-09** | Camera | Perspective projection đúng + từ chối input lỗi | `M1_UnitTests`: foreshortening `PASS`; từ chối aspect ≤ 0/NaN, clip planes lỗi, `pos==target`, collinear/zero up, FOV ngoài biên `PASS` | **PASS** |
-| **TC-M1-10** | Camera | Orthographic projection đúng + presets hợp lệ | `M1_UnitTests`: `w=1`, tọa độ gần/xa trùng khớp `0.5`, Top/Front/Reset presets `PASS` | **PASS** |
-| **TC-M1-11** | Depth Testing | Che khuất đúng độc lập thứ tự draw + đối chứng Depth OFF | `Far->Near (Depth ON) RGB=255,0,0`; `Near->Far (Depth ON) RGB=255,0,0`; `Near->Far (Depth OFF) RGB=0,0,255` | **PASS** |
-| **TC-M1-12** | Renderer / Scene | Hiển thị nhiều cube 3D + Grid/Axes trong 10 frames | `Frames rendered: 10`, `drawCalls=7 (vertices=130, indices=166)`; `CubeA=(213,82,82)`, `CubeB=(88,141,221)`, `CubeC=(75,196,131)` | **PASS** |
-| **TC-M1-13** | Framebuffer | FBO hoàn thiện (`GL_FRAMEBUFFER_COMPLETE`) | `[TC-M1-13] Off-screen Framebuffer complete with valid color texture: PASS` | **PASS** |
-| **TC-M1-14** | Framebuffer | Resize đúng, no-op caching, xử lý an toàn `0x0` | `[TC-M1-14] Framebuffer resize, no-op caching, and 0x0 safety: PASS` | **PASS** |
-| **TC-M1-15** | Lifecycle (RAII) | Move ownership sạch, chống double-delete, giải phóng trước khi hủy context | `[TC-M1-15] RAII move ownership & safe resource destruction: PASS`; `GPU & Dear ImGui resources released cleanly` | **PASS** |
-| **TC-M1-16** | OpenGL Errors | Không phát sinh lỗi OpenGL ngoài dự kiến | `[M1-SMOKE] OpenGL errors: NONE`, `M1_EXIT=0`, `UNIT_EXIT=0` (chạy cả trong CTest và độc lập ngoài PATH WinLibs) | **PASS** |
-| **TC-M1-MANUAL** | Manual GUI | Người dùng chạy `RoomCraft3D.exe`, kiểm tra trực quan 3 cube 3D trong ImGui Viewport, tắt/bật Depth Test, đổi Perspective/Orthographic, kéo Transform | Chưa được người dùng chạy kiểm chứng trực quan | **NOT VERIFIED** |
+- **M0 (`TC-M0-01`..`TC-M0-07`)**: **7/7 PASS** (tự động). `TC-M0-MSVC`: **NOT RUN**. `TC-M0-MANUAL`: **NOT VERIFIED**.
+- **M1 (`TC-M1-01`..`TC-M1-16`)**: **16/16 PASS** (tự động). `TC-M1-MANUAL`: **NOT VERIFIED**.

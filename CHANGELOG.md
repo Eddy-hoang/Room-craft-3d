@@ -4,29 +4,30 @@ Tất cả các thay đổi đáng chú ý của dự án được ghi nhận tr
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-11-27 (Milestone M1: Core Graphics Engine)
+## [0.2.0] - 2026-11-27 (Milestone M2: Procedural Geometry & Modeling)
 ### Added
-- Tích hợp thư viện toán học **GLM 1.0.1** (khóa commit SHA qua CMake FetchContent và bổ sung vào `vcpkg.json`).
-- Tách lớp `roomcraft::core::Window` (`Window.hpp/cpp`) quản lý FreeGLUT, OpenGL 3.3 Core Context, GLAD và tập callback sự kiện độc lập khỏi `Application`.
-- Triển khai các thành phần Core Graphics Engine theo mô hình RAII (cấm copy, hỗ trợ move):
-  - `Shader` (`Shader.hpp/cpp`): đọc/biên dịch/link GLSL `#version 330 core`, báo lỗi driver chi tiết, cache uniform (`int`, `float`, `vec3`, `vec4`, `mat4`).
-  - `Vertex` (`Vertex.hpp`): cấu trúc đỉnh `position`, `normal`, `texCoord` chuẩn `standard_layout`.
-  - `Mesh` (`Mesh.hpp/cpp`, `MeshValidation.cpp`): VAO/VBO/EBO với Indexed Rendering (`glDrawElements`), bố cục `sizeof`/`offsetof`, kiểm tra biên chỉ mục & dữ liệu NaN/Inf trước khi upload GPU, kèm fixture lập phương đơn vị, lưới XZ và trục XYZ.
-  - `Transform` (`Transform.hpp/cpp`): hệ tọa độ tay phải Y-up, đơn vị mét, công thức `M = T * Ry * Rx * Rz * S` và kiểm tra scale hợp lệ.
-  - `Camera` (`Camera.hpp/cpp`): View (`glm::lookAt`), Perspective (`glm::perspective`), Orthographic (`glm::ortho`), kiểm tra dữ liệu đầu vào tránh ma trận suy biến và các góc nhìn preset.
-  - `Framebuffer` (`Framebuffer.hpp/cpp`): off-screen FBO (`GL_RGBA8` + `GL_DEPTH24_STENCIL8`), kiểm tra completeness, cache resize và xử lý an toàn kích thước `0x0`.
-  - `Renderer` (`Renderer.hpp/cpp`): điều phối `beginFrame`, `drawMesh`, `drawLines`, `endFrame`, bật/tắt Depth Test và thống kê `RenderStats` thực tế.
-- Bổ sung shader 3D `assets/shaders/mesh.vert`, `mesh.frag` và shader lưới/trục `assets/shaders/grid.vert`, `grid.frag`.
-- Mở rộng giao diện chẩn đoán M1 (`M1 Diagnostics` + `3D Viewport (Off-screen Framebuffer)` với UV lật đúng chiều cho OpenGL texture).
-- Bổ sung bộ Unit Test thuần CPU (`tests/unit/TransformTests.cpp`, `CameraTests.cpp`, `MeshValidationTests.cpp`) và GPU Integration Smoke Test (`--m1-smoke-test`) tích hợp với CTest.
+- Tạo thư viện tĩnh thuần CPU `roomcraft_geometry` (không phụ thuộc OpenGL/FreeGLUT/ImGui):
+  - `math::BoundingBox` (`BoundingBox.hpp/cpp`): tính AABB từ đỉnh, hợp nhất và biến đổi 8 góc bằng ma trận 4×4.
+  - `geometry::MeshData` (`MeshData.hpp/cpp`) và `geometry::GeometryUtils` (`GeometryUtils.hpp/cpp`): dữ liệu mesh CPU kèm kiểm tra pháp tuyến đơn vị, UV hữu hạn, chỉ mục hợp lệ và chống tam giác suy biến; sinh overlay BoundingBox và Vertex Normals.
+  - `geometry::PrimitiveGenerator` (`PrimitiveGenerator.hpp/cpp`): tự sinh thuật toán cho `Plane`, `Cube`, `Cuboid`, `Cylinder`, `Sphere`, `Cone`, `Frustum` với pivot tâm đáy (`y = 0`), winding CCW, pháp tuyến chuẩn hóa và UV seam.
+  - `geometry::BezierCurve` (`BezierCurve.hpp/cpp`): Cubic Bézier (Bernstein + de Casteljau + đạo hàm bậc nhất + control polygon).
+  - `geometry::BezierSurface` (`BezierSurface.hpp/cpp`): Bicubic Bézier Surface `4×4` (đạo hàm riêng `dS/du`, `dS/dv`, pháp tuyến bề mặt, control net).
+  - `geometry::RevolutionSurface` (`RevolutionSurface.hpp/cpp`): mặt tròn xoay quanh trục `+Y` từ profile 2D hoặc Bézier Curve, xử lý cực `r = 0` và nắp phẳng.
+  - `geometry::FurnitureGenerator` (`FurnitureGenerator.hpp/cpp`): mô hình hóa phân cấp (`M_world_part = M_parent * M_local_part`) cho 6 mẫu nội thất: `Desk`, `Chair`, `Bookshelf`, `Desk Lamp`, `Vase` (Revolution) và `Curved Chair` (Bicubic Bézier Surface).
+- Nâng cấp `Renderer` hỗ trợ `drawMeshWithMatrix()` và `setWireframeMode()` tự khôi phục `GL_FILL` tại `endFrame()`.
+- Nâng cấp `Application` thành **M2 Geometry Playground** (chọn danh mục/loại, chỉnh tham số, auto/manual regenerate, Solid/Wireframe, Grid/Axes/BoundingBox/Control Net/Vertex Normals overlay, thống kê thực tế) và bổ sung chế độ `--m2-smoke-test`.
+- Bổ sung bộ Unit Test thuần CPU `RoomCraft3D_GeometryUnitTests` (`M2_GeometryUnitTests`) và `M2_IntegrationSmokeTest` trong CTest.
+- Tạo tài liệu học thuật [`docs/GEOMETRY_ALGORITHMS.md`](docs/GEOMETRY_ALGORITHMS.md) giải thích thuật toán kèm sơ đồ Mermaid và mã giả.
 
 ### Verified
-- CMake configure & Debug build thành công (`0` errors, `0` project warnings).
-- Toàn bộ `3/3` bộ test CTest đạt `PASS` (`M0_SmokeTest`, `M1_UnitTests` với 23 assertions, `M1_IntegrationSmokeTest` gồm chứng minh Depth Testing độc lập thứ tự draw và xác minh pixel 3 cube trong FBO).
-- Kiểm thử tương tác GUI thủ công (`TC-M1-MANUAL`) giữ trạng thái `NOT VERIFIED` chờ người dùng xác nhận.
+- Build Debug thành công (`24/24` targets, `0` errors, `0` project warnings).
+- Toàn bộ `5/5` CTest suites đạt `PASS` trong `3.24s` (`M0_SmokeTest`, `M1_UnitTests`, `M1_IntegrationSmokeTest`, `M2_GeometryUnitTests`, `M2_IntegrationSmokeTest`).
+- Kiểm thử tương tác GUI thủ công (`TC-M2-MANUAL`) giữ trạng thái `NOT VERIFIED` chờ người dùng xác nhận.
+
+## [0.1.0] - 2026-11-27 (Milestone M1: Core Graphics Engine)
+### Added
+- Tích hợp `GLM 1.0.1`, tách `Window` khỏi `Application`, triển khai `Shader`, `Vertex`, `Mesh`, `Transform`, `Camera`, `Framebuffer`, `Renderer`, demo 3 cube + Grid/XYZ Axes, `M1 Diagnostics`, unit tests và GPU integration smoke test.
 
 ## [0.0.1] - 2026-11-27 (Milestone M0: Project Foundation)
 ### Added
-- Khởi tạo Git repository, `.gitignore`, `LICENSE`, `AGENTS.md` và bộ tài liệu nền móng (`docs/`).
-- Cấu hình build CMake (`CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json`) sử dụng C++17 và khóa phiên bản dependency (`FreeGLUT v3.8.0`, `GLAD v0.1.36`, `Dear ImGui v1.93.0-docking`).
-- Triển khai lớp `roomcraft::core::Application` (`Application.hpp/cpp`) và `src/main.cpp` với OpenGL 3.3 Core, GLAD, tam giác VAO/VBO/GLSL và tích hợp Dear ImGui (`imgui_impl_glut` + `imgui_impl_opengl3`).
+- Khởi tạo cấu trúc dự án, CMake C++17, FreeGLUT `v3.8.0`, GLAD `v0.1.36`, Dear ImGui `v1.93.0-docking`, render tam giác OpenGL 3.3 Core và `M0_SmokeTest`.

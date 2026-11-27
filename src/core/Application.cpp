@@ -1,5 +1,9 @@
 #include "roomcraft/core/Application.hpp"
 
+#include "roomcraft/geometry/GeometryUtils.hpp"
+#include "roomcraft/geometry/PrimitiveGenerator.hpp"
+#include "roomcraft/geometry/RevolutionSurface.hpp"
+
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -8,6 +12,7 @@
 #include <imgui_impl_opengl3.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -63,7 +68,7 @@ bool Application::initialize(int& argc, char** argv)
             return false;
         }
     } else {
-        if (!initM1Resources()) {
+        if (!initM1AndM2Resources()) {
             shutdownGraphics();
             return false;
         }
@@ -74,7 +79,6 @@ bool Application::initialize(int& argc, char** argv)
         return false;
     }
 
-    // Kết nối các sự kiện cửa sổ từ Window tới Application và Dear ImGui
     WindowCallbacks callbacks;
     callbacks.onDisplay = [this]() { renderFrame(); };
     callbacks.onReshape = [this](int w, int h) { handleReshape(w, h); };
@@ -175,6 +179,24 @@ int Application::run()
         return passed ? 0 : 1;
     }
 
+    if (m_config.mode == ApplicationMode::SmokeTestM2) {
+        const auto& stats = m_renderer.getLastFrameStats();
+        std::cout << "[M2-SMOKE] Frames rendered       : " << m_frameCount << std::endl;
+        std::cout << "[M2-SMOKE] Last frame draw calls : " << stats.drawCalls
+                  << " (vertices=" << stats.vertexCount
+                  << ", indices=" << stats.indexCount
+                  << ", triangles=" << stats.triangleCount << ")" << std::endl;
+        std::cout << "[M2-SMOKE] Integration suite     : " << (m_m2SuitePassed ? "PASS" : "FAIL") << std::endl;
+        std::cout << "[M2-SMOKE] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
+
+        const bool passed = (m_frameCount >= m_config.smokeTestFrames) &&
+                            m_m2SuiteExecuted &&
+                            m_m2SuitePassed &&
+                            !m_glErrorDetected;
+        std::cout << "[M2-SMOKE] Final Result          : " << (passed ? "PASS" : "FAIL") << std::endl;
+        return passed ? 0 : 1;
+    }
+
     return 0;
 }
 
@@ -189,7 +211,6 @@ bool Application::initImGui()
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 #endif
 
-    // Bảng màu tối theo định hướng RoomCraft Design System
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 6.0f;
@@ -254,9 +275,8 @@ bool Application::initM0Resources()
     return true;
 }
 
-bool Application::initM1Resources()
+bool Application::initM1AndM2Resources()
 {
-    // 1. Nạp Shader 3D (mesh.vert/frag) và Shader lưới/trục (grid.vert/frag)
     if (!m_meshShader.loadFromFiles(resolveAssetPath("assets/shaders/mesh.vert"),
                                     resolveAssetPath("assets/shaders/mesh.frag"))) {
         return false;
@@ -267,7 +287,7 @@ bool Application::initM1Resources()
         return false;
     }
 
-    // 2. Tạo Indexed Cube Mesh (fixture kiểm thử Graphics Engine M1)
+    // Cube fixture cho M1 Reference Scene & điểm đánh dấu control point cho Bézier Playground
     std::vector<graphics::Vertex> cubeVerts;
     std::vector<std::uint32_t> cubeIndices;
     graphics::Mesh::buildUnitCubeFixture(cubeVerts, cubeIndices);
@@ -275,50 +295,64 @@ bool Application::initM1Resources()
         return false;
     }
 
-    // 3. Tạo Grid trên mặt phẳng XZ và 3 trục tọa độ X, Y, Z bằng GL_LINES (Modern OpenGL)
+    geometry::MeshData markerData;
+    if (!geometry::PrimitiveGenerator::createCube(0.055f, markerData) ||
+        !m_controlMarkerMesh.create(markerData.vertices, markerData.indices, markerData.topology)) {
+        return false;
+    }
+
+    // Grid trên mặt phẳng XZ và 3 trục tọa độ X, Y, Z bằng GL_LINES
     std::vector<graphics::Vertex> gridVerts;
     std::vector<std::uint32_t> gridIndices;
-    graphics::Mesh::buildGridFixture(6, 1.0f, gridVerts, gridIndices);
+    graphics::Mesh::buildGridFixture(6, 0.5f, gridVerts, gridIndices);
     if (!m_gridMesh.create(gridVerts, gridIndices, graphics::PrimitiveTopology::Lines)) {
         return false;
     }
 
     std::vector<graphics::Vertex> axisVerts;
     std::vector<std::uint32_t> axisIndices;
-    graphics::Mesh::buildAxisLineFixture({0.0f, 0.005f, 0.0f}, {2.5f, 0.005f, 0.0f}, axisVerts, axisIndices);
+    graphics::Mesh::buildAxisLineFixture({0.0f, 0.004f, 0.0f}, {2.2f, 0.004f, 0.0f}, axisVerts, axisIndices);
     if (!m_axisXMesh.create(axisVerts, axisIndices, graphics::PrimitiveTopology::Lines)) {
         return false;
     }
-    graphics::Mesh::buildAxisLineFixture({0.0f, 0.0f, 0.0f}, {0.0f, 2.5f, 0.0f}, axisVerts, axisIndices);
+    graphics::Mesh::buildAxisLineFixture({0.0f, 0.0f, 0.0f}, {0.0f, 2.2f, 0.0f}, axisVerts, axisIndices);
     if (!m_axisYMesh.create(axisVerts, axisIndices, graphics::PrimitiveTopology::Lines)) {
         return false;
     }
-    graphics::Mesh::buildAxisLineFixture({0.0f, 0.005f, 0.0f}, {0.0f, 0.005f, 2.5f}, axisVerts, axisIndices);
+    graphics::Mesh::buildAxisLineFixture({0.0f, 0.004f, 0.0f}, {0.0f, 0.004f, 2.2f}, axisVerts, axisIndices);
     if (!m_axisZMesh.create(axisVerts, axisIndices, graphics::PrimitiveTopology::Lines)) {
         return false;
     }
 
-    // 4. Khởi tạo Off-screen Framebuffer (mặc định 860x640, tự resize theo viewport panel)
     if (!m_framebuffer.create(860, 640)) {
         return false;
     }
 
-    // 5. Thiết lập scene thử nghiệm gồm nhiều khối lập phương 3D có che khuất nhau
-    setupDefaultDemoScene();
-    m_camera.reset();
+    setupDefaultM1DemoScene();
+
+    if (m_config.mode == ApplicationMode::SmokeTestM1) {
+        m_category = PlaygroundCategory::M1ReferenceScene;
+        m_camera.reset();
+    } else {
+        // Góc nhìn gần vừa vặn để quan sát nội thất và hình học M2
+        m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
+        m_camera.lookAt({2.3f, 1.8f, 2.7f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
+        if (!regenerateActivePlaygroundGeometry()) {
+            return false;
+        }
+    }
+
     m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
                             static_cast<float>(m_framebuffer.getHeight()));
 
-    std::cout << "[RoomCraft3D] M1 Core Graphics Engine resources initialized (Shaders, Indexed Cube, Grid/Axes, Framebuffer)."
-              << std::endl;
+    std::cout << "[RoomCraft3D] M1/M2 Graphics & Geometry Playground resources initialized." << std::endl;
     return true;
 }
 
-void Application::setupDefaultDemoScene()
+void Application::setupDefaultM1DemoScene()
 {
     m_demoCubes.clear();
 
-    // Cube A (gần camera hơn, màu đỏ dịu) — chồng hình chiếu lên Cube B để quan sát trực tiếp Depth Testing
     DemoCubeObject cubeA;
     cubeA.name = "Cube A (Front Red)";
     cubeA.transform = scene::Transform({0.25f, 0.50f, 1.10f}, {0.0f, 18.0f, 0.0f}, {1.0f, 1.0f, 1.0f});
@@ -326,7 +360,6 @@ void Application::setupDefaultDemoScene()
     cubeA.color = {0.88f, 0.34f, 0.34f, 1.0f};
     m_demoCubes.push_back(cubeA);
 
-    // Cube B (xa camera hơn, vẽ sau Cube A, màu xanh dương) — nếu tắt Depth Test sẽ đè lên Cube A
     DemoCubeObject cubeB;
     cubeB.name = "Cube B (Back Blue)";
     cubeB.transform = scene::Transform({-0.45f, 0.65f, -0.55f}, {0.0f, -24.0f, 0.0f}, {1.35f, 1.30f, 1.35f});
@@ -334,7 +367,6 @@ void Application::setupDefaultDemoScene()
     cubeB.color = {0.35f, 0.56f, 0.88f, 1.0f};
     m_demoCubes.push_back(cubeB);
 
-    // Cube C (bên phải, non-uniform scaling, màu xanh lá)
     DemoCubeObject cubeC;
     cubeC.name = "Cube C (Scaled Green)";
     cubeC.transform = scene::Transform({1.95f, 0.40f, -0.35f}, {12.0f, 35.0f, 0.0f}, {0.85f, 0.80f, 1.45f});
@@ -343,15 +375,270 @@ void Application::setupDefaultDemoScene()
     m_demoCubes.push_back(cubeC);
 }
 
+void Application::resetCurrentPlaygroundParameters()
+{
+    m_planeWidth = 2.0f;
+    m_planeDepth = 2.0f;
+    m_planeSubX = 4;
+    m_planeSubZ = 4;
+    m_cubeSize = 1.0f;
+    m_cuboidW = 1.4f;
+    m_cuboidH = 0.8f;
+    m_cuboidD = 0.9f;
+    m_cylRadius = 0.45f;
+    m_cylHeight = 1.2f;
+    m_cylSegments = 24;
+    m_cylCapped = true;
+    m_sphereRadius = 0.55f;
+    m_sphereLatSeg = 18;
+    m_sphereLonSeg = 28;
+    m_coneRadius = 0.50f;
+    m_coneHeight = 1.15f;
+    m_coneSegments = 24;
+    m_coneCapped = true;
+    m_frustumBottomR = 0.55f;
+    m_frustumTopR = 0.25f;
+    m_frustumHeight = 1.0f;
+    m_frustumSegments = 24;
+    m_frustumCapBottom = true;
+    m_frustumCapTop = true;
+
+    m_bezierCurvePts = {
+        glm::vec3(-1.0f, 0.2f, 0.0f),
+        glm::vec3(-0.4f, 1.5f, 0.4f),
+        glm::vec3( 0.4f, 1.5f, -0.4f),
+        glm::vec3( 1.0f, 0.2f, 0.0f)
+    };
+    m_bezierCurveSegments = 32;
+    m_bezierSurfWidth = 1.8f;
+    m_bezierSurfDepth = 1.8f;
+    m_bezierSurfCurvature = 0.55f;
+    m_bezierSurfUSeg = 16;
+    m_bezierSurfVSeg = 16;
+    m_revHeight = 1.1f;
+    m_revBaseR = 0.22f;
+    m_revBellyR = 0.48f;
+    m_revNeckR = 0.16f;
+    m_revRimR = 0.28f;
+    m_revRadialSeg = 32;
+    m_revProfileSeg = 20;
+    m_revCapBottom = true;
+    m_revCapTop = false;
+
+    m_deskParams = geometry::DeskParams{};
+    m_chairParams = geometry::ChairParams{};
+    m_bookshelfParams = geometry::BookshelfParams{};
+    m_lampParams = geometry::DeskLampParams{};
+    m_vaseParams = geometry::VaseParams{};
+    m_curvedChairParams = geometry::CurvedChairParams{};
+    m_rootTransform.reset();
+}
+
+bool Application::uploadPlaygroundParts(std::vector<geometry::FurniturePart>& parts,
+                                        const math::BoundingBox& overallBox,
+                                        const geometry::MeshData* controlOverlayLines,
+                                        const std::vector<glm::vec3>& controlPoints,
+                                        std::string& outError)
+{
+    // Chuẩn bị toàn bộ GPU mesh tạm trước khi hoán đổi để nếu có lỗi sẽ KHÔNG làm mất mesh đang hiển thị
+    std::vector<UploadedRenderPart> nextParts;
+    nextParts.reserve(parts.size());
+
+    std::uint32_t totalVerts = 0;
+    std::uint32_t totalIndices = 0;
+    std::uint32_t totalTris = 0;
+
+    geometry::MeshData combinedNormals;
+    combinedNormals.topology = graphics::PrimitiveTopology::Lines;
+
+    for (auto& part : parts) {
+        UploadedRenderPart uploaded;
+        uploaded.name = part.name;
+        uploaded.localTransform = part.localTransform;
+        uploaded.color = part.baseColor;
+        uploaded.isLinePrimitive = (part.meshData.topology == graphics::PrimitiveTopology::Lines);
+
+        if (!uploaded.mesh.create(part.meshData.vertices, part.meshData.indices, part.meshData.topology, &outError)) {
+            return false;
+        }
+
+        totalVerts += part.meshData.getVertexCount();
+        totalIndices += part.meshData.getIndexCount();
+        totalTris += part.meshData.getTriangleCount();
+
+        // Thu thập các đoạn pháp tuyến đỉnh cho chế độ Normal Visualization (biến đổi về không gian root)
+        if (part.meshData.topology == graphics::PrimitiveTopology::Triangles) {
+            const glm::mat4 localMat = part.localTransform.getModelMatrix();
+            const glm::mat3 normalMat = glm::mat3(glm::transpose(glm::inverse(localMat)));
+            const glm::vec3 up(0.0f, 1.0f, 0.0f);
+            for (const auto& v : part.meshData.vertices) {
+                const glm::vec3 p = glm::vec3(localMat * glm::vec4(v.position, 1.0f));
+                const glm::vec3 n = glm::normalize(normalMat * v.normal);
+                const auto baseIdx = static_cast<std::uint32_t>(combinedNormals.vertices.size());
+                combinedNormals.vertices.push_back({p, up, {0.0f, 0.0f}});
+                combinedNormals.vertices.push_back({p + n * m_normalVisualLength, up, {1.0f, 0.0f}});
+                combinedNormals.indices.push_back(baseIdx);
+                combinedNormals.indices.push_back(baseIdx + 1);
+            }
+        }
+
+        nextParts.push_back(std::move(uploaded));
+    }
+
+    graphics::Mesh nextBBoxLines;
+    if (overallBox.isValid()) {
+        const auto bboxData = geometry::GeometryUtils::buildBoundingBoxLines(overallBox);
+        if (!bboxData.vertices.empty()) {
+            nextBBoxLines.create(bboxData.vertices, bboxData.indices, bboxData.topology);
+        }
+    }
+
+    graphics::Mesh nextControlLines;
+    if (controlOverlayLines != nullptr && !controlOverlayLines->vertices.empty()) {
+        nextControlLines.create(controlOverlayLines->vertices,
+                                controlOverlayLines->indices,
+                                controlOverlayLines->topology);
+    }
+
+    graphics::Mesh nextNormalLines;
+    if (!combinedNormals.vertices.empty()) {
+        nextNormalLines.create(combinedNormals.vertices, combinedNormals.indices, combinedNormals.topology);
+    }
+
+    // Hoán đổi tài nguyên GPU an toàn (RAII sẽ tự giải phóng các buffer cũ ngay khi vector cũ hết scope)
+    m_activeParts = std::move(nextParts);
+    m_activeBBoxLines = std::move(nextBBoxLines);
+    m_activeControlLines = std::move(nextControlLines);
+    m_activeNormalLines = std::move(nextNormalLines);
+    m_activeControlPoints = controlPoints;
+    m_activeBoundingBox = overallBox;
+    m_activeVertexCount = totalVerts;
+    m_activeIndexCount = totalIndices;
+    m_activeTriangleCount = totalTris;
+    return true;
+}
+
+bool Application::regenerateActivePlaygroundGeometry()
+{
+    if (m_category == PlaygroundCategory::M1ReferenceScene) {
+        m_lastGeometryError.clear();
+        return true;
+    }
+
+    const auto startTime = std::chrono::steady_clock::now();
+
+    std::vector<geometry::FurniturePart> parts;
+    math::BoundingBox overallBox;
+    geometry::MeshData controlLines;
+    bool hasControlLines = false;
+    std::vector<glm::vec3> controlPoints;
+    std::string error;
+    bool ok = false;
+
+    if (m_category == PlaygroundCategory::Primitives) {
+        geometry::MeshData meshData;
+        const glm::vec4 primColor{0.45f, 0.64f, 0.88f, 1.0f};
+        switch (m_primitiveTypeIndex) {
+            case 0: ok = geometry::PrimitiveGenerator::createPlane(m_planeWidth, m_planeDepth, m_planeSubX, m_planeSubZ, meshData, &error); break;
+            case 1: ok = geometry::PrimitiveGenerator::createCube(m_cubeSize, meshData, &error); break;
+            case 2: ok = geometry::PrimitiveGenerator::createCuboid(m_cuboidW, m_cuboidH, m_cuboidD, meshData, &error); break;
+            case 3: ok = geometry::PrimitiveGenerator::createCylinder(m_cylRadius, m_cylHeight, m_cylSegments, m_cylCapped, meshData, &error); break;
+            case 4: ok = geometry::PrimitiveGenerator::createSphere(m_sphereRadius, m_sphereLatSeg, m_sphereLonSeg, meshData, &error); break;
+            case 5: ok = geometry::PrimitiveGenerator::createCone(m_coneRadius, m_coneHeight, m_coneSegments, m_coneCapped, meshData, &error); break;
+            case 6: ok = geometry::PrimitiveGenerator::createFrustum(m_frustumBottomR, m_frustumTopR, m_frustumHeight, m_frustumSegments, m_frustumCapBottom, m_frustumCapTop, meshData, &error); break;
+            default: error = "Unknown primitive type."; break;
+        }
+        if (ok) {
+            overallBox = meshData.boundingBox;
+            parts.push_back({"Primitive", std::move(meshData), scene::Transform(), primColor});
+        }
+    } else if (m_category == PlaygroundCategory::Parametric) {
+        if (m_parametricTypeIndex == 0) {
+            const geometry::BezierCurve curve(m_bezierCurvePts);
+            geometry::MeshData curveLines;
+            ok = curve.generateLineMesh(m_bezierCurveSegments, curveLines, &error) &&
+                 curve.generateControlPolygonMesh(controlLines, &error);
+            if (ok) {
+                hasControlLines = true;
+                controlPoints.assign(m_bezierCurvePts.begin(), m_bezierCurvePts.end());
+                overallBox = curveLines.boundingBox;
+                parts.push_back({"BezierCurve", std::move(curveLines), scene::Transform(), {0.35f, 0.88f, 0.60f, 1.0f}});
+            }
+        } else if (m_parametricTypeIndex == 1) {
+            const auto surface = geometry::BezierSurface::createCurvedWavePatch(
+                m_bezierSurfWidth, m_bezierSurfDepth, m_bezierSurfCurvature);
+            geometry::MeshData surfMesh;
+            ok = surface.generateMesh(m_bezierSurfUSeg, m_bezierSurfVSeg, surfMesh, &error) &&
+                 surface.generateControlNetMesh(controlLines, &error);
+            if (ok) {
+                hasControlLines = true;
+                const auto& grid = surface.getControlPoints();
+                for (int i = 0; i < 4; ++i) {
+                    for (int j = 0; j < 4; ++j) {
+                        controlPoints.push_back(grid[static_cast<std::size_t>(i)][static_cast<std::size_t>(j)]);
+                    }
+                }
+                overallBox = surfMesh.boundingBox;
+                parts.push_back({"BezierSurface", std::move(surfMesh), scene::Transform(), {0.48f, 0.70f, 0.90f, 1.0f}});
+            }
+        } else {
+            const geometry::BezierCurve profile(
+                glm::vec3(m_revBaseR,  0.0f,               0.0f),
+                glm::vec3(m_revBellyR, m_revHeight * 0.35f, 0.0f),
+                glm::vec3(m_revNeckR,  m_revHeight * 0.78f, 0.0f),
+                glm::vec3(m_revRimR,   m_revHeight,         0.0f)
+            );
+            geometry::MeshData revMesh;
+            ok = geometry::RevolutionSurface::generateFromBezierProfile(
+                profile, m_revProfileSeg, m_revRadialSeg, m_revCapBottom, m_revCapTop, revMesh, &error);
+            if (ok) {
+                overallBox = revMesh.boundingBox;
+                parts.push_back({"RevolutionSurface", std::move(revMesh), scene::Transform(), {0.42f, 0.72f, 0.78f, 1.0f}});
+            }
+        }
+    } else if (m_category == PlaygroundCategory::Furniture) {
+        geometry::FurnitureModel model;
+        switch (m_furnitureTypeIndex) {
+            case 0: ok = geometry::FurnitureGenerator::createDesk(m_deskParams, model, &error); break;
+            case 1: ok = geometry::FurnitureGenerator::createChair(m_chairParams, model, &error); break;
+            case 2: ok = geometry::FurnitureGenerator::createBookshelf(m_bookshelfParams, model, &error); break;
+            case 3: ok = geometry::FurnitureGenerator::createDeskLamp(m_lampParams, model, &error); break;
+            case 4: ok = geometry::FurnitureGenerator::createVase(m_vaseParams, model, &error); break;
+            case 5: ok = geometry::FurnitureGenerator::createCurvedChair(m_curvedChairParams, model, &error); break;
+            default: error = "Unknown furniture type."; break;
+        }
+        if (ok) {
+            overallBox = model.boundingBox;
+            parts = std::move(model.parts);
+        }
+    }
+
+    if (!ok) {
+        // Giữ nguyên mesh hợp lệ trước đó và hiển thị thông báo lỗi cho người dùng
+        m_lastGeometryError = error;
+        return false;
+    }
+
+    if (!uploadPlaygroundParts(parts, overallBox, hasControlLines ? &controlLines : nullptr, controlPoints, error)) {
+        m_lastGeometryError = error;
+        return false;
+    }
+
+    const auto endTime = std::chrono::steady_clock::now();
+    m_lastGenerationTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
+    m_lastGeometryError.clear();
+    return true;
+}
+
 void Application::shutdownGraphics()
 {
     if (!m_initialized && !m_imguiInitialized &&
         !m_meshShader.isValid() && !m_gridShader.isValid() && !m_m0BasicShader.isValid() &&
-        !m_cubeMesh.isValid() && !m_framebuffer.isComplete() && m_m0Vao == 0 && m_m0Vbo == 0) {
+        !m_cubeMesh.isValid() && !m_framebuffer.isComplete() && m_activeParts.empty() &&
+        m_m0Vao == 0 && m_m0Vbo == 0) {
         return;
     }
 
-    // 1. Giải phóng Dear ImGui trước khi hủy OpenGL context
     if (m_imguiInitialized) {
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplGLUT_Shutdown();
@@ -359,9 +646,15 @@ void Application::shutdownGraphics()
         m_imguiInitialized = false;
     }
 
-    // 2. Giải phóng toàn bộ tài nguyên M1 trước khi OpenGL context bị hủy
+    // Giải phóng toàn bộ GPU mesh của Geometry Playground trước khi hủy OpenGL context
+    m_activeParts.clear();
+    m_activeBBoxLines.destroy();
+    m_activeControlLines.destroy();
+    m_activeNormalLines.destroy();
+
     m_framebuffer.destroy();
     m_cubeMesh.destroy();
+    m_controlMarkerMesh.destroy();
     m_gridMesh.destroy();
     m_axisXMesh.destroy();
     m_axisYMesh.destroy();
@@ -369,7 +662,6 @@ void Application::shutdownGraphics()
     m_meshShader.destroy();
     m_gridShader.destroy();
 
-    // 3. Giải phóng tài nguyên M0 regression (nếu có)
     m_m0BasicShader.destroy();
     if (m_m0Vao != 0) {
         glDeleteVertexArrays(1, &m_m0Vao);
@@ -390,12 +682,10 @@ std::filesystem::path Application::resolveAssetPath(const std::filesystem::path&
     if (std::filesystem::exists(candidateExe)) {
         return candidateExe;
     }
-
     const auto candidateCwd = std::filesystem::current_path() / relativePath;
     if (std::filesystem::exists(candidateCwd)) {
         return candidateCwd;
     }
-
     return candidateExe;
 }
 
@@ -405,7 +695,6 @@ void Application::renderFrame()
         return;
     }
 
-    // Cập nhật FPS và frame time (ms) từ đồng hồ thực tế của FreeGLUT
     ++m_frameCount;
     ++m_framesSinceLastFps;
     const int nowMs = m_window.getElapsedTimeMs();
@@ -424,23 +713,41 @@ void Application::renderFrame()
         return;
     }
 
-    // Chạy bộ kiểm thử GPU tích hợp một lần ở khung hình đầu tiên khi ở chế độ --m1-smoke-test
     if (m_config.mode == ApplicationMode::SmokeTestM1 && !m_m1SuiteExecuted) {
         m_m1SuiteExecuted = true;
         m_m1SuitePassed = runM1IntegrationSuiteOnce();
-        // Khôi phục camera & kích thước FBO chuẩn cho vòng render 10 frames tiếp theo
         m_framebuffer.resize(800, 600);
         m_camera.reset();
         m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
                                 static_cast<float>(m_framebuffer.getHeight()));
     }
 
-    renderM1InteractiveFrame();
+    if (m_config.mode == ApplicationMode::SmokeTestM2 && !m_m2SuiteExecuted) {
+        m_m2SuiteExecuted = true;
+        m_m2SuitePassed = runM2IntegrationSuiteOnce();
+        m_framebuffer.resize(800, 600);
+        m_category = PlaygroundCategory::Furniture;
+        m_furnitureTypeIndex = 0; // Desk
+        regenerateActivePlaygroundGeometry();
+        m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
+        m_camera.lookAt({2.3f, 1.8f, 2.7f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
+        m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
+                                static_cast<float>(m_framebuffer.getHeight()));
+    }
+
+    renderInteractiveFrame();
 
     if (m_config.mode == ApplicationMode::SmokeTestM1) {
         if (m_frameCount == 3 && !m_m1MultiCubePixelsVerified) {
             m_m1MultiCubePixelsVerified = verifyM1MultiCubeRenderedPixels();
         }
+        if (m_frameCount >= m_config.smokeTestFrames) {
+            m_window.requestClose();
+            return;
+        }
+    }
+
+    if (m_config.mode == ApplicationMode::SmokeTestM2) {
         if (m_frameCount >= m_config.smokeTestFrames) {
             m_window.requestClose();
             return;
@@ -525,16 +832,17 @@ void Application::renderM1DemoSceneToFramebuffer(float faceContrast)
                           m_clearColor,
                           m_depthTestEnabled);
 
-    // 1. Vẽ lưới căn chỉnh (XZ) và hệ trục tọa độ XYZ bằng GL_LINES
-    if (m_showGridAndAxes) {
-        const glm::mat4 identity(1.0f);
+    const glm::mat4 identity(1.0f);
+    if (m_showGrid) {
         m_renderer.drawLines(m_gridMesh, m_gridShader, identity, m_camera, {0.30f, 0.33f, 0.40f, 1.0f});
-        m_renderer.drawLines(m_axisXMesh, m_gridShader, identity, m_camera, {0.92f, 0.30f, 0.30f, 1.0f}); // +X Đỏ
-        m_renderer.drawLines(m_axisYMesh, m_gridShader, identity, m_camera, {0.30f, 0.88f, 0.42f, 1.0f}); // +Y Xanh lá
-        m_renderer.drawLines(m_axisZMesh, m_gridShader, identity, m_camera, {0.34f, 0.56f, 0.96f, 1.0f}); // +Z Xanh dương
+    }
+    if (m_showAxes) {
+        m_renderer.drawLines(m_axisXMesh, m_gridShader, identity, m_camera, {0.92f, 0.30f, 0.30f, 1.0f});
+        m_renderer.drawLines(m_axisYMesh, m_gridShader, identity, m_camera, {0.30f, 0.88f, 0.42f, 1.0f});
+        m_renderer.drawLines(m_axisZMesh, m_gridShader, identity, m_camera, {0.34f, 0.56f, 0.96f, 1.0f});
     }
 
-    // 2. Vẽ các khối lập phương 3D thử nghiệm (Cube A, Cube B, Cube C) dùng chung 1 Indexed Cube Mesh
+    m_renderer.setWireframeMode(m_wireframeMode);
     for (const auto& cube : m_demoCubes) {
         m_renderer.drawMesh(m_cubeMesh, m_meshShader, cube.transform, m_camera, cube.color, faceContrast);
     }
@@ -543,22 +851,83 @@ void Application::renderM1DemoSceneToFramebuffer(float faceContrast)
     graphics::Framebuffer::unbind();
 }
 
-void Application::renderM1InteractiveFrame()
+void Application::renderPlaygroundSceneToFramebuffer(float faceContrast)
 {
-    // 1. Render scene 3D vào off-screen Framebuffer
-    renderM1DemoSceneToFramebuffer(0.45f);
+    if (!m_framebuffer.isComplete()) {
+        return;
+    }
 
-    // 2. Bắt đầu frame Dear ImGui trên cửa sổ chính
+    m_framebuffer.bind();
+    m_renderer.beginFrame(m_framebuffer.getWidth(),
+                          m_framebuffer.getHeight(),
+                          m_clearColor,
+                          m_depthTestEnabled);
+
+    const glm::mat4 identity(1.0f);
+    if (m_showGrid) {
+        m_renderer.drawLines(m_gridMesh, m_gridShader, identity, m_camera, {0.28f, 0.31f, 0.38f, 1.0f});
+    }
+    if (m_showAxes) {
+        m_renderer.drawLines(m_axisXMesh, m_gridShader, identity, m_camera, {0.92f, 0.30f, 0.30f, 1.0f});
+        m_renderer.drawLines(m_axisYMesh, m_gridShader, identity, m_camera, {0.30f, 0.88f, 0.42f, 1.0f});
+        m_renderer.drawLines(m_axisZMesh, m_gridShader, identity, m_camera, {0.34f, 0.56f, 0.96f, 1.0f});
+    }
+
+    // Áp dụng biến đổi phân cấp: M_world_part = M_parent * M_local_part
+    const glm::mat4 parentMat = m_rootTransform.getModelMatrix();
+
+    m_renderer.setWireframeMode(m_wireframeMode);
+    for (const auto& part : m_activeParts) {
+        const glm::mat4 worldMat = parentMat * part.localTransform.getModelMatrix();
+        if (part.isLinePrimitive) {
+            m_renderer.drawLines(part.mesh, m_gridShader, worldMat, m_camera, part.color);
+        } else {
+            m_renderer.drawMeshWithMatrix(part.mesh, m_meshShader, worldMat, m_camera, part.color, faceContrast);
+        }
+    }
+
+    // Khôi phục GL_FILL trước khi vẽ các overlay trực quan hóa (BoundingBox, Control Points, Normals)
+    m_renderer.setWireframeMode(false);
+
+    if (m_showBoundingBox && m_activeBBoxLines.isValid()) {
+        m_renderer.drawLines(m_activeBBoxLines, m_gridShader, parentMat, m_camera, {0.96f, 0.78f, 0.28f, 1.0f});
+    }
+
+    if (m_showControlOverlay) {
+        if (m_activeControlLines.isValid()) {
+            m_renderer.drawLines(m_activeControlLines, m_gridShader, parentMat, m_camera, {0.95f, 0.65f, 0.25f, 1.0f});
+        }
+        for (const auto& cp : m_activeControlPoints) {
+            const glm::mat4 cpMat = parentMat * glm::translate(glm::mat4(1.0f), cp - glm::vec3(0.0f, 0.0275f, 0.0f));
+            m_renderer.drawMeshWithMatrix(m_controlMarkerMesh, m_meshShader, cpMat, m_camera, {0.96f, 0.35f, 0.35f, 1.0f}, 0.25f);
+        }
+    }
+
+    if (m_showVertexNormals && m_activeNormalLines.isValid()) {
+        m_renderer.drawLines(m_activeNormalLines, m_gridShader, parentMat, m_camera, {0.35f, 0.92f, 0.88f, 1.0f});
+    }
+
+    m_renderer.endFrame();
+    graphics::Framebuffer::unbind();
+}
+
+void Application::renderInteractiveFrame()
+{
+    if (m_category == PlaygroundCategory::M1ReferenceScene) {
+        renderM1DemoSceneToFramebuffer(0.45f);
+    } else {
+        renderPlaygroundSceneToFramebuffer(0.45f);
+    }
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGLUT_NewFrame();
     ImGui::NewFrame();
 
-    renderM1DiagnosticsUi();
-    renderM1ViewportUi();
+    renderPlaygroundControlUi();
+    renderViewportUi();
 
     ImGui::Render();
 
-    // 3. Xóa Default Framebuffer và vẽ toàn bộ giao diện ImGui (bao gồm texture của 3D Viewport)
     glViewport(0, 0, m_window.getWidth(), m_window.getHeight());
     glDisable(GL_DEPTH_TEST);
     glClearColor(0.070f, 0.075f, 0.095f, 1.0f);
@@ -570,43 +939,247 @@ void Application::renderM1InteractiveFrame()
     m_window.swapBuffers();
 }
 
-void Application::renderM1DiagnosticsUi()
+void Application::renderPlaygroundControlUi()
 {
     const auto& gpu = m_window.getGpuInfo();
     const auto& stats = m_renderer.getLastFrameStats();
 
     ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(370.0f, 696.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(390.0f, 696.0f), ImGuiCond_FirstUseEver);
 
-    if (ImGui::Begin("RoomCraft 3D - M1 Diagnostics")) {
-        ImGui::TextUnformatted("Core Graphics Engine (OpenGL 3.3 Core)");
+    if (ImGui::Begin("RoomCraft 3D - M2 Geometry Playground")) {
+        bool paramsChanged = false;
+        bool selectionChanged = false;
+
+        // 1. Chọn danh mục hình học
+        const char* categories[] = {"Primitives", "Parametric", "Procedural Furniture", "M1 Reference Scene"};
+        int catIdx = static_cast<int>(m_category);
+        if (ImGui::Combo("Category", &catIdx, categories, 4)) {
+            m_category = static_cast<PlaygroundCategory>(catIdx);
+            selectionChanged = true;
+        }
+
+        // 2. Chọn loại hình học cụ thể trong danh mục
+        if (m_category == PlaygroundCategory::Primitives) {
+            const char* primTypes[] = {"Plane", "Cube", "Cuboid", "Cylinder", "Sphere", "Cone", "Frustum"};
+            if (ImGui::Combo("Primitive Type", &m_primitiveTypeIndex, primTypes, 7)) {
+                selectionChanged = true;
+            }
+        } else if (m_category == PlaygroundCategory::Parametric) {
+            const char* paramTypes[] = {"Bezier Curve (Cubic)", "Bezier Surface (4x4)", "Surface of Revolution"};
+            if (ImGui::Combo("Parametric Type", &m_parametricTypeIndex, paramTypes, 3)) {
+                selectionChanged = true;
+            }
+        } else if (m_category == PlaygroundCategory::Furniture) {
+            const char* furnTypes[] = {
+                "01. Procedural Desk",
+                "02. Procedural Chair",
+                "03. Procedural Bookshelf",
+                "04. Procedural Desk Lamp",
+                "05. Procedural Vase (Revolution)",
+                "06. Procedural Curved Chair (Bezier)"
+            };
+            if (ImGui::Combo("Furniture Type", &m_furnitureTypeIndex, furnTypes, 6)) {
+                selectionChanged = true;
+            }
+        }
+
         ImGui::Separator();
 
-        ImGui::Text("GPU Renderer : %s", gpu.renderer.c_str());
-        ImGui::Text("OpenGL       : %s", gpu.glVersion.c_str());
-        ImGui::Text("Profile      : %s", gpu.profile.c_str());
-        ImGui::Text("GLSL         : %s", gpu.glslVersion.c_str());
+        // 3. Trình chỉnh sửa tham số tương ứng
+        if (m_category == PlaygroundCategory::Primitives) {
+            ImGui::TextUnformatted("Primitive Parameters (meters)");
+            switch (m_primitiveTypeIndex) {
+                case 0:
+                    paramsChanged |= ImGui::SliderFloat("Width", &m_planeWidth, 0.2f, 6.0f);
+                    paramsChanged |= ImGui::SliderFloat("Depth", &m_planeDepth, 0.2f, 6.0f);
+                    paramsChanged |= ImGui::SliderInt("Subdivisions X", &m_planeSubX, 1, 32);
+                    paramsChanged |= ImGui::SliderInt("Subdivisions Z", &m_planeSubZ, 1, 32);
+                    break;
+                case 1:
+                    paramsChanged |= ImGui::SliderFloat("Size", &m_cubeSize, 0.1f, 3.0f);
+                    break;
+                case 2:
+                    paramsChanged |= ImGui::SliderFloat("Width", &m_cuboidW, 0.1f, 4.0f);
+                    paramsChanged |= ImGui::SliderFloat("Height", &m_cuboidH, 0.1f, 4.0f);
+                    paramsChanged |= ImGui::SliderFloat("Depth", &m_cuboidD, 0.1f, 4.0f);
+                    break;
+                case 3:
+                    paramsChanged |= ImGui::SliderFloat("Radius", &m_cylRadius, 0.05f, 2.0f);
+                    paramsChanged |= ImGui::SliderFloat("Height", &m_cylHeight, 0.1f, 3.5f);
+                    paramsChanged |= ImGui::SliderInt("Radial Segments", &m_cylSegments, 3, 96);
+                    paramsChanged |= ImGui::Checkbox("Capped", &m_cylCapped);
+                    break;
+                case 4:
+                    paramsChanged |= ImGui::SliderFloat("Radius", &m_sphereRadius, 0.1f, 2.0f);
+                    paramsChanged |= ImGui::SliderInt("Latitude Segments", &m_sphereLatSeg, 3, 64);
+                    paramsChanged |= ImGui::SliderInt("Longitude Segments", &m_sphereLonSeg, 3, 96);
+                    break;
+                case 5:
+                    paramsChanged |= ImGui::SliderFloat("Base Radius", &m_coneRadius, 0.05f, 2.0f);
+                    paramsChanged |= ImGui::SliderFloat("Height", &m_coneHeight, 0.1f, 3.5f);
+                    paramsChanged |= ImGui::SliderInt("Radial Segments", &m_coneSegments, 3, 96);
+                    paramsChanged |= ImGui::Checkbox("Cap Bottom", &m_coneCapped);
+                    break;
+                case 6:
+                    paramsChanged |= ImGui::SliderFloat("Bottom Radius", &m_frustumBottomR, 0.0f, 2.0f);
+                    paramsChanged |= ImGui::SliderFloat("Top Radius", &m_frustumTopR, 0.0f, 2.0f);
+                    paramsChanged |= ImGui::SliderFloat("Height", &m_frustumHeight, 0.1f, 3.5f);
+                    paramsChanged |= ImGui::SliderInt("Radial Segments", &m_frustumSegments, 3, 96);
+                    paramsChanged |= ImGui::Checkbox("Cap Bottom", &m_frustumCapBottom);
+                    ImGui::SameLine();
+                    paramsChanged |= ImGui::Checkbox("Cap Top", &m_frustumCapTop);
+                    break;
+                default: break;
+            }
+        } else if (m_category == PlaygroundCategory::Parametric) {
+            ImGui::TextUnformatted("Parametric Parameters");
+            if (m_parametricTypeIndex == 0) {
+                paramsChanged |= ImGui::DragFloat3("P0", &m_bezierCurvePts[0].x, 0.03f, -3.0f, 3.0f);
+                paramsChanged |= ImGui::DragFloat3("P1", &m_bezierCurvePts[1].x, 0.03f, -3.0f, 3.0f);
+                paramsChanged |= ImGui::DragFloat3("P2", &m_bezierCurvePts[2].x, 0.03f, -3.0f, 3.0f);
+                paramsChanged |= ImGui::DragFloat3("P3", &m_bezierCurvePts[3].x, 0.03f, -3.0f, 3.0f);
+                paramsChanged |= ImGui::SliderInt("Curve Segments", &m_bezierCurveSegments, 2, 128);
+            } else if (m_parametricTypeIndex == 1) {
+                paramsChanged |= ImGui::SliderFloat("Patch Width", &m_bezierSurfWidth, 0.4f, 4.0f);
+                paramsChanged |= ImGui::SliderFloat("Patch Depth", &m_bezierSurfDepth, 0.4f, 4.0f);
+                paramsChanged |= ImGui::SliderFloat("Curvature Height", &m_bezierSurfCurvature, -1.0f, 1.5f);
+                paramsChanged |= ImGui::SliderInt("U Segments", &m_bezierSurfUSeg, 2, 48);
+                paramsChanged |= ImGui::SliderInt("V Segments", &m_bezierSurfVSeg, 2, 48);
+            } else {
+                paramsChanged |= ImGui::SliderFloat("Height", &m_revHeight, 0.2f, 2.5f);
+                paramsChanged |= ImGui::SliderFloat("Base Radius", &m_revBaseR, 0.02f, 0.8f);
+                paramsChanged |= ImGui::SliderFloat("Belly Radius", &m_revBellyR, 0.05f, 1.0f);
+                paramsChanged |= ImGui::SliderFloat("Neck Radius", &m_revNeckR, 0.02f, 0.8f);
+                paramsChanged |= ImGui::SliderFloat("Rim Radius", &m_revRimR, 0.02f, 0.9f);
+                paramsChanged |= ImGui::SliderInt("Radial Segments", &m_revRadialSeg, 6, 96);
+                paramsChanged |= ImGui::SliderInt("Profile Segments", &m_revProfileSeg, 4, 64);
+                paramsChanged |= ImGui::Checkbox("Cap Bottom", &m_revCapBottom);
+                ImGui::SameLine();
+                paramsChanged |= ImGui::Checkbox("Cap Top", &m_revCapTop);
+            }
+        } else if (m_category == PlaygroundCategory::Furniture) {
+            ImGui::TextUnformatted("Procedural Furniture Parameters (meters)");
+            switch (m_furnitureTypeIndex) {
+                case 0:
+                    paramsChanged |= ImGui::SliderFloat("Width", &m_deskParams.width, 0.7f, 2.4f);
+                    paramsChanged |= ImGui::SliderFloat("Depth", &m_deskParams.depth, 0.4f, 1.2f);
+                    paramsChanged |= ImGui::SliderFloat("Height", &m_deskParams.height, 0.55f, 1.1f);
+                    paramsChanged |= ImGui::SliderFloat("Top Thickness", &m_deskParams.topThickness, 0.02f, 0.12f);
+                    paramsChanged |= ImGui::SliderFloat("Leg Thickness", &m_deskParams.legThickness, 0.025f, 0.12f);
+                    break;
+                case 1:
+                    paramsChanged |= ImGui::SliderFloat("Width", &m_chairParams.width, 0.35f, 0.75f);
+                    paramsChanged |= ImGui::SliderFloat("Depth", &m_chairParams.depth, 0.35f, 0.75f);
+                    paramsChanged |= ImGui::SliderFloat("Seat Height", &m_chairParams.seatHeight, 0.30f, 0.65f);
+                    paramsChanged |= ImGui::SliderFloat("Backrest Height", &m_chairParams.backrestHeight, 0.25f, 0.75f);
+                    paramsChanged |= ImGui::SliderFloat("Leg Radius", &m_chairParams.legRadius, 0.012f, 0.045f);
+                    paramsChanged |= ImGui::SliderInt("Leg Segments", &m_chairParams.radialSegments, 6, 48);
+                    break;
+                case 2:
+                    paramsChanged |= ImGui::SliderFloat("Width", &m_bookshelfParams.width, 0.5f, 2.0f);
+                    paramsChanged |= ImGui::SliderFloat("Height", &m_bookshelfParams.height, 0.8f, 2.6f);
+                    paramsChanged |= ImGui::SliderFloat("Depth", &m_bookshelfParams.depth, 0.20f, 0.60f);
+                    paramsChanged |= ImGui::SliderInt("Shelf Count", &m_bookshelfParams.shelfCount, 2, 10);
+                    paramsChanged |= ImGui::SliderFloat("Panel Thickness", &m_bookshelfParams.panelThickness, 0.015f, 0.05f);
+                    break;
+                case 3:
+                    paramsChanged |= ImGui::SliderFloat("Base Radius", &m_lampParams.baseRadius, 0.06f, 0.25f);
+                    paramsChanged |= ImGui::SliderFloat("Stem Height", &m_lampParams.stemHeight, 0.18f, 0.80f);
+                    paramsChanged |= ImGui::SliderFloat("Shade Bottom R", &m_lampParams.shadeBottomRadius, 0.07f, 0.30f);
+                    paramsChanged |= ImGui::SliderFloat("Shade Top R", &m_lampParams.shadeTopRadius, 0.02f, 0.20f);
+                    paramsChanged |= ImGui::SliderFloat("Shade Height", &m_lampParams.shadeHeight, 0.08f, 0.35f);
+                    paramsChanged |= ImGui::SliderInt("Radial Segments", &m_lampParams.radialSegments, 8, 64);
+                    break;
+                case 4:
+                    paramsChanged |= ImGui::SliderFloat("Height", &m_vaseParams.height, 0.18f, 1.0f);
+                    paramsChanged |= ImGui::SliderFloat("Base Radius", &m_vaseParams.baseRadius, 0.03f, 0.20f);
+                    paramsChanged |= ImGui::SliderFloat("Belly Radius", &m_vaseParams.bellyRadius, 0.05f, 0.30f);
+                    paramsChanged |= ImGui::SliderFloat("Neck Radius", &m_vaseParams.neckRadius, 0.02f, 0.20f);
+                    paramsChanged |= ImGui::SliderFloat("Rim Radius", &m_vaseParams.rimRadius, 0.03f, 0.25f);
+                    paramsChanged |= ImGui::SliderInt("Radial Segments", &m_vaseParams.radialSegments, 8, 96);
+                    paramsChanged |= ImGui::SliderInt("Profile Segments", &m_vaseParams.profileSegments, 6, 48);
+                    break;
+                case 5:
+                    paramsChanged |= ImGui::SliderFloat("Width", &m_curvedChairParams.width, 0.38f, 0.80f);
+                    paramsChanged |= ImGui::SliderFloat("Depth", &m_curvedChairParams.depth, 0.38f, 0.75f);
+                    paramsChanged |= ImGui::SliderFloat("Seat Height", &m_curvedChairParams.seatHeight, 0.32f, 0.60f);
+                    paramsChanged |= ImGui::SliderFloat("Backrest Height", &m_curvedChairParams.backrestHeight, 0.30f, 0.70f);
+                    paramsChanged |= ImGui::SliderFloat("Curvature", &m_curvedChairParams.backrestCurvature, 0.02f, 0.25f);
+                    paramsChanged |= ImGui::SliderInt("U Segments", &m_curvedChairParams.uSegments, 4, 32);
+                    paramsChanged |= ImGui::SliderInt("V Segments", &m_curvedChairParams.vSegments, 4, 32);
+                    break;
+                default: break;
+            }
+        } else {
+            ImGui::TextUnformatted("M1 Demo Cube Transform");
+            if (!m_demoCubes.empty()) {
+                m_selectedCubeIndex = std::clamp(m_selectedCubeIndex, 0, static_cast<int>(m_demoCubes.size()) - 1);
+                if (ImGui::BeginCombo("Cube", m_demoCubes[static_cast<std::size_t>(m_selectedCubeIndex)].name.c_str())) {
+                    for (int i = 0; i < static_cast<int>(m_demoCubes.size()); ++i) {
+                        if (ImGui::Selectable(m_demoCubes[static_cast<std::size_t>(i)].name.c_str(), i == m_selectedCubeIndex)) {
+                            m_selectedCubeIndex = i;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                auto& obj = m_demoCubes[static_cast<std::size_t>(m_selectedCubeIndex)];
+                ImGui::DragFloat3("Pos (m)", &obj.transform.position.x, 0.05f, -10.0f, 10.0f);
+                ImGui::DragFloat3("Rot (deg)", &obj.transform.rotationDegrees.x, 1.0f, -360.0f, 360.0f);
+                glm::vec3 s = obj.transform.scale;
+                if (ImGui::DragFloat3("Scale", &s.x, 0.05f, 0.1f, 5.0f)) {
+                    obj.transform.setScaleSafe(s, 0.05f);
+                }
+                if (ImGui::Button("Reset Cube")) {
+                    obj.transform = obj.defaultTransform;
+                }
+            }
+        }
+
+        if (m_category != PlaygroundCategory::M1ReferenceScene) {
+            ImGui::Checkbox("Auto-regenerate", &m_autoRegenerate);
+            ImGui::SameLine();
+            const bool manualRegen = ImGui::Button("Regenerate Mesh");
+            ImGui::SameLine();
+            if (ImGui::Button("Reset Params")) {
+                resetCurrentPlaygroundParameters();
+                paramsChanged = true;
+            }
+
+            if (selectionChanged || manualRegen || (paramsChanged && m_autoRegenerate)) {
+                regenerateActivePlaygroundGeometry();
+            }
+
+            if (!m_lastGeometryError.empty()) {
+                ImGui::TextColored(ImVec4(0.96f, 0.36f, 0.36f, 1.0f), "Error: %s", m_lastGeometryError.c_str());
+            }
+        }
 
         ImGui::Separator();
-        ImGui::Text("FPS          : %.1f", m_currentFps);
-        ImGui::Text("Frame Time   : %.2f ms", m_frameTimeMs);
-        ImGui::Text("Draw Calls   : %u", stats.drawCalls);
-        ImGui::Text("Vertex Count : %u", stats.vertexCount);
-        ImGui::Text("Index Count  : %u", stats.indexCount);
-        ImGui::Text("Window Size  : %d x %d", m_window.getWidth(), m_window.getHeight());
-        ImGui::Text("FBO Viewport : %d x %d (%s)",
-                    m_framebuffer.getWidth(),
-                    m_framebuffer.getHeight(),
-                    m_framebuffer.isComplete() ? "Complete" : "Incomplete");
 
-        ImGui::Separator();
-        ImGui::TextUnformatted("Render & Depth Controls");
-        ImGui::Checkbox("Enable Depth Testing (GL_DEPTH_TEST)", &m_depthTestEnabled);
-        ImGui::Checkbox("Show Grid (XZ) & XYZ Axes", &m_showGridAndAxes);
-        ImGui::ColorEdit3("Clear Color", &m_clearColor.r);
+        // 4. Tùy chọn trực quan hóa
+        ImGui::TextUnformatted("Visualization & Camera");
+        int polyMode = m_wireframeMode ? 1 : 0;
+        if (ImGui::RadioButton("Solid", &polyMode, 0)) {
+            m_wireframeMode = false;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Wireframe", &polyMode, 1)) {
+            m_wireframeMode = true;
+        }
+        ImGui::SameLine();
+        ImGui::Checkbox("Depth Test", &m_depthTestEnabled);
 
-        ImGui::Separator();
-        ImGui::TextUnformatted("Camera & Projection");
+        ImGui::Checkbox("Grid (XZ)", &m_showGrid);
+        ImGui::SameLine();
+        ImGui::Checkbox("XYZ Axes", &m_showAxes);
+        ImGui::SameLine();
+        ImGui::Checkbox("BoundingBox", &m_showBoundingBox);
+
+        ImGui::Checkbox("Control Net/Pts", &m_showControlOverlay);
+        ImGui::SameLine();
+        ImGui::Checkbox("Vertex Normals", &m_showVertexNormals);
+
         int projIdx = (m_camera.getProjectionMode() == graphics::ProjectionMode::Perspective) ? 0 : 1;
         if (ImGui::RadioButton("Perspective", &projIdx, 0)) {
             m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
@@ -616,83 +1189,69 @@ void Application::renderM1DiagnosticsUi()
             m_camera.setProjectionMode(graphics::ProjectionMode::Orthographic);
         }
 
-        if (ImGui::Button("Default 3D")) {
+        if (ImGui::Button("Close 3D")) {
+            m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
+            m_camera.lookAt({2.3f, 1.8f, 2.7f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Wide 3D")) {
             m_camera.setPerspectivePreset();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Top Ortho")) {
+        if (ImGui::Button("Top")) {
             m_camera.setTopOrthoPreset();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Front Ortho")) {
+        if (ImGui::Button("Front")) {
             m_camera.setFrontOrthoPreset();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Reset Camera")) {
-            m_camera.reset();
-        }
 
-        float fov = m_camera.getFieldOfView();
-        if (m_camera.getProjectionMode() == graphics::ProjectionMode::Perspective) {
-            if (ImGui::SliderFloat("FOV (deg)", &fov, 20.0f, 90.0f)) {
-                m_camera.setFieldOfView(fov);
-            }
-        } else {
-            float orthoHalf = m_camera.getOrthoHalfHeight();
-            if (ImGui::SliderFloat("Ortho Size", &orthoHalf, 1.0f, 10.0f)) {
-                m_camera.setOrthoHalfHeight(orthoHalf);
-            }
-        }
-
-        ImGui::Separator();
-        ImGui::TextUnformatted("Demo Object Transform");
-        if (!m_demoCubes.empty()) {
-            m_selectedCubeIndex = std::clamp(m_selectedCubeIndex, 0, static_cast<int>(m_demoCubes.size()) - 1);
-            if (ImGui::BeginCombo("Target Object", m_demoCubes[static_cast<std::size_t>(m_selectedCubeIndex)].name.c_str())) {
-                for (int i = 0; i < static_cast<int>(m_demoCubes.size()); ++i) {
-                    const bool isSelected = (i == m_selectedCubeIndex);
-                    if (ImGui::Selectable(m_demoCubes[static_cast<std::size_t>(i)].name.c_str(), isSelected)) {
-                        m_selectedCubeIndex = i;
-                    }
-                    if (isSelected) {
-                        ImGui::SetItemDefaultFocus();
-                    }
+        if (m_category != PlaygroundCategory::M1ReferenceScene) {
+            if (ImGui::TreeNode("Root Transform (Hierarchy Test)")) {
+                ImGui::DragFloat3("Root Pos", &m_rootTransform.position.x, 0.05f, -5.0f, 5.0f);
+                ImGui::DragFloat3("Root Rot", &m_rootTransform.rotationDegrees.x, 1.0f, -360.0f, 360.0f);
+                glm::vec3 rs = m_rootTransform.scale;
+                if (ImGui::DragFloat3("Root Scale", &rs.x, 0.05f, 0.1f, 3.0f)) {
+                    m_rootTransform.setScaleSafe(rs, 0.05f);
                 }
-                ImGui::EndCombo();
-            }
-
-            auto& obj = m_demoCubes[static_cast<std::size_t>(m_selectedCubeIndex)];
-            ImGui::DragFloat3("Position (m)", &obj.transform.position.x, 0.05f, -10.0f, 10.0f);
-            ImGui::DragFloat3("Rotation (deg)", &obj.transform.rotationDegrees.x, 1.0f, -360.0f, 360.0f);
-
-            glm::vec3 editScale = obj.transform.scale;
-            if (ImGui::DragFloat3("Scale", &editScale.x, 0.05f, 0.1f, 5.0f)) {
-                obj.transform.setScaleSafe(editScale, 0.05f);
-            }
-
-            if (ImGui::Button("Reset Object Transform")) {
-                obj.transform = obj.defaultTransform;
+                if (ImGui::Button("Reset Root")) {
+                    m_rootTransform.reset();
+                }
+                ImGui::TreePop();
             }
         }
 
         ImGui::Separator();
-        ImGui::TextDisabled("Press ESC or close window to exit cleanly.");
+
+        // 5. Thống kê thật (không hardcode)
+        ImGui::TextUnformatted("Real-Time Statistics");
+        ImGui::Text("GPU: %s (GL %d.%d Core)", gpu.renderer.c_str(), gpu.majorVersion, gpu.minorVersion);
+        ImGui::Text("FPS: %.1f | Frame: %.2f ms | Draw Calls: %u", m_currentFps, m_frameTimeMs, stats.drawCalls);
+        ImGui::Text("Mesh Verts: %u | Indices: %u | Tris: %u",
+                    m_activeVertexCount, m_activeIndexCount, m_activeTriangleCount);
+        ImGui::Text("Gen Time: %.3f ms | FBO: %dx%d",
+                    m_lastGenerationTimeMs, m_framebuffer.getWidth(), m_framebuffer.getHeight());
+        if (m_activeBoundingBox.isValid()) {
+            const glm::vec3 sz = m_activeBoundingBox.getSize();
+            ImGui::Text("BBox Size: %.2f x %.2f x %.2f m", sz.x, sz.y, sz.z);
+            ImGui::Text("BBox Min : (%.2f, %.2f, %.2f)",
+                        m_activeBoundingBox.min.x, m_activeBoundingBox.min.y, m_activeBoundingBox.min.z);
+        }
     }
     ImGui::End();
 }
 
-void Application::renderM1ViewportUi()
+void Application::renderViewportUi()
 {
-    ImGui::SetNextWindowPos(ImVec2(394.0f, 12.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(874.0f, 696.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(414.0f, 12.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(854.0f, 696.0f), ImGuiCond_FirstUseEver);
 
     if (ImGui::Begin("3D Viewport (Off-screen Framebuffer)")) {
         const ImVec2 avail = ImGui::GetContentRegionAvail();
         const int targetW = static_cast<int>(avail.x);
         const int targetH = static_cast<int>(avail.y);
 
-        // Chỉ cập nhật kích thước Framebuffer khi kích thước khả dụng > 0 và thực sự thay đổi
-        if (targetW > 0 && targetH > 0 && m_config.mode == ApplicationMode::InteractiveM1) {
+        if (targetW > 0 && targetH > 0 && m_config.mode == ApplicationMode::InteractivePlayground) {
             if (targetW != m_framebuffer.getWidth() || targetH != m_framebuffer.getHeight()) {
                 m_framebuffer.resize(targetW, targetH);
             }
@@ -701,8 +1260,6 @@ void Application::renderM1ViewportUi()
         }
 
         if (m_framebuffer.isComplete() && targetW > 0 && targetH > 0) {
-            // Quan trọng: Texture OpenGL có gốc (0, 0) ở góc dưới-trái còn ImGui có gốc ở góc trên-trái,
-            // nên phải đảo trục V: uv0 = (0, 1), uv1 = (1, 0) để hình ảnh 3D không bị lộn ngược.
             const auto texId = static_cast<ImTextureID>(static_cast<std::uintptr_t>(m_framebuffer.getColorTextureId()));
             ImGui::Image(texId, avail, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         } else {
@@ -722,11 +1279,9 @@ bool Application::runM1IntegrationSuiteOnce()
         }
     };
 
-    // TC-M1-02: Shader hợp lệ đã biên dịch & link thành công
     report("TC-M1-02", "Valid 3D & Grid shaders compiled and linked",
            m_meshShader.isValid() && m_gridShader.isValid());
 
-    // TC-M1-03: Shader sai cú pháp phải trả về false kèm thông báo lỗi rõ ràng
     {
         graphics::Shader badShader;
         std::string errMsg;
@@ -735,15 +1290,13 @@ bool Application::runM1IntegrationSuiteOnce()
             "#version 330 core\nout vec4 FragColor; void main() { FragColor = vec4(1.0); }",
             "invalid_test_shader",
             &errMsg);
-        const bool rejectedCleanly = (!compiled) && (!badShader.isValid()) && (!errMsg.empty());
-        report("TC-M1-03", "Invalid GLSL syntax rejected with diagnostic log", rejectedCleanly);
+        report("TC-M1-03", "Invalid GLSL syntax rejected with diagnostic log",
+               (!compiled) && (!badShader.isValid()) && (!errMsg.empty()));
     }
 
-    // TC-M1-04: Indexed Cube Mesh hợp lệ (24 đỉnh, 36 chỉ mục)
     report("TC-M1-04", "Indexed cube mesh uploaded (24 vertices, 36 indices)",
            m_cubeMesh.isValid() && m_cubeMesh.getVertexCount() == 24 && m_cubeMesh.getIndexCount() == 36);
 
-    // TC-M1-05: Từ chối dữ liệu chỉ mục vượt biên trên GPU Mesh::create
     {
         graphics::Mesh badMesh;
         std::vector<graphics::Vertex> verts(3);
@@ -754,23 +1307,17 @@ bool Application::runM1IntegrationSuiteOnce()
                (!created) && (!badMesh.isValid()) && (!errMsg.empty()));
     }
 
-    // TC-M1-13 & TC-M1-14: Framebuffer completeness, no-op resize, 0x0 safety, actual resize
     report("TC-M1-13", "Off-screen Framebuffer complete with valid color texture",
            m_framebuffer.isComplete() && m_framebuffer.getColorTextureId() != 0);
     report("TC-M1-14", "Framebuffer resize, no-op caching, and 0x0 safety",
            verifyM1FramebufferResizeAndZeroSafety());
-
-    // TC-M1-11: Chứng minh Depth Testing độc lập thứ tự draw + đối chứng khi tắt Depth Test
     report("TC-M1-11", "Depth testing order-independent proof + depth-off control",
            verifyM1DepthTestingOrderIndependence());
-
-    // TC-M1-15: Kiểm thử RAII & move semantics không double-delete
     report("TC-M1-15", "RAII move ownership & safe resource destruction",
            verifyM1RaiiMoveLifecycle());
 
     drainAndCheckOpenGlErrors();
     report("TC-M1-16", "Zero unexpected OpenGL errors during integration suite", !m_glErrorDetected);
-
     return allPassed;
 }
 
@@ -783,17 +1330,12 @@ bool Application::verifyM1FramebufferResizeAndZeroSafety()
     const unsigned int initialFboId = fbo.getFboId();
     const unsigned int initialTexId = fbo.getColorTextureId();
 
-    // Resize về đúng kích thước cũ -> không được cấp phát lại
     if (!fbo.resize(640, 360) || fbo.getFboId() != initialFboId || fbo.getColorTextureId() != initialTexId) {
         return false;
     }
-
-    // Resize về 0x0 (mô phỏng cửa sổ thu nhỏ) -> giữ nguyên FBO hợp lệ, không phát sinh lỗi GL
     if (!fbo.resize(0, 0) || !fbo.isComplete() || fbo.getWidth() != 640 || fbo.getHeight() != 360) {
         return false;
     }
-
-    // Resize sang kích thước mới 800x600 -> cập nhật thành công và vẫn complete
     if (!fbo.resize(800, 600) || !fbo.isComplete() || fbo.getWidth() != 800 || fbo.getHeight() != 600) {
         return false;
     }
@@ -816,9 +1358,6 @@ bool Application::verifyM1DepthTestingOrderIndependence()
     testCam.setClipPlanes(0.1f, 50.0f);
     testCam.lookAt({0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-    // Hai khối phủ kín tâm màn hình dọc theo tia nhìn -Z:
-    // - nearRed ở z = +1.5 (gần camera hơn)
-    // - farBlue ở z = -1.5 (xa camera hơn)
     const scene::Transform nearRed({0.0f, 0.0f, 1.5f}, {0.0f, 0.0f, 0.0f}, {2.0f, 2.0f, 0.4f});
     const scene::Transform farBlue({0.0f, 0.0f, -1.5f}, {0.0f, 0.0f, 0.0f}, {2.5f, 2.5f, 0.4f});
     const glm::vec4 redColor{1.0f, 0.0f, 0.0f, 1.0f};
@@ -830,7 +1369,6 @@ bool Application::verifyM1DepthTestingOrderIndependence()
         return px;
     };
 
-    // Pass 1: Depth ON, vẽ Xa (Blue) trước -> Gần (Red) sau => tâm phải là ĐỎ
     fbo.bind();
     m_renderer.beginFrame(256, 256, {0.0f, 0.0f, 0.0f, 1.0f}, true);
     m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, blueColor, 0.0f);
@@ -838,14 +1376,12 @@ bool Application::verifyM1DepthTestingOrderIndependence()
     m_renderer.endFrame();
     const auto pxOrderFarFirst = readCenterPixel();
 
-    // Pass 2: Depth ON, ĐẢO THỨ TỰ VẼ: vẽ Gần (Red) trước -> Xa (Blue) sau => tâm VẪN PHẢI LÀ ĐỎ
     m_renderer.beginFrame(256, 256, {0.0f, 0.0f, 0.0f, 1.0f}, true);
     m_renderer.drawMesh(m_cubeMesh, m_meshShader, nearRed, testCam, redColor, 0.0f);
     m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, blueColor, 0.0f);
     m_renderer.endFrame();
     const auto pxOrderNearFirst = readCenterPixel();
 
-    // Pass 3 (Đối chứng): Depth OFF, vẽ Gần (Red) trước -> Xa (Blue) sau => Blue phải đè lên thành XANH DƯƠNG
     m_renderer.beginFrame(256, 256, {0.0f, 0.0f, 0.0f, 1.0f}, false);
     m_renderer.drawMesh(m_cubeMesh, m_meshShader, nearRed, testCam, redColor, 0.0f);
     m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, blueColor, 0.0f);
@@ -877,7 +1413,6 @@ bool Application::verifyM1DepthTestingOrderIndependence()
 
 bool Application::verifyM1RaiiMoveLifecycle()
 {
-    // Kiểm thử move semantics cho Shader
     graphics::Shader s1;
     if (!s1.loadFromFiles(resolveAssetPath("assets/shaders/grid.vert"),
                           resolveAssetPath("assets/shaders/grid.frag"))) {
@@ -889,9 +1424,8 @@ bool Application::verifyM1RaiiMoveLifecycle()
         return false;
     }
     s2.destroy();
-    s2.destroy(); // Chống double-delete
+    s2.destroy();
 
-    // Kiểm thử move semantics cho Mesh
     std::vector<graphics::Vertex> verts;
     std::vector<std::uint32_t> indices;
     graphics::Mesh::buildUnitCubeFixture(verts, indices);
@@ -907,7 +1441,6 @@ bool Application::verifyM1RaiiMoveLifecycle()
     m2.destroy();
     m2.destroy();
 
-    // Kiểm thử move semantics cho Framebuffer
     graphics::Framebuffer f1;
     if (!f1.create(128, 128)) {
         return false;
@@ -919,7 +1452,6 @@ bool Application::verifyM1RaiiMoveLifecycle()
     }
     f2.destroy();
     f2.destroy();
-
     return true;
 }
 
@@ -929,7 +1461,6 @@ bool Application::verifyM1MultiCubeRenderedPixels()
         return false;
     }
 
-    // Chiếu vị trí tâm từng Cube lên tọa độ pixel trong Framebuffer để đọc và xác minh màu thực tế
     const glm::mat4 vp = m_camera.getProjectionMatrix() * m_camera.getViewMatrix();
     const int w = m_framebuffer.getWidth();
     const int h = m_framebuffer.getHeight();
@@ -946,11 +1477,9 @@ bool Application::verifyM1MultiCubeRenderedPixels()
         return rgba;
     };
 
-    // Cube A (Đỏ), phần lộ phía trên của Cube B (Xanh dương), Cube C (Xanh lá)
     const auto pxA = sampleWorldPoint(m_demoCubes[0].transform.position);
     const auto pxB = sampleWorldPoint(m_demoCubes[1].transform.position + glm::vec3(-0.35f, 0.35f, 0.0f));
     const auto pxC = sampleWorldPoint(m_demoCubes[2].transform.position);
-
     graphics::Framebuffer::unbind();
 
     const bool cubeAIsRedDominant = (pxA[0] > pxA[1] + 40 && pxA[0] > pxA[2] + 40);
@@ -965,8 +1494,224 @@ bool Application::verifyM1MultiCubeRenderedPixels()
 
     const auto& stats = m_renderer.getLastFrameStats();
     const bool statsValid = (stats.drawCalls >= 3 && stats.vertexCount >= 72 && stats.indexCount >= 108);
-
     return cubeAIsRedDominant && cubeBIsBlueDominant && cubeCIsGreenDominant && statsValid;
+}
+
+bool Application::verifyM2ProjectedGeometryRender(const std::string& label,
+                                                  const std::vector<UploadedRenderPart>& parts,
+                                                  const math::BoundingBox& box,
+                                                  const graphics::Camera& cam)
+{
+    if (parts.empty() || !box.isValid()) {
+        return false;
+    }
+
+    graphics::Framebuffer fbo;
+    if (!fbo.create(320, 320) || !fbo.isComplete()) {
+        return false;
+    }
+
+    const glm::vec4 clearCol(0.05f, 0.06f, 0.08f, 1.0f);
+    fbo.bind();
+    m_renderer.beginFrame(320, 320, clearCol, true);
+
+    for (const auto& part : parts) {
+        if (part.isLinePrimitive) {
+            m_renderer.drawLines(part.mesh, m_gridShader, part.localTransform.getModelMatrix(), cam, part.color);
+        } else {
+            m_renderer.drawMeshWithMatrix(part.mesh, m_meshShader, part.localTransform.getModelMatrix(), cam, part.color, 0.35f);
+        }
+    }
+    m_renderer.endFrame();
+
+    // Đọc toàn bộ ảnh FBO 320x320 để xác minh:
+    // 1. Góc ngoài cùng (4, 4) vẫn giữ nguyên màu nền (chứng minh không vẽ tràn/rác toàn màn hình)
+    // 2. Trong vùng chiếu hình chiếu của BoundingBox có số lượng pixel phủ đáng kể (> 150 px) khác màu nền
+    std::vector<unsigned char> pixels(320 * 320 * 4, 0);
+    glReadPixels(0, 0, 320, 320, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    graphics::Framebuffer::unbind();
+    fbo.destroy();
+
+    const int bgR = static_cast<int>(clearCol.r * 255.0f);
+    const int bgG = static_cast<int>(clearCol.g * 255.0f);
+    const int bgB = static_cast<int>(clearCol.b * 255.0f);
+
+    const auto pixelDiffFromBg = [&](int x, int y) -> int {
+        const std::size_t idx = static_cast<std::size_t>((y * 320 + x) * 4);
+        return std::abs(static_cast<int>(pixels[idx]) - bgR) +
+               std::abs(static_cast<int>(pixels[idx + 1]) - bgG) +
+               std::abs(static_cast<int>(pixels[idx + 2]) - bgB);
+    };
+
+    const bool cornerIsBackground = (pixelDiffFromBg(4, 4) < 12);
+
+    // Chiếu 8 góc BoundingBox để xác định hình chữ nhật màn hình dự kiến của vật thể
+    const glm::mat4 vp = cam.getProjectionMatrix() * cam.getViewMatrix();
+    int minPx = 319, maxPx = 0, minPy = 319, maxPy = 0;
+    const glm::vec3 corners[8] = {
+        {box.min.x, box.min.y, box.min.z}, {box.max.x, box.min.y, box.min.z},
+        {box.min.x, box.max.y, box.min.z}, {box.max.x, box.max.y, box.min.z},
+        {box.min.x, box.min.y, box.max.z}, {box.max.x, box.min.y, box.max.z},
+        {box.min.x, box.max.y, box.max.z}, {box.max.x, box.max.y, box.max.z}
+    };
+    for (const auto& c : corners) {
+        const glm::vec4 clip = vp * glm::vec4(c, 1.0f);
+        if (clip.w <= 1e-4f) {
+            continue;
+        }
+        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        const int sx = std::clamp(static_cast<int>((ndc.x * 0.5f + 0.5f) * 320.0f), 0, 319);
+        const int sy = std::clamp(static_cast<int>((ndc.y * 0.5f + 0.5f) * 320.0f), 0, 319);
+        minPx = std::min(minPx, sx);
+        maxPx = std::max(maxPx, sx);
+        minPy = std::min(minPy, sy);
+        maxPy = std::max(maxPy, sy);
+    }
+
+    int coveredPixelsInsideBBox = 0;
+    for (int y = minPy; y <= maxPy; ++y) {
+        for (int x = minPx; x <= maxPx; ++x) {
+            if (pixelDiffFromBg(x, y) > 25) {
+                ++coveredPixelsInsideBBox;
+            }
+        }
+    }
+
+    const auto& stats = m_renderer.getLastFrameStats();
+    const bool passed = cornerIsBackground && (coveredPixelsInsideBBox > 150) && (stats.drawCalls == parts.size());
+
+    std::cout << "  [M2-Render] " << label
+              << " | drawCalls=" << stats.drawCalls
+              << " | tris=" << stats.triangleCount
+              << " | bboxCoveragePx=" << coveredPixelsInsideBBox
+              << " | cornerBg=" << (cornerIsBackground ? "OK" : "FAIL")
+              << " -> " << (passed ? "PASS" : "FAIL") << std::endl;
+    return passed;
+}
+
+bool Application::verifyM2WireframeStateRestoration()
+{
+    graphics::Framebuffer fbo;
+    if (!fbo.create(128, 128) || !fbo.isComplete()) {
+        return false;
+    }
+
+    graphics::Camera cam;
+    cam.setAspectRatio(1.0f);
+    cam.lookAt({2.0f, 1.5f, 2.0f}, {0.0f, 0.5f, 0.0f});
+
+    fbo.bind();
+    m_renderer.beginFrame(128, 128, {0.1f, 0.1f, 0.1f, 1.0f}, true);
+    m_renderer.setWireframeMode(true);
+
+    GLint modeDuringWireframe[2] = {0, 0};
+    glGetIntegerv(GL_POLYGON_MODE, modeDuringWireframe);
+    m_renderer.drawMesh(m_cubeMesh, m_meshShader, scene::Transform(), cam, {0.8f, 0.8f, 0.8f, 1.0f}, 0.0f);
+    m_renderer.endFrame();
+
+    GLint modeAfterEndFrame[2] = {0, 0};
+    glGetIntegerv(GL_POLYGON_MODE, modeAfterEndFrame);
+
+    graphics::Framebuffer::unbind();
+    fbo.destroy();
+
+    return (modeDuringWireframe[0] == GL_LINE) && (modeAfterEndFrame[0] == GL_FILL);
+}
+
+bool Application::runM2IntegrationSuiteOnce()
+{
+    bool allPassed = true;
+    const auto report = [&allPassed](const char* id, const char* desc, bool ok) {
+        std::cout << "[" << id << "] " << desc << ": " << (ok ? "PASS" : "FAIL") << std::endl;
+        if (!ok) {
+            allPassed = false;
+        }
+    };
+
+    graphics::Camera testCam;
+    testCam.setProjectionMode(graphics::ProjectionMode::Perspective);
+    testCam.setAspectRatio(1.0f);
+    testCam.setFieldOfView(45.0f);
+    testCam.lookAt({2.2f, 1.8f, 2.6f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
+
+    // TC-M2-19: Kiểm thử regeneration lặp lại & bảo toàn mesh cũ khi tham số không hợp lệ
+    bool regenOk = true;
+    {
+        m_category = PlaygroundCategory::Primitives;
+        m_primitiveTypeIndex = 3; // Cylinder
+        m_cylSegments = 8;
+        regenOk &= regenerateActivePlaygroundGeometry();
+        const std::uint32_t verts8 = m_activeVertexCount;
+
+        m_cylSegments = 32;
+        regenOk &= regenerateActivePlaygroundGeometry();
+        const std::uint32_t verts32 = m_activeVertexCount;
+        regenOk &= (verts32 > verts8);
+
+        // Thử tham số lỗi (bán kính âm) -> phải trả false và GIỮ NGUYÊN mesh hợp lệ (verts32)
+        const float savedRadius = m_cylRadius;
+        m_cylRadius = -1.0f;
+        const bool rejectedBad = !regenerateActivePlaygroundGeometry();
+        regenOk &= rejectedBad && (m_activeVertexCount == verts32) && (!m_activeParts.empty()) && m_activeParts[0].mesh.isValid();
+        m_cylRadius = savedRadius;
+    }
+    report("TC-M2-19", "Mesh regeneration (8->32 segs) and prior-mesh preservation on invalid input", regenOk);
+
+    // TC-M2-20: Kiểm thử GPU render từng nhóm (Primitives, Bezier Surface, Revolution Surface, 6 Furniture models)
+    bool categoryRenderOk = true;
+    const auto renderPlaygroundItem = [&](const std::string& label, PlaygroundCategory cat, int idx, const graphics::Camera& cam) {
+        m_category = cat;
+        if (cat == PlaygroundCategory::Primitives) m_primitiveTypeIndex = idx;
+        else if (cat == PlaygroundCategory::Parametric) m_parametricTypeIndex = idx;
+        else if (cat == PlaygroundCategory::Furniture) m_furnitureTypeIndex = idx;
+
+        if (!regenerateActivePlaygroundGeometry()) {
+            categoryRenderOk = false;
+            return;
+        }
+        categoryRenderOk &= verifyM2ProjectedGeometryRender(label, m_activeParts, m_activeBoundingBox, cam);
+    };
+
+    renderPlaygroundItem("Primitive_Cuboid", PlaygroundCategory::Primitives, 2, testCam);
+    renderPlaygroundItem("Primitive_Cylinder", PlaygroundCategory::Primitives, 3, testCam);
+    renderPlaygroundItem("Primitive_Sphere", PlaygroundCategory::Primitives, 4, testCam);
+    renderPlaygroundItem("Primitive_Frustum", PlaygroundCategory::Primitives, 6, testCam);
+    renderPlaygroundItem("Parametric_BezierSurface", PlaygroundCategory::Parametric, 1, testCam);
+    renderPlaygroundItem("Parametric_RevolutionSurface", PlaygroundCategory::Parametric, 2, testCam);
+
+    graphics::Camera closeCam;
+    closeCam.setAspectRatio(1.0f);
+    closeCam.lookAt({0.9f, 0.7f, 1.1f}, {0.0f, 0.25f, 0.0f}, {0.0f, 1.0f, 0.0f});
+
+    graphics::Camera tallCam;
+    tallCam.setAspectRatio(1.0f);
+    tallCam.lookAt({2.6f, 1.6f, 3.0f}, {0.0f, 0.85f, 0.0f}, {0.0f, 1.0f, 0.0f});
+
+    renderPlaygroundItem("Furniture_Desk", PlaygroundCategory::Furniture, 0, testCam);
+    renderPlaygroundItem("Furniture_Chair", PlaygroundCategory::Furniture, 1, testCam);
+    renderPlaygroundItem("Furniture_Bookshelf", PlaygroundCategory::Furniture, 2, tallCam);
+    renderPlaygroundItem("Furniture_DeskLamp", PlaygroundCategory::Furniture, 3, closeCam);
+    renderPlaygroundItem("Furniture_Vase", PlaygroundCategory::Furniture, 4, closeCam);
+    renderPlaygroundItem("Furniture_CurvedChair", PlaygroundCategory::Furniture, 5, testCam);
+
+    report("TC-M2-20", "GPU rendering & projected BBox coverage across all M2 categories", categoryRenderOk);
+
+    // TC-M2-21: Kiểm thử khôi phục trạng thái Wireframe GL_LINE -> GL_FILL
+    report("TC-M2-21", "Wireframe polygon mode restored to GL_FILL after endFrame()",
+           verifyM2WireframeStateRestoration());
+
+    // TC-M2-22: Kiểm thử vòng đời tài nguyên GPU sau nhiều chu kỳ regeneration
+    bool lifecycleOk = true;
+    for (int iter = 0; iter < 5; ++iter) {
+        m_category = PlaygroundCategory::Furniture;
+        m_furnitureTypeIndex = iter % 6;
+        lifecycleOk &= regenerateActivePlaygroundGeometry();
+    }
+    report("TC-M2-22", "Repeated GPU upload/release lifecycle across furniture models", lifecycleOk);
+
+    drainAndCheckOpenGlErrors();
+    report("TC-M2-23", "Zero unexpected OpenGL errors during M2 integration suite", !m_glErrorDetected);
+    return allPassed;
 }
 
 void Application::handleReshape(int width, int height)
@@ -996,7 +1741,6 @@ void Application::handleKeyboard(unsigned char key, int x, int y)
         }
     }
 
-    // Phím ESC để thoát ứng dụng an toàn
     if (key == 27) {
         m_window.requestClose();
     }
@@ -1004,7 +1748,6 @@ void Application::handleKeyboard(unsigned char key, int x, int y)
 
 void Application::handleClose()
 {
-    // Giải phóng toàn bộ tài nguyên GPU & ImGui TRƯỚC khi FreeGLUT hủy OpenGL context
     shutdownGraphics();
 }
 

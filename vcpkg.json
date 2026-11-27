@@ -1,12 +1,14 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "roomcraft-3d",
-  "version-string": "0.1.0",
-  "description": "RoomCraft 3D - Desktop 3D Interior Design and Room Planner (OpenGL 3.3 Core + FreeGLUT + Dear ImGui + GLM)",
+  "version-string": "0.3.0",
+  "description": "RoomCraft 3D - Desktop 3D Interior Design and Room Planner (OpenGL 3.3 Core + FreeGLUT + Dear ImGui + GLM + Assimp + stb)",
   "builtin-baseline": "9fa95bf687fa6ae7f2da0673a8067e5fc1515c27",
   "dependencies": [
     "freeglut",
     "glm",
+    "assimp",
+    "stb",
     {
       "name": "glad",
       "features": [

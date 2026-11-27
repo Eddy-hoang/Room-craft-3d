@@ -98,3 +98,19 @@ Tại Milestone M2, hệ thống bổ sung module `roomcraft_geometry` thuần C
 - **Hierarchical Modeling & AABB**: Tổ hợp đa thành phần bằng $M_{\text{world\_part}} = M_{\text{parent}} \cdot M_{\text{local\_part}}$ với gốc nội thất tại tâm đáy ($y = 0$).
 
 Xem phân tích toán học đầy đủ, sơ đồ lớp và mã giả (pseudocode) tại [`docs/GEOMETRY_ALGORITHMS.md`](GEOMETRY_ALGORITHMS.md).
+
+---
+
+## 8. Milestone M3 — Asset Pipeline, Chuyển đổi Hệ tọa độ, Texture Mapping & Camera Auto-Fit
+
+Tại Milestone M3, hệ thống kết nối mô hình Blender (`.obj` + `.mtl` + `.png`) vào cùng một biểu diễn `AssetData` với nội thất Procedural:
+- **Chuyển đổi hệ tọa độ Blender (`Z-up`) → OpenGL (`Y-up`, Forward `-Z`)**: Khi xuất OBJ từ Blender (`forward_axis='NEGATIVE_Z'`, `up_axis='Y'`), ma trận xoay $+90^\circ$ quanh trục $X$ biến đổi $(x, y, z)_{\text{Blender}} \mapsto (x, z, -y)_{\text{OpenGL}}$.
+- **Biến đổi pháp tuyến bằng ma trận nghịch đảo chuyển vị (Normal Matrix)**: Khi duyệt cây node Assimp với ma trận tích lũy $M_{\text{world}}$ (có thể chứa non-uniform scale), pháp tuyến phải biến đổi bằng:
+  $$n_{\text{world}} = \text{normalize}\!\left(\left(M_{3\times 3}^{-1}\right)^T n_{\text{local}}\right)$$
+  để bảo toàn tính vuông góc $n'^T t' = 0$ với mọi tiếp tuyến $t' = M_{3\times 3} t$.
+- **Chuẩn hóa Pivot tâm đáy (Bottom-Center Normalization)**: Sau khi nhân hệ số tỷ lệ đơn vị $s$, dịch toàn bộ đỉnh theo vector $\Delta = \left(-\frac{x_{\min}+x_{\max}}{2},\; -y_{\min},\; -\frac{z_{\min}+z_{\max}}{2}\right)$ để mọi nội thất luôn tiếp xúc sàn tại $y = 0$ và căn giữa theo $X, Z$.
+- **Quy ước trục V của Texture (`stb_image` + OpenGL)**: Không bật `aiProcess_FlipUVs` ở Assimp mà bật duy nhất `stbi_set_flip_vertically_on_load(1)` khi giải mã ảnh PNG/JPG, tránh lật hai lần (double-flip) — đã kiểm chứng trực tiếp bằng ảnh bất đối xứng Đỏ/Xanh ở `TC-M3-17`.
+- **Camera Auto-Fit (`Camera::fitBoundingBox`)**: Đặt mục tiêu camera tại tâm hình cầu ngoại tiếp AABB ($c$, bán kính $R = \frac{1}{2}\|\text{size}\|$) và tính khoảng cách phù hợp theo cả FOV dọc ($\theta_v$) lẫn FOV ngang ($\theta_h = 2\arctan(\tan(\theta_v/2)\cdot a)$):
+  $$d = \text{padding} \cdot \max\!\left(\frac{R}{\sin(\theta_v/2)},\; \frac{R}{\sin(\theta_h/2)}\right)$$
+
+Xem chi tiết kiến trúc, sơ đồ và thuật toán tại [`docs/ASSET_PIPELINE.md`](ASSET_PIPELINE.md) và [`docs/BLENDER_GUIDE.md`](BLENDER_GUIDE.md).

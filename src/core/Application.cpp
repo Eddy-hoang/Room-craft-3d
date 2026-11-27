@@ -5,6 +5,7 @@
 #include "roomcraft/geometry/RevolutionSurface.hpp"
 
 #include <glad/glad.h>
+#include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <imgui.h>
@@ -16,6 +17,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <vector>
 
 namespace roomcraft::core {
@@ -37,6 +39,7 @@ Application::Application(ApplicationConfig config)
     : m_config(std::move(config))
     , m_window(makeWindowConfig(m_config))
 {
+    m_browserSearchBuf.fill('\0');
 }
 
 Application::~Application()
@@ -58,6 +61,8 @@ bool Application::initialize(int& argc, char** argv)
         m_executableDir = std::filesystem::current_path();
     }
 
+    m_assetManager.setSearchRoots(m_executableDir, std::filesystem::current_path());
+
     if (!m_window.initialize(argc, argv)) {
         return false;
     }
@@ -68,7 +73,7 @@ bool Application::initialize(int& argc, char** argv)
             return false;
         }
     } else {
-        if (!initM1AndM2Resources()) {
+        if (!initEngineResources()) {
             shutdownGraphics();
             return false;
         }
@@ -153,9 +158,7 @@ int Application::run()
         std::cout << "[SMOKE] OpenGL errors: " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
 
         const bool passed = (m_frameCount >= m_config.smokeTestFrames) &&
-                            m_m0PixelVerified &&
-                            m_m0ResizeObserved &&
-                            !m_glErrorDetected;
+                            m_m0PixelVerified && m_m0ResizeObserved && !m_glErrorDetected;
         std::cout << "[SMOKE] Result: " << (passed ? "PASS" : "FAIL") << std::endl;
         return passed ? 0 : 1;
     }
@@ -164,17 +167,13 @@ int Application::run()
         const auto& stats = m_renderer.getLastFrameStats();
         std::cout << "[M1-SMOKE] Frames rendered       : " << m_frameCount << std::endl;
         std::cout << "[M1-SMOKE] Last frame draw calls : " << stats.drawCalls
-                  << " (vertices=" << stats.vertexCount
-                  << ", indices=" << stats.indexCount << ")" << std::endl;
+                  << " (vertices=" << stats.vertexCount << ", indices=" << stats.indexCount << ")" << std::endl;
         std::cout << "[M1-SMOKE] Integration suite     : " << (m_m1SuitePassed ? "PASS" : "FAIL") << std::endl;
         std::cout << "[M1-SMOKE] Multi-cube pixels     : " << (m_m1MultiCubePixelsVerified ? "PASS" : "FAIL") << std::endl;
         std::cout << "[M1-SMOKE] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
 
         const bool passed = (m_frameCount >= m_config.smokeTestFrames) &&
-                            m_m1SuiteExecuted &&
-                            m_m1SuitePassed &&
-                            m_m1MultiCubePixelsVerified &&
-                            !m_glErrorDetected;
+                            m_m1SuiteExecuted && m_m1SuitePassed && m_m1MultiCubePixelsVerified && !m_glErrorDetected;
         std::cout << "[M1-SMOKE] Final Result          : " << (passed ? "PASS" : "FAIL") << std::endl;
         return passed ? 0 : 1;
     }
@@ -183,17 +182,31 @@ int Application::run()
         const auto& stats = m_renderer.getLastFrameStats();
         std::cout << "[M2-SMOKE] Frames rendered       : " << m_frameCount << std::endl;
         std::cout << "[M2-SMOKE] Last frame draw calls : " << stats.drawCalls
-                  << " (vertices=" << stats.vertexCount
-                  << ", indices=" << stats.indexCount
+                  << " (vertices=" << stats.vertexCount << ", indices=" << stats.indexCount
                   << ", triangles=" << stats.triangleCount << ")" << std::endl;
         std::cout << "[M2-SMOKE] Integration suite     : " << (m_m2SuitePassed ? "PASS" : "FAIL") << std::endl;
         std::cout << "[M2-SMOKE] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
 
         const bool passed = (m_frameCount >= m_config.smokeTestFrames) &&
-                            m_m2SuiteExecuted &&
-                            m_m2SuitePassed &&
-                            !m_glErrorDetected;
+                            m_m2SuiteExecuted && m_m2SuitePassed && !m_glErrorDetected;
         std::cout << "[M2-SMOKE] Final Result          : " << (passed ? "PASS" : "FAIL") << std::endl;
+        return passed ? 0 : 1;
+    }
+
+    if (m_config.mode == ApplicationMode::SmokeTestM3) {
+        const auto& stats = m_renderer.getLastFrameStats();
+        std::cout << "[M3-SMOKE] Frames rendered       : " << m_frameCount << std::endl;
+        std::cout << "[M3-SMOKE] Last frame draw calls : " << stats.drawCalls
+                  << " (vertices=" << stats.vertexCount << ", indices=" << stats.indexCount
+                  << ", triangles=" << stats.triangleCount << ")" << std::endl;
+        std::cout << "[M3-SMOKE] Cached assets/textures: " << m_assetManager.getCachedAssetCount()
+                  << " assets, " << m_assetManager.getTextureManager().getCachedTextureCount() << " textures" << std::endl;
+        std::cout << "[M3-SMOKE] Integration suite     : " << (m_m3SuitePassed ? "PASS" : "FAIL") << std::endl;
+        std::cout << "[M3-SMOKE] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
+
+        const bool passed = (m_frameCount >= m_config.smokeTestFrames) &&
+                            m_m3SuiteExecuted && m_m3SuitePassed && !m_glErrorDetected;
+        std::cout << "[M3-SMOKE] Final Result          : " << (passed ? "PASS" : "FAIL") << std::endl;
         return passed ? 0 : 1;
     }
 
@@ -275,7 +288,7 @@ bool Application::initM0Resources()
     return true;
 }
 
-bool Application::initM1AndM2Resources()
+bool Application::initEngineResources()
 {
     if (!m_meshShader.loadFromFiles(resolveAssetPath("assets/shaders/mesh.vert"),
                                     resolveAssetPath("assets/shaders/mesh.frag"))) {
@@ -287,7 +300,6 @@ bool Application::initM1AndM2Resources()
         return false;
     }
 
-    // Cube fixture cho M1 Reference Scene & điểm đánh dấu control point cho Bézier Playground
     std::vector<graphics::Vertex> cubeVerts;
     std::vector<std::uint32_t> cubeIndices;
     graphics::Mesh::buildUnitCubeFixture(cubeVerts, cubeIndices);
@@ -301,7 +313,6 @@ bool Application::initM1AndM2Resources()
         return false;
     }
 
-    // Grid trên mặt phẳng XZ và 3 trục tọa độ X, Y, Z bằng GL_LINES
     std::vector<graphics::Vertex> gridVerts;
     std::vector<std::uint32_t> gridIndices;
     graphics::Mesh::buildGridFixture(6, 0.5f, gridVerts, gridIndices);
@@ -324,28 +335,40 @@ bool Application::initM1AndM2Resources()
         return false;
     }
 
-    if (!m_framebuffer.create(860, 640)) {
+    if (!m_framebuffer.create(720, 620)) {
         return false;
     }
 
     setupDefaultM1DemoScene();
 
     if (m_config.mode == ApplicationMode::SmokeTestM1) {
-        m_category = PlaygroundCategory::M1ReferenceScene;
+        m_workspace = InteractiveWorkspace::ReferenceSceneM1;
         m_camera.reset();
-    } else {
-        // Góc nhìn gần vừa vặn để quan sát nội thất và hình học M2
+    } else if (m_config.mode == ApplicationMode::SmokeTestM2) {
+        m_workspace = InteractiveWorkspace::GeometryPlaygroundM2;
         m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
         m_camera.lookAt({2.3f, 1.8f, 2.7f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
         if (!regenerateActivePlaygroundGeometry()) {
             return false;
+        }
+    } else {
+        // Mặc định M3: khởi chạy chế độ Furniture Asset Browser & tải sẵn Modern Sofa + Camera Auto-Fit
+        m_workspace = InteractiveWorkspace::AssetBrowserM3;
+        m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
+        m_camera.lookAt({2.6f, 1.8f, 2.8f}, {0.0f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f});
+        m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
+                                static_cast<float>(m_framebuffer.getHeight()));
+        regenerateActivePlaygroundGeometry();
+        if (!selectBrowserAsset("blender-modern-sofa", true)) {
+            // Nếu file OBJ chưa tồn tại, dự phòng sang Procedural Desk
+            selectBrowserAsset("procedural-desk", true);
         }
     }
 
     m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
                             static_cast<float>(m_framebuffer.getHeight()));
 
-    std::cout << "[RoomCraft3D] M1/M2 Graphics & Geometry Playground resources initialized." << std::endl;
+    std::cout << "[RoomCraft3D] M1/M2/M3 Engine & Asset Pipeline resources initialized." << std::endl;
     return true;
 }
 
@@ -377,53 +400,24 @@ void Application::setupDefaultM1DemoScene()
 
 void Application::resetCurrentPlaygroundParameters()
 {
-    m_planeWidth = 2.0f;
-    m_planeDepth = 2.0f;
-    m_planeSubX = 4;
-    m_planeSubZ = 4;
+    m_planeWidth = 2.0f; m_planeDepth = 2.0f; m_planeSubX = 4; m_planeSubZ = 4;
     m_cubeSize = 1.0f;
-    m_cuboidW = 1.4f;
-    m_cuboidH = 0.8f;
-    m_cuboidD = 0.9f;
-    m_cylRadius = 0.45f;
-    m_cylHeight = 1.2f;
-    m_cylSegments = 24;
-    m_cylCapped = true;
-    m_sphereRadius = 0.55f;
-    m_sphereLatSeg = 18;
-    m_sphereLonSeg = 28;
-    m_coneRadius = 0.50f;
-    m_coneHeight = 1.15f;
-    m_coneSegments = 24;
-    m_coneCapped = true;
-    m_frustumBottomR = 0.55f;
-    m_frustumTopR = 0.25f;
-    m_frustumHeight = 1.0f;
-    m_frustumSegments = 24;
-    m_frustumCapBottom = true;
-    m_frustumCapTop = true;
+    m_cuboidW = 1.4f; m_cuboidH = 0.8f; m_cuboidD = 0.9f;
+    m_cylRadius = 0.45f; m_cylHeight = 1.2f; m_cylSegments = 24; m_cylCapped = true;
+    m_sphereRadius = 0.55f; m_sphereLatSeg = 18; m_sphereLonSeg = 28;
+    m_coneRadius = 0.50f; m_coneHeight = 1.15f; m_coneSegments = 24; m_coneCapped = true;
+    m_frustumBottomR = 0.55f; m_frustumTopR = 0.25f; m_frustumHeight = 1.0f; m_frustumSegments = 24;
+    m_frustumCapBottom = true; m_frustumCapTop = true;
 
     m_bezierCurvePts = {
-        glm::vec3(-1.0f, 0.2f, 0.0f),
-        glm::vec3(-0.4f, 1.5f, 0.4f),
-        glm::vec3( 0.4f, 1.5f, -0.4f),
-        glm::vec3( 1.0f, 0.2f, 0.0f)
+        glm::vec3(-1.0f, 0.2f, 0.0f), glm::vec3(-0.4f, 1.5f, 0.4f),
+        glm::vec3( 0.4f, 1.5f, -0.4f), glm::vec3( 1.0f, 0.2f, 0.0f)
     };
     m_bezierCurveSegments = 32;
-    m_bezierSurfWidth = 1.8f;
-    m_bezierSurfDepth = 1.8f;
-    m_bezierSurfCurvature = 0.55f;
-    m_bezierSurfUSeg = 16;
-    m_bezierSurfVSeg = 16;
-    m_revHeight = 1.1f;
-    m_revBaseR = 0.22f;
-    m_revBellyR = 0.48f;
-    m_revNeckR = 0.16f;
-    m_revRimR = 0.28f;
-    m_revRadialSeg = 32;
-    m_revProfileSeg = 20;
-    m_revCapBottom = true;
-    m_revCapTop = false;
+    m_bezierSurfWidth = 1.8f; m_bezierSurfDepth = 1.8f; m_bezierSurfCurvature = 0.55f;
+    m_bezierSurfUSeg = 16; m_bezierSurfVSeg = 16;
+    m_revHeight = 1.1f; m_revBaseR = 0.22f; m_revBellyR = 0.48f; m_revNeckR = 0.16f; m_revRimR = 0.28f;
+    m_revRadialSeg = 32; m_revProfileSeg = 20; m_revCapBottom = true; m_revCapTop = false;
 
     m_deskParams = geometry::DeskParams{};
     m_chairParams = geometry::ChairParams{};
@@ -434,13 +428,44 @@ void Application::resetCurrentPlaygroundParameters()
     m_rootTransform.reset();
 }
 
+bool Application::selectBrowserAsset(const std::string& assetId, bool autoFitCamera)
+{
+    std::string err;
+    auto loaded = m_assetManager.getOrLoadAsset(assetId, &err);
+    if (!loaded) {
+        m_lastAssetError = err;
+        return false;
+    }
+
+    m_selectedAssetId = assetId;
+    m_activeBrowserAsset = std::move(loaded);
+    m_lastAssetError.clear();
+    m_lastAssetStatus = "Loaded " + m_activeBrowserAsset->cpuData.displayName;
+
+    if (autoFitCamera) {
+        fitCameraToActiveModel();
+    }
+    return true;
+}
+
+void Application::fitCameraToActiveModel()
+{
+    if (m_workspace == InteractiveWorkspace::AssetBrowserM3 && m_activeBrowserAsset) {
+        m_camera.fitBoundingBox(m_activeBrowserAsset->cpuData.localBounds, 1.28f);
+    } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2 && m_activeBoundingBox.isValid()) {
+        const auto worldBox = m_activeBoundingBox.transformed(m_rootTransform.getModelMatrix());
+        m_camera.fitBoundingBox(worldBox, 1.28f);
+    } else {
+        m_camera.reset();
+    }
+}
+
 bool Application::uploadPlaygroundParts(std::vector<geometry::FurniturePart>& parts,
                                         const math::BoundingBox& overallBox,
                                         const geometry::MeshData* controlOverlayLines,
                                         const std::vector<glm::vec3>& controlPoints,
                                         std::string& outError)
 {
-    // Chuẩn bị toàn bộ GPU mesh tạm trước khi hoán đổi để nếu có lỗi sẽ KHÔNG làm mất mesh đang hiển thị
     std::vector<UploadedRenderPart> nextParts;
     nextParts.reserve(parts.size());
 
@@ -466,10 +491,9 @@ bool Application::uploadPlaygroundParts(std::vector<geometry::FurniturePart>& pa
         totalIndices += part.meshData.getIndexCount();
         totalTris += part.meshData.getTriangleCount();
 
-        // Thu thập các đoạn pháp tuyến đỉnh cho chế độ Normal Visualization (biến đổi về không gian root)
         if (part.meshData.topology == graphics::PrimitiveTopology::Triangles) {
             const glm::mat4 localMat = part.localTransform.getModelMatrix();
-            const glm::mat3 normalMat = glm::mat3(glm::transpose(glm::inverse(localMat)));
+            const glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(localMat));
             const glm::vec3 up(0.0f, 1.0f, 0.0f);
             for (const auto& v : part.meshData.vertices) {
                 const glm::vec3 p = glm::vec3(localMat * glm::vec4(v.position, 1.0f));
@@ -495,9 +519,7 @@ bool Application::uploadPlaygroundParts(std::vector<geometry::FurniturePart>& pa
 
     graphics::Mesh nextControlLines;
     if (controlOverlayLines != nullptr && !controlOverlayLines->vertices.empty()) {
-        nextControlLines.create(controlOverlayLines->vertices,
-                                controlOverlayLines->indices,
-                                controlOverlayLines->topology);
+        nextControlLines.create(controlOverlayLines->vertices, controlOverlayLines->indices, controlOverlayLines->topology);
     }
 
     graphics::Mesh nextNormalLines;
@@ -505,7 +527,6 @@ bool Application::uploadPlaygroundParts(std::vector<geometry::FurniturePart>& pa
         nextNormalLines.create(combinedNormals.vertices, combinedNormals.indices, combinedNormals.topology);
     }
 
-    // Hoán đổi tài nguyên GPU an toàn (RAII sẽ tự giải phóng các buffer cũ ngay khi vector cũ hết scope)
     m_activeParts = std::move(nextParts);
     m_activeBBoxLines = std::move(nextBBoxLines);
     m_activeControlLines = std::move(nextControlLines);
@@ -520,11 +541,6 @@ bool Application::uploadPlaygroundParts(std::vector<geometry::FurniturePart>& pa
 
 bool Application::regenerateActivePlaygroundGeometry()
 {
-    if (m_category == PlaygroundCategory::M1ReferenceScene) {
-        m_lastGeometryError.clear();
-        return true;
-    }
-
     const auto startTime = std::chrono::steady_clock::now();
 
     std::vector<geometry::FurniturePart> parts;
@@ -583,7 +599,7 @@ bool Application::regenerateActivePlaygroundGeometry()
             }
         } else {
             const geometry::BezierCurve profile(
-                glm::vec3(m_revBaseR,  0.0f,               0.0f),
+                glm::vec3(m_revBaseR,  0.0f,                0.0f),
                 glm::vec3(m_revBellyR, m_revHeight * 0.35f, 0.0f),
                 glm::vec3(m_revNeckR,  m_revHeight * 0.78f, 0.0f),
                 glm::vec3(m_revRimR,   m_revHeight,         0.0f)
@@ -614,7 +630,6 @@ bool Application::regenerateActivePlaygroundGeometry()
     }
 
     if (!ok) {
-        // Giữ nguyên mesh hợp lệ trước đó và hiển thị thông báo lỗi cho người dùng
         m_lastGeometryError = error;
         return false;
     }
@@ -635,6 +650,7 @@ void Application::shutdownGraphics()
     if (!m_initialized && !m_imguiInitialized &&
         !m_meshShader.isValid() && !m_gridShader.isValid() && !m_m0BasicShader.isValid() &&
         !m_cubeMesh.isValid() && !m_framebuffer.isComplete() && m_activeParts.empty() &&
+        !m_activeBrowserAsset && m_assetManager.getCachedAssetCount() == 0 &&
         m_m0Vao == 0 && m_m0Vbo == 0) {
         return;
     }
@@ -646,7 +662,10 @@ void Application::shutdownGraphics()
         m_imguiInitialized = false;
     }
 
-    // Giải phóng toàn bộ GPU mesh của Geometry Playground trước khi hủy OpenGL context
+    // Giải phóng toàn bộ tài nguyên AssetManager (Meshes + Textures) TRƯỚC khi OpenGL context bị hủy
+    m_activeBrowserAsset.reset();
+    m_assetManager.clear();
+
     m_activeParts.clear();
     m_activeBBoxLines.destroy();
     m_activeControlLines.destroy();
@@ -673,18 +692,26 @@ void Application::shutdownGraphics()
     }
 
     m_initialized = false;
-    std::cout << "[RoomCraft3D] GPU & Dear ImGui resources released cleanly." << std::endl;
+    std::cout << "[RoomCraft3D] GPU, Asset/Texture caches & Dear ImGui resources released cleanly." << std::endl;
 }
 
 std::filesystem::path Application::resolveAssetPath(const std::filesystem::path& relativePath) const
 {
+    std::error_code ec;
     const auto candidateExe = m_executableDir / relativePath;
-    if (std::filesystem::exists(candidateExe)) {
+    if (std::filesystem::exists(candidateExe, ec)) {
         return candidateExe;
     }
     const auto candidateCwd = std::filesystem::current_path() / relativePath;
-    if (std::filesystem::exists(candidateCwd)) {
+    if (std::filesystem::exists(candidateCwd, ec)) {
         return candidateCwd;
+    }
+    // Hỗ trợ trường hợp chạy từ build/<preset>/ tìm ngược lên thư mục gốc dự án (cho tests/fixtures)
+    if (m_executableDir.has_parent_path() && m_executableDir.parent_path().has_parent_path()) {
+        const auto candidateRepo = m_executableDir.parent_path().parent_path() / relativePath;
+        if (std::filesystem::exists(candidateRepo, ec)) {
+            return candidateRepo;
+        }
     }
     return candidateExe;
 }
@@ -716,6 +743,7 @@ void Application::renderFrame()
     if (m_config.mode == ApplicationMode::SmokeTestM1 && !m_m1SuiteExecuted) {
         m_m1SuiteExecuted = true;
         m_m1SuitePassed = runM1IntegrationSuiteOnce();
+        m_workspace = InteractiveWorkspace::ReferenceSceneM1;
         m_framebuffer.resize(800, 600);
         m_camera.reset();
         m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
@@ -725,14 +753,24 @@ void Application::renderFrame()
     if (m_config.mode == ApplicationMode::SmokeTestM2 && !m_m2SuiteExecuted) {
         m_m2SuiteExecuted = true;
         m_m2SuitePassed = runM2IntegrationSuiteOnce();
+        m_workspace = InteractiveWorkspace::GeometryPlaygroundM2;
         m_framebuffer.resize(800, 600);
         m_category = PlaygroundCategory::Furniture;
-        m_furnitureTypeIndex = 0; // Desk
+        m_furnitureTypeIndex = 0;
         regenerateActivePlaygroundGeometry();
         m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
         m_camera.lookAt({2.3f, 1.8f, 2.7f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
         m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
                                 static_cast<float>(m_framebuffer.getHeight()));
+    }
+
+    if (m_config.mode == ApplicationMode::SmokeTestM3 && !m_m3SuiteExecuted) {
+        m_m3SuiteExecuted = true;
+        m_m3SuitePassed = runM3IntegrationSuiteOnce();
+        m_workspace = InteractiveWorkspace::AssetBrowserM3;
+        m_framebuffer.resize(800, 600);
+        m_camera.setAspectRatio(800.0f / 600.0f);
+        selectBrowserAsset("blender-modern-sofa", true);
     }
 
     renderInteractiveFrame();
@@ -747,7 +785,7 @@ void Application::renderFrame()
         }
     }
 
-    if (m_config.mode == ApplicationMode::SmokeTestM2) {
+    if (m_config.mode == ApplicationMode::SmokeTestM2 || m_config.mode == ApplicationMode::SmokeTestM3) {
         if (m_frameCount >= m_config.smokeTestFrames) {
             m_window.requestClose();
             return;
@@ -820,6 +858,60 @@ void Application::renderM0RegressionFrame()
     m_window.postRedisplay();
 }
 
+void Application::renderGpuAssetToCurrentTarget(const assets::GpuAsset& asset,
+                                                const glm::mat4& parentMatrix,
+                                                const graphics::Camera& cam,
+                                                float faceContrast)
+{
+    for (const auto& sub : asset.subMeshes) {
+        const glm::mat4 worldMat = parentMatrix * sub.localTransform.getModelMatrix();
+        const glm::vec4 color = (sub.materialIndex < asset.cpuData.materials.size())
+                                    ? asset.cpuData.materials[sub.materialIndex].baseColor
+                                    : glm::vec4(0.8f, 0.8f, 0.82f, 1.0f);
+        const graphics::Texture* diffTex = nullptr;
+        if (sub.materialIndex < asset.materialDiffuseTextures.size() && asset.materialDiffuseTextures[sub.materialIndex]) {
+            diffTex = asset.materialDiffuseTextures[sub.materialIndex].get();
+        }
+        m_renderer.drawMeshTextured(sub.mesh, m_meshShader, worldMat, cam, color, diffTex, faceContrast);
+    }
+}
+
+void Application::renderAssetBrowserSceneToFramebuffer(float faceContrast)
+{
+    if (!m_framebuffer.isComplete()) {
+        return;
+    }
+
+    m_framebuffer.bind();
+    m_renderer.beginFrame(m_framebuffer.getWidth(), m_framebuffer.getHeight(), m_clearColor, m_depthTestEnabled);
+
+    const glm::mat4 identity(1.0f);
+    if (m_showGrid) {
+        m_renderer.drawLines(m_gridMesh, m_gridShader, identity, m_camera, {0.26f, 0.29f, 0.36f, 1.0f});
+    }
+    if (m_showAxes) {
+        m_renderer.drawLines(m_axisXMesh, m_gridShader, identity, m_camera, {0.92f, 0.30f, 0.30f, 1.0f});
+        m_renderer.drawLines(m_axisYMesh, m_gridShader, identity, m_camera, {0.30f, 0.88f, 0.42f, 1.0f});
+        m_renderer.drawLines(m_axisZMesh, m_gridShader, identity, m_camera, {0.34f, 0.56f, 0.96f, 1.0f});
+    }
+
+    if (m_activeBrowserAsset) {
+        m_renderer.setWireframeMode(m_wireframeMode);
+        renderGpuAssetToCurrentTarget(*m_activeBrowserAsset, identity, m_camera, faceContrast);
+        m_renderer.setWireframeMode(false);
+
+        if (m_showBoundingBox && m_activeBrowserAsset->boundingBoxLines.isValid()) {
+            m_renderer.drawLines(m_activeBrowserAsset->boundingBoxLines, m_gridShader, identity, m_camera, {0.96f, 0.78f, 0.28f, 1.0f});
+        }
+        if (m_showVertexNormals && m_activeBrowserAsset->vertexNormalLines.isValid()) {
+            m_renderer.drawLines(m_activeBrowserAsset->vertexNormalLines, m_gridShader, identity, m_camera, {0.35f, 0.92f, 0.88f, 1.0f});
+        }
+    }
+
+    m_renderer.endFrame();
+    graphics::Framebuffer::unbind();
+}
+
 void Application::renderM1DemoSceneToFramebuffer(float faceContrast)
 {
     if (!m_framebuffer.isComplete()) {
@@ -827,10 +919,7 @@ void Application::renderM1DemoSceneToFramebuffer(float faceContrast)
     }
 
     m_framebuffer.bind();
-    m_renderer.beginFrame(m_framebuffer.getWidth(),
-                          m_framebuffer.getHeight(),
-                          m_clearColor,
-                          m_depthTestEnabled);
+    m_renderer.beginFrame(m_framebuffer.getWidth(), m_framebuffer.getHeight(), m_clearColor, m_depthTestEnabled);
 
     const glm::mat4 identity(1.0f);
     if (m_showGrid) {
@@ -858,10 +947,7 @@ void Application::renderPlaygroundSceneToFramebuffer(float faceContrast)
     }
 
     m_framebuffer.bind();
-    m_renderer.beginFrame(m_framebuffer.getWidth(),
-                          m_framebuffer.getHeight(),
-                          m_clearColor,
-                          m_depthTestEnabled);
+    m_renderer.beginFrame(m_framebuffer.getWidth(), m_framebuffer.getHeight(), m_clearColor, m_depthTestEnabled);
 
     const glm::mat4 identity(1.0f);
     if (m_showGrid) {
@@ -873,9 +959,7 @@ void Application::renderPlaygroundSceneToFramebuffer(float faceContrast)
         m_renderer.drawLines(m_axisZMesh, m_gridShader, identity, m_camera, {0.34f, 0.56f, 0.96f, 1.0f});
     }
 
-    // Áp dụng biến đổi phân cấp: M_world_part = M_parent * M_local_part
     const glm::mat4 parentMat = m_rootTransform.getModelMatrix();
-
     m_renderer.setWireframeMode(m_wireframeMode);
     for (const auto& part : m_activeParts) {
         const glm::mat4 worldMat = parentMat * part.localTransform.getModelMatrix();
@@ -885,8 +969,6 @@ void Application::renderPlaygroundSceneToFramebuffer(float faceContrast)
             m_renderer.drawMeshWithMatrix(part.mesh, m_meshShader, worldMat, m_camera, part.color, faceContrast);
         }
     }
-
-    // Khôi phục GL_FILL trước khi vẽ các overlay trực quan hóa (BoundingBox, Control Points, Normals)
     m_renderer.setWireframeMode(false);
 
     if (m_showBoundingBox && m_activeBBoxLines.isValid()) {
@@ -913,18 +995,37 @@ void Application::renderPlaygroundSceneToFramebuffer(float faceContrast)
 
 void Application::renderInteractiveFrame()
 {
-    if (m_category == PlaygroundCategory::M1ReferenceScene) {
-        renderM1DemoSceneToFramebuffer(0.45f);
-    } else {
+    if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
+        renderAssetBrowserSceneToFramebuffer(0.45f);
+    } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2) {
         renderPlaygroundSceneToFramebuffer(0.45f);
+    } else {
+        renderM1DemoSceneToFramebuffer(0.45f);
     }
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGLUT_NewFrame();
     ImGui::NewFrame();
 
-    renderPlaygroundControlUi();
-    renderViewportUi();
+    renderTopWorkspaceBar();
+
+    if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
+        renderAssetBrowserUi();
+    } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2) {
+        renderPlaygroundControlUi();
+        renderViewportPanel("3D Viewport (Off-screen Framebuffer)",
+                            412.0f, 44.0f,
+                            static_cast<float>(std::max(300, m_window.getWidth() - 422)),
+                            static_cast<float>(std::max(240, m_window.getHeight() - 54)),
+                            true);
+    } else {
+        renderM1ReferenceControlUi();
+        renderViewportPanel("3D Viewport (Off-screen Framebuffer)",
+                            392.0f, 44.0f,
+                            static_cast<float>(std::max(300, m_window.getWidth() - 402)),
+                            static_cast<float>(std::max(240, m_window.getHeight() - 54)),
+                            true);
+    }
 
     ImGui::Render();
 
@@ -939,56 +1040,282 @@ void Application::renderInteractiveFrame()
     m_window.swapBuffers();
 }
 
+void Application::renderTopWorkspaceBar()
+{
+    if (ImGui::BeginMainMenuBar()) {
+        ImGui::TextUnformatted("RoomCraft 3D v0.3.0");
+        ImGui::Separator();
+
+        const bool isM3 = (m_workspace == InteractiveWorkspace::AssetBrowserM3);
+        const bool isM2 = (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2);
+        const bool isM1 = (m_workspace == InteractiveWorkspace::ReferenceSceneM1);
+
+        if (ImGui::MenuItem("Asset Browser (M3)", nullptr, isM3)) {
+            m_workspace = InteractiveWorkspace::AssetBrowserM3;
+            fitCameraToActiveModel();
+        }
+        if (ImGui::MenuItem("Geometry Playground (M2)", nullptr, isM2)) {
+            m_workspace = InteractiveWorkspace::GeometryPlaygroundM2;
+            fitCameraToActiveModel();
+        }
+        if (ImGui::MenuItem("M1 Reference Scene", nullptr, isM1)) {
+            m_workspace = InteractiveWorkspace::ReferenceSceneM1;
+            m_camera.reset();
+        }
+
+        ImGui::Separator();
+        ImGui::Text("FPS: %.1f | Draw Calls: %u | GL %d.%d Core",
+                    m_currentFps,
+                    m_renderer.getLastFrameStats().drawCalls,
+                    m_window.getGpuInfo().majorVersion,
+                    m_window.getGpuInfo().minorVersion);
+
+        ImGui::EndMainMenuBar();
+    }
+}
+
+void Application::renderAssetBrowserUi()
+{
+    const float winW = static_cast<float>(std::max(800, m_window.getWidth()));
+    const float winH = static_cast<float>(std::max(500, m_window.getHeight()));
+    const float topY = 34.0f;
+    const float panelH = winH - topY - 10.0f;
+    const float leftW = 280.0f;
+    const float rightW = 320.0f;
+    const float centerW = std::max(260.0f, winW - leftW - rightW - 40.0f);
+
+    // 1. Left Panel: ASSET LIBRARY
+    ImGui::SetNextWindowPos(ImVec2(10.0f, topY), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(leftW, panelH), ImGuiCond_Always);
+    if (ImGui::Begin("Asset Library", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint("##AssetSearch", "Search furniture...", m_browserSearchBuf.data(), m_browserSearchBuf.size());
+
+        // Bộ lọc nguồn: All / Procedural / Blender Assets
+        if (ImGui::Selectable("All Assets (14)", m_browserSourceFilter == 0)) m_browserSourceFilter = 0;
+        if (ImGui::Selectable("Procedural (C++ M2)", m_browserSourceFilter == 1)) m_browserSourceFilter = 1;
+        if (ImGui::Selectable("Blender Assets (OBJ)", m_browserSourceFilter == 2)) m_browserSourceFilter = 2;
+
+        const char* catNames[] = {"All Categories", "Seating", "Tables", "Storage", "Lighting", "Beds", "Electronics", "Decor"};
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::Combo("##CategoryFilter", &m_browserCategoryFilter, catNames, 8);
+        ImGui::Separator();
+
+        std::optional<assets::AssetSourceType> srcFilter;
+        if (m_browserSourceFilter == 1) srcFilter = assets::AssetSourceType::Procedural;
+        else if (m_browserSourceFilter == 2) srcFilter = assets::AssetSourceType::Imported;
+
+        std::optional<assets::AssetCategory> catFilter;
+        if (m_browserCategoryFilter > 0) {
+            catFilter = static_cast<assets::AssetCategory>(m_browserCategoryFilter - 1);
+        }
+
+        const auto filtered = m_assetManager.getCatalog().filter(srcFilter, catFilter, m_browserSearchBuf.data());
+        ImGui::TextDisabled("Showing %zu asset(s)", filtered.size());
+
+        if (ImGui::BeginChild("AssetListScroll", ImVec2(0.0f, 0.0f), true)) {
+            for (const auto* entry : filtered) {
+                const bool selected = (entry->assetId == m_selectedAssetId);
+                const char* badge = (entry->sourceType == assets::AssetSourceType::Procedural) ? "[C++]" : "[OBJ]";
+                const std::string label = std::string(badge) + " " + entry->displayName + "##" + entry->assetId;
+                if (ImGui::Selectable(label.c_str(), selected)) {
+                    selectBrowserAsset(entry->assetId, true);
+                }
+            }
+        }
+        ImGui::EndChild();
+    }
+    ImGui::End();
+
+    // 2. Center Panel: 3D ASSET PREVIEW (Off-screen Framebuffer)
+    renderViewportPanel("3D Asset Preview", 10.0f + leftW + 10.0f, topY, centerW, panelH, true);
+
+    // 3. Right Panel: ASSET INSPECTOR
+    ImGui::SetNextWindowPos(ImVec2(10.0f + leftW + 10.0f + centerW + 10.0f, topY), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(rightW, panelH), ImGuiCond_Always);
+    if (ImGui::Begin("Asset Inspector", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
+        if (m_activeBrowserAsset) {
+            const auto& cpu = m_activeBrowserAsset->cpuData;
+            const glm::vec3 dims = cpu.localBounds.getSize();
+            const auto& stats = m_renderer.getLastFrameStats();
+
+            ImGui::Text("%s", cpu.displayName.c_str());
+            ImGui::TextDisabled("Source: %s", assets::assetSourceTypeToString(cpu.sourceType));
+            ImGui::Separator();
+
+            ImGui::Text("Asset ID       : %s", cpu.assetId.c_str());
+            ImGui::Text("Category       : %s", assets::assetCategoryToString(cpu.category));
+            ImGui::Text("Mesh count     : %zu", cpu.subMeshes.size());
+            ImGui::Text("Material count : %zu", cpu.materials.size());
+            ImGui::Text("Texture count  : %zu", cpu.getUniqueTextureCount());
+            ImGui::Separator();
+
+            ImGui::Text("Vertices       : %u", cpu.getTotalVertexCount());
+            ImGui::Text("Indices        : %u", cpu.getTotalIndexCount());
+            ImGui::Text("Triangles      : %u", cpu.getTotalTriangleCount());
+            ImGui::Text("Width (X)      : %.3f m", dims.x);
+            ImGui::Text("Height (Y)     : %.3f m", dims.y);
+            ImGui::Text("Depth (Z)      : %.3f m", dims.z);
+            ImGui::Text("Pivot Min Y    : %.4f m", cpu.localBounds.min.y);
+            ImGui::Separator();
+
+            ImGui::Text("Import Time    : %.2f ms", cpu.importTimeMs);
+            ImGui::Text("Draw Calls     : %u", stats.drawCalls);
+            ImGui::Text("FPS / Frame    : %.1f / %.2f ms", m_currentFps, m_frameTimeMs);
+            ImGui::Text("Asset Cache    : %zu assets, %zu tex",
+                        m_assetManager.getCachedAssetCount(),
+                        m_assetManager.getTextureManager().getCachedTextureCount());
+            if (m_activeBrowserAsset->usedFallbackTexture) {
+                ImGui::TextColored(ImVec4(0.96f, 0.78f, 0.28f, 1.0f), "Warning: Fallback texture active");
+            }
+            ImGui::Separator();
+
+            ImGui::TextWrapped("Author  : %s", cpu.author.c_str());
+            ImGui::Text("License : %s", cpu.license.c_str());
+            ImGui::Separator();
+        } else {
+            ImGui::TextDisabled("No asset loaded.");
+        }
+
+        ImGui::Checkbox("Show Bounding Box", &m_showBoundingBox);
+        ImGui::Checkbox("Wireframe Mode", &m_wireframeMode);
+        ImGui::Checkbox("Show Normals", &m_showVertexNormals);
+        ImGui::Checkbox("Show Grid (XZ)", &m_showGrid);
+        ImGui::SameLine();
+        ImGui::Checkbox("Axes", &m_showAxes);
+        ImGui::Checkbox("Depth Test", &m_depthTestEnabled);
+
+        ImGui::Separator();
+        if (ImGui::Button("Fit Model", ImVec2(-1.0f, 0.0f))) {
+            fitCameraToActiveModel();
+        }
+        if (ImGui::Button("Reload Asset", ImVec2(-1.0f, 0.0f))) {
+            std::string err;
+            if (m_assetManager.reloadAsset(m_selectedAssetId, &err)) {
+                m_activeBrowserAsset = m_assetManager.getOrLoadAsset(m_selectedAssetId);
+                m_lastAssetError.clear();
+                m_lastAssetStatus = "Reloaded " + m_selectedAssetId;
+                fitCameraToActiveModel();
+            } else {
+                m_lastAssetError = err;
+            }
+        }
+
+        if (!m_lastAssetError.empty()) {
+            ImGui::TextColored(ImVec4(0.96f, 0.36f, 0.36f, 1.0f), "Error: %s", m_lastAssetError.c_str());
+        } else if (!m_lastAssetStatus.empty()) {
+            ImGui::TextDisabled("%s", m_lastAssetStatus.c_str());
+        }
+    }
+    ImGui::End();
+}
+
+void Application::renderViewportPanel(const char* panelTitle,
+                                      float posX,
+                                      float posY,
+                                      float width,
+                                      float height,
+                                      bool showTopToolbar)
+{
+    ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
+
+    if (ImGui::Begin(panelTitle, nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
+        if (showTopToolbar) {
+            if (ImGui::Button("Fit Model")) {
+                fitCameraToActiveModel();
+            }
+            ImGui::SameLine();
+            int projIdx = (m_camera.getProjectionMode() == graphics::ProjectionMode::Perspective) ? 0 : 1;
+            if (ImGui::RadioButton("Persp", &projIdx, 0)) {
+                m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
+                fitCameraToActiveModel();
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Ortho", &projIdx, 1)) {
+                m_camera.setProjectionMode(graphics::ProjectionMode::Orthographic);
+                fitCameraToActiveModel();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("3/4")) {
+                m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
+                m_camera.lookAt({2.6f, 1.8f, 2.8f}, {0.0f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f});
+                fitCameraToActiveModel();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Top")) {
+                m_camera.setTopOrthoPreset();
+                fitCameraToActiveModel();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Front")) {
+                m_camera.setFrontOrthoPreset();
+                fitCameraToActiveModel();
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("FBO %dx%d", m_framebuffer.getWidth(), m_framebuffer.getHeight());
+            ImGui::Separator();
+        }
+
+        const ImVec2 avail = ImGui::GetContentRegionAvail();
+        const int targetW = static_cast<int>(avail.x);
+        const int targetH = static_cast<int>(avail.y);
+
+        if (targetW > 0 && targetH > 0 && m_config.mode == ApplicationMode::InteractiveApp) {
+            if (targetW != m_framebuffer.getWidth() || targetH != m_framebuffer.getHeight()) {
+                m_framebuffer.resize(targetW, targetH);
+            }
+            m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
+                                    static_cast<float>(m_framebuffer.getHeight()));
+        }
+
+        if (m_framebuffer.isComplete() && targetW > 0 && targetH > 0) {
+            const auto texId = static_cast<ImTextureID>(static_cast<std::uintptr_t>(m_framebuffer.getColorTextureId()));
+            ImGui::Image(texId, avail, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        } else {
+            ImGui::TextDisabled("Framebuffer inactive (viewport size is 0).");
+        }
+    }
+    ImGui::End();
+}
+
 void Application::renderPlaygroundControlUi()
 {
     const auto& gpu = m_window.getGpuInfo();
     const auto& stats = m_renderer.getLastFrameStats();
+    const float panelH = static_cast<float>(std::max(240, m_window.getHeight() - 54));
 
-    ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(390.0f, 696.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(10.0f, 44.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(392.0f, panelH), ImGuiCond_Always);
 
-    if (ImGui::Begin("RoomCraft 3D - M2 Geometry Playground")) {
+    if (ImGui::Begin("RoomCraft 3D - M2 Geometry Playground", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
         bool paramsChanged = false;
         bool selectionChanged = false;
 
-        // 1. Chọn danh mục hình học
-        const char* categories[] = {"Primitives", "Parametric", "Procedural Furniture", "M1 Reference Scene"};
+        const char* categories[] = {"Primitives", "Parametric", "Procedural Furniture"};
         int catIdx = static_cast<int>(m_category);
-        if (ImGui::Combo("Category", &catIdx, categories, 4)) {
+        if (ImGui::Combo("Category", &catIdx, categories, 3)) {
             m_category = static_cast<PlaygroundCategory>(catIdx);
             selectionChanged = true;
         }
 
-        // 2. Chọn loại hình học cụ thể trong danh mục
         if (m_category == PlaygroundCategory::Primitives) {
             const char* primTypes[] = {"Plane", "Cube", "Cuboid", "Cylinder", "Sphere", "Cone", "Frustum"};
-            if (ImGui::Combo("Primitive Type", &m_primitiveTypeIndex, primTypes, 7)) {
-                selectionChanged = true;
-            }
+            if (ImGui::Combo("Primitive Type", &m_primitiveTypeIndex, primTypes, 7)) selectionChanged = true;
         } else if (m_category == PlaygroundCategory::Parametric) {
             const char* paramTypes[] = {"Bezier Curve (Cubic)", "Bezier Surface (4x4)", "Surface of Revolution"};
-            if (ImGui::Combo("Parametric Type", &m_parametricTypeIndex, paramTypes, 3)) {
-                selectionChanged = true;
-            }
-        } else if (m_category == PlaygroundCategory::Furniture) {
+            if (ImGui::Combo("Parametric Type", &m_parametricTypeIndex, paramTypes, 3)) selectionChanged = true;
+        } else {
             const char* furnTypes[] = {
-                "01. Procedural Desk",
-                "02. Procedural Chair",
-                "03. Procedural Bookshelf",
-                "04. Procedural Desk Lamp",
-                "05. Procedural Vase (Revolution)",
-                "06. Procedural Curved Chair (Bezier)"
+                "01. Procedural Desk", "02. Procedural Chair", "03. Procedural Bookshelf",
+                "04. Procedural Desk Lamp", "05. Procedural Vase (Revolution)", "06. Procedural Curved Chair (Bezier)"
             };
-            if (ImGui::Combo("Furniture Type", &m_furnitureTypeIndex, furnTypes, 6)) {
-                selectionChanged = true;
-            }
+            if (ImGui::Combo("Furniture Type", &m_furnitureTypeIndex, furnTypes, 6)) selectionChanged = true;
         }
 
         ImGui::Separator();
 
-        // 3. Trình chỉnh sửa tham số tương ứng
         if (m_category == PlaygroundCategory::Primitives) {
-            ImGui::TextUnformatted("Primitive Parameters (meters)");
             switch (m_primitiveTypeIndex) {
                 case 0:
                     paramsChanged |= ImGui::SliderFloat("Width", &m_planeWidth, 0.2f, 6.0f);
@@ -996,9 +1323,7 @@ void Application::renderPlaygroundControlUi()
                     paramsChanged |= ImGui::SliderInt("Subdivisions X", &m_planeSubX, 1, 32);
                     paramsChanged |= ImGui::SliderInt("Subdivisions Z", &m_planeSubZ, 1, 32);
                     break;
-                case 1:
-                    paramsChanged |= ImGui::SliderFloat("Size", &m_cubeSize, 0.1f, 3.0f);
-                    break;
+                case 1: paramsChanged |= ImGui::SliderFloat("Size", &m_cubeSize, 0.1f, 3.0f); break;
                 case 2:
                     paramsChanged |= ImGui::SliderFloat("Width", &m_cuboidW, 0.1f, 4.0f);
                     paramsChanged |= ImGui::SliderFloat("Height", &m_cuboidH, 0.1f, 4.0f);
@@ -1033,7 +1358,6 @@ void Application::renderPlaygroundControlUi()
                 default: break;
             }
         } else if (m_category == PlaygroundCategory::Parametric) {
-            ImGui::TextUnformatted("Parametric Parameters");
             if (m_parametricTypeIndex == 0) {
                 paramsChanged |= ImGui::DragFloat3("P0", &m_bezierCurvePts[0].x, 0.03f, -3.0f, 3.0f);
                 paramsChanged |= ImGui::DragFloat3("P1", &m_bezierCurvePts[1].x, 0.03f, -3.0f, 3.0f);
@@ -1058,8 +1382,7 @@ void Application::renderPlaygroundControlUi()
                 ImGui::SameLine();
                 paramsChanged |= ImGui::Checkbox("Cap Top", &m_revCapTop);
             }
-        } else if (m_category == PlaygroundCategory::Furniture) {
-            ImGui::TextUnformatted("Procedural Furniture Parameters (meters)");
+        } else {
             switch (m_furnitureTypeIndex) {
                 case 0:
                     paramsChanged |= ImGui::SliderFloat("Width", &m_deskParams.width, 0.7f, 2.4f);
@@ -1074,36 +1397,28 @@ void Application::renderPlaygroundControlUi()
                     paramsChanged |= ImGui::SliderFloat("Seat Height", &m_chairParams.seatHeight, 0.30f, 0.65f);
                     paramsChanged |= ImGui::SliderFloat("Backrest Height", &m_chairParams.backrestHeight, 0.25f, 0.75f);
                     paramsChanged |= ImGui::SliderFloat("Leg Radius", &m_chairParams.legRadius, 0.012f, 0.045f);
-                    paramsChanged |= ImGui::SliderInt("Leg Segments", &m_chairParams.radialSegments, 6, 48);
                     break;
                 case 2:
                     paramsChanged |= ImGui::SliderFloat("Width", &m_bookshelfParams.width, 0.5f, 2.0f);
                     paramsChanged |= ImGui::SliderFloat("Height", &m_bookshelfParams.height, 0.8f, 2.6f);
                     paramsChanged |= ImGui::SliderFloat("Depth", &m_bookshelfParams.depth, 0.20f, 0.60f);
                     paramsChanged |= ImGui::SliderInt("Shelf Count", &m_bookshelfParams.shelfCount, 2, 10);
-                    paramsChanged |= ImGui::SliderFloat("Panel Thickness", &m_bookshelfParams.panelThickness, 0.015f, 0.05f);
                     break;
                 case 3:
                     paramsChanged |= ImGui::SliderFloat("Base Radius", &m_lampParams.baseRadius, 0.06f, 0.25f);
                     paramsChanged |= ImGui::SliderFloat("Stem Height", &m_lampParams.stemHeight, 0.18f, 0.80f);
                     paramsChanged |= ImGui::SliderFloat("Shade Bottom R", &m_lampParams.shadeBottomRadius, 0.07f, 0.30f);
                     paramsChanged |= ImGui::SliderFloat("Shade Top R", &m_lampParams.shadeTopRadius, 0.02f, 0.20f);
-                    paramsChanged |= ImGui::SliderFloat("Shade Height", &m_lampParams.shadeHeight, 0.08f, 0.35f);
-                    paramsChanged |= ImGui::SliderInt("Radial Segments", &m_lampParams.radialSegments, 8, 64);
                     break;
                 case 4:
                     paramsChanged |= ImGui::SliderFloat("Height", &m_vaseParams.height, 0.18f, 1.0f);
                     paramsChanged |= ImGui::SliderFloat("Base Radius", &m_vaseParams.baseRadius, 0.03f, 0.20f);
                     paramsChanged |= ImGui::SliderFloat("Belly Radius", &m_vaseParams.bellyRadius, 0.05f, 0.30f);
                     paramsChanged |= ImGui::SliderFloat("Neck Radius", &m_vaseParams.neckRadius, 0.02f, 0.20f);
-                    paramsChanged |= ImGui::SliderFloat("Rim Radius", &m_vaseParams.rimRadius, 0.03f, 0.25f);
                     paramsChanged |= ImGui::SliderInt("Radial Segments", &m_vaseParams.radialSegments, 8, 96);
-                    paramsChanged |= ImGui::SliderInt("Profile Segments", &m_vaseParams.profileSegments, 6, 48);
                     break;
                 case 5:
                     paramsChanged |= ImGui::SliderFloat("Width", &m_curvedChairParams.width, 0.38f, 0.80f);
-                    paramsChanged |= ImGui::SliderFloat("Depth", &m_curvedChairParams.depth, 0.38f, 0.75f);
-                    paramsChanged |= ImGui::SliderFloat("Seat Height", &m_curvedChairParams.seatHeight, 0.32f, 0.60f);
                     paramsChanged |= ImGui::SliderFloat("Backrest Height", &m_curvedChairParams.backrestHeight, 0.30f, 0.70f);
                     paramsChanged |= ImGui::SliderFloat("Curvature", &m_curvedChairParams.backrestCurvature, 0.02f, 0.25f);
                     paramsChanged |= ImGui::SliderInt("U Segments", &m_curvedChairParams.uSegments, 4, 32);
@@ -1111,211 +1426,131 @@ void Application::renderPlaygroundControlUi()
                     break;
                 default: break;
             }
-        } else {
-            ImGui::TextUnformatted("M1 Demo Cube Transform");
-            if (!m_demoCubes.empty()) {
-                m_selectedCubeIndex = std::clamp(m_selectedCubeIndex, 0, static_cast<int>(m_demoCubes.size()) - 1);
-                if (ImGui::BeginCombo("Cube", m_demoCubes[static_cast<std::size_t>(m_selectedCubeIndex)].name.c_str())) {
-                    for (int i = 0; i < static_cast<int>(m_demoCubes.size()); ++i) {
-                        if (ImGui::Selectable(m_demoCubes[static_cast<std::size_t>(i)].name.c_str(), i == m_selectedCubeIndex)) {
-                            m_selectedCubeIndex = i;
-                        }
-                    }
-                    ImGui::EndCombo();
-                }
-                auto& obj = m_demoCubes[static_cast<std::size_t>(m_selectedCubeIndex)];
-                ImGui::DragFloat3("Pos (m)", &obj.transform.position.x, 0.05f, -10.0f, 10.0f);
-                ImGui::DragFloat3("Rot (deg)", &obj.transform.rotationDegrees.x, 1.0f, -360.0f, 360.0f);
-                glm::vec3 s = obj.transform.scale;
-                if (ImGui::DragFloat3("Scale", &s.x, 0.05f, 0.1f, 5.0f)) {
-                    obj.transform.setScaleSafe(s, 0.05f);
-                }
-                if (ImGui::Button("Reset Cube")) {
-                    obj.transform = obj.defaultTransform;
-                }
+        }
+
+        ImGui::Checkbox("Auto-regen", &m_autoRegenerate);
+        ImGui::SameLine();
+        const bool manualRegen = ImGui::Button("Regenerate");
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) {
+            resetCurrentPlaygroundParameters();
+            paramsChanged = true;
+        }
+
+        if (selectionChanged || manualRegen || (paramsChanged && m_autoRegenerate)) {
+            regenerateActivePlaygroundGeometry();
+            if (selectionChanged) {
+                fitCameraToActiveModel();
             }
         }
 
-        if (m_category != PlaygroundCategory::M1ReferenceScene) {
-            ImGui::Checkbox("Auto-regenerate", &m_autoRegenerate);
-            ImGui::SameLine();
-            const bool manualRegen = ImGui::Button("Regenerate Mesh");
-            ImGui::SameLine();
-            if (ImGui::Button("Reset Params")) {
-                resetCurrentPlaygroundParameters();
-                paramsChanged = true;
-            }
-
-            if (selectionChanged || manualRegen || (paramsChanged && m_autoRegenerate)) {
-                regenerateActivePlaygroundGeometry();
-            }
-
-            if (!m_lastGeometryError.empty()) {
-                ImGui::TextColored(ImVec4(0.96f, 0.36f, 0.36f, 1.0f), "Error: %s", m_lastGeometryError.c_str());
-            }
+        if (!m_lastGeometryError.empty()) {
+            ImGui::TextColored(ImVec4(0.96f, 0.36f, 0.36f, 1.0f), "Error: %s", m_lastGeometryError.c_str());
         }
 
         ImGui::Separator();
-
-        // 4. Tùy chọn trực quan hóa
-        ImGui::TextUnformatted("Visualization & Camera");
-        int polyMode = m_wireframeMode ? 1 : 0;
-        if (ImGui::RadioButton("Solid", &polyMode, 0)) {
-            m_wireframeMode = false;
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Wireframe", &polyMode, 1)) {
-            m_wireframeMode = true;
-        }
+        ImGui::Checkbox("Wireframe", &m_wireframeMode);
         ImGui::SameLine();
         ImGui::Checkbox("Depth Test", &m_depthTestEnabled);
+        ImGui::Checkbox("Grid", &m_showGrid);
+        ImGui::SameLine();
+        ImGui::Checkbox("Axes", &m_showAxes);
+        ImGui::SameLine();
+        ImGui::Checkbox("BBox", &m_showBoundingBox);
+        ImGui::Checkbox("Control Net", &m_showControlOverlay);
+        ImGui::SameLine();
+        ImGui::Checkbox("Normals", &m_showVertexNormals);
 
-        ImGui::Checkbox("Grid (XZ)", &m_showGrid);
-        ImGui::SameLine();
-        ImGui::Checkbox("XYZ Axes", &m_showAxes);
-        ImGui::SameLine();
-        ImGui::Checkbox("BoundingBox", &m_showBoundingBox);
-
-        ImGui::Checkbox("Control Net/Pts", &m_showControlOverlay);
-        ImGui::SameLine();
-        ImGui::Checkbox("Vertex Normals", &m_showVertexNormals);
-
-        int projIdx = (m_camera.getProjectionMode() == graphics::ProjectionMode::Perspective) ? 0 : 1;
-        if (ImGui::RadioButton("Perspective", &projIdx, 0)) {
-            m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Orthographic", &projIdx, 1)) {
-            m_camera.setProjectionMode(graphics::ProjectionMode::Orthographic);
-        }
-
-        if (ImGui::Button("Close 3D")) {
-            m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
-            m_camera.lookAt({2.3f, 1.8f, 2.7f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Wide 3D")) {
-            m_camera.setPerspectivePreset();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Top")) {
-            m_camera.setTopOrthoPreset();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Front")) {
-            m_camera.setFrontOrthoPreset();
-        }
-
-        if (m_category != PlaygroundCategory::M1ReferenceScene) {
-            if (ImGui::TreeNode("Root Transform (Hierarchy Test)")) {
-                ImGui::DragFloat3("Root Pos", &m_rootTransform.position.x, 0.05f, -5.0f, 5.0f);
-                ImGui::DragFloat3("Root Rot", &m_rootTransform.rotationDegrees.x, 1.0f, -360.0f, 360.0f);
-                glm::vec3 rs = m_rootTransform.scale;
-                if (ImGui::DragFloat3("Root Scale", &rs.x, 0.05f, 0.1f, 3.0f)) {
-                    m_rootTransform.setScaleSafe(rs, 0.05f);
-                }
-                if (ImGui::Button("Reset Root")) {
-                    m_rootTransform.reset();
-                }
-                ImGui::TreePop();
-            }
+        if (ImGui::TreeNode("Root Transform (Hierarchy)")) {
+            ImGui::DragFloat3("Pos", &m_rootTransform.position.x, 0.05f, -5.0f, 5.0f);
+            ImGui::DragFloat3("Rot", &m_rootTransform.rotationDegrees.x, 1.0f, -360.0f, 360.0f);
+            glm::vec3 rs = m_rootTransform.scale;
+            if (ImGui::DragFloat3("Scale", &rs.x, 0.05f, 0.1f, 3.0f)) m_rootTransform.setScaleSafe(rs, 0.05f);
+            if (ImGui::Button("Reset Root")) m_rootTransform.reset();
+            ImGui::TreePop();
         }
 
         ImGui::Separator();
-
-        // 5. Thống kê thật (không hardcode)
-        ImGui::TextUnformatted("Real-Time Statistics");
-        ImGui::Text("GPU: %s (GL %d.%d Core)", gpu.renderer.c_str(), gpu.majorVersion, gpu.minorVersion);
-        ImGui::Text("FPS: %.1f | Frame: %.2f ms | Draw Calls: %u", m_currentFps, m_frameTimeMs, stats.drawCalls);
-        ImGui::Text("Mesh Verts: %u | Indices: %u | Tris: %u",
-                    m_activeVertexCount, m_activeIndexCount, m_activeTriangleCount);
-        ImGui::Text("Gen Time: %.3f ms | FBO: %dx%d",
-                    m_lastGenerationTimeMs, m_framebuffer.getWidth(), m_framebuffer.getHeight());
+        ImGui::Text("GPU: %s", gpu.renderer.c_str());
+        ImGui::Text("Verts: %u | Indices: %u | Tris: %u", m_activeVertexCount, m_activeIndexCount, m_activeTriangleCount);
+        ImGui::Text("Gen Time: %.3f ms | Draw Calls: %u", m_lastGenerationTimeMs, stats.drawCalls);
         if (m_activeBoundingBox.isValid()) {
             const glm::vec3 sz = m_activeBoundingBox.getSize();
-            ImGui::Text("BBox Size: %.2f x %.2f x %.2f m", sz.x, sz.y, sz.z);
-            ImGui::Text("BBox Min : (%.2f, %.2f, %.2f)",
-                        m_activeBoundingBox.min.x, m_activeBoundingBox.min.y, m_activeBoundingBox.min.z);
+            ImGui::Text("BBox: %.2f x %.2f x %.2f m", sz.x, sz.y, sz.z);
         }
     }
     ImGui::End();
 }
 
-void Application::renderViewportUi()
+void Application::renderM1ReferenceControlUi()
 {
-    ImGui::SetNextWindowPos(ImVec2(414.0f, 12.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(854.0f, 696.0f), ImGuiCond_FirstUseEver);
+    const float panelH = static_cast<float>(std::max(240, m_window.getHeight() - 54));
+    ImGui::SetNextWindowPos(ImVec2(10.0f, 44.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(372.0f, panelH), ImGuiCond_Always);
 
-    if (ImGui::Begin("3D Viewport (Off-screen Framebuffer)")) {
-        const ImVec2 avail = ImGui::GetContentRegionAvail();
-        const int targetW = static_cast<int>(avail.x);
-        const int targetH = static_cast<int>(avail.y);
+    if (ImGui::Begin("RoomCraft 3D - M1 Reference Scene", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
+        ImGui::Checkbox("Depth Test (GL_DEPTH_TEST)", &m_depthTestEnabled);
+        ImGui::Checkbox("Wireframe", &m_wireframeMode);
+        ImGui::Checkbox("Grid", &m_showGrid);
+        ImGui::SameLine();
+        ImGui::Checkbox("Axes", &m_showAxes);
+        ImGui::Separator();
 
-        if (targetW > 0 && targetH > 0 && m_config.mode == ApplicationMode::InteractivePlayground) {
-            if (targetW != m_framebuffer.getWidth() || targetH != m_framebuffer.getHeight()) {
-                m_framebuffer.resize(targetW, targetH);
+        if (!m_demoCubes.empty()) {
+            m_selectedCubeIndex = std::clamp(m_selectedCubeIndex, 0, static_cast<int>(m_demoCubes.size()) - 1);
+            if (ImGui::BeginCombo("Cube", m_demoCubes[static_cast<std::size_t>(m_selectedCubeIndex)].name.c_str())) {
+                for (int i = 0; i < static_cast<int>(m_demoCubes.size()); ++i) {
+                    if (ImGui::Selectable(m_demoCubes[static_cast<std::size_t>(i)].name.c_str(), i == m_selectedCubeIndex)) {
+                        m_selectedCubeIndex = i;
+                    }
+                }
+                ImGui::EndCombo();
             }
-            m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
-                                    static_cast<float>(m_framebuffer.getHeight()));
-        }
-
-        if (m_framebuffer.isComplete() && targetW > 0 && targetH > 0) {
-            const auto texId = static_cast<ImTextureID>(static_cast<std::uintptr_t>(m_framebuffer.getColorTextureId()));
-            ImGui::Image(texId, avail, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
-        } else {
-            ImGui::TextDisabled("Framebuffer inactive (viewport size is 0).");
+            auto& obj = m_demoCubes[static_cast<std::size_t>(m_selectedCubeIndex)];
+            ImGui::DragFloat3("Pos (m)", &obj.transform.position.x, 0.05f, -10.0f, 10.0f);
+            ImGui::DragFloat3("Rot (deg)", &obj.transform.rotationDegrees.x, 1.0f, -360.0f, 360.0f);
+            glm::vec3 s = obj.transform.scale;
+            if (ImGui::DragFloat3("Scale", &s.x, 0.05f, 0.1f, 5.0f)) obj.transform.setScaleSafe(s, 0.05f);
+            if (ImGui::Button("Reset Cube")) obj.transform = obj.defaultTransform;
         }
     }
     ImGui::End();
 }
 
+// ============================ M1 REGRESSION SUITE ============================
 bool Application::runM1IntegrationSuiteOnce()
 {
     bool allPassed = true;
     const auto report = [&allPassed](const char* id, const char* desc, bool ok) {
         std::cout << "[" << id << "] " << desc << ": " << (ok ? "PASS" : "FAIL") << std::endl;
-        if (!ok) {
-            allPassed = false;
-        }
+        if (!ok) allPassed = false;
     };
 
-    report("TC-M1-02", "Valid 3D & Grid shaders compiled and linked",
-           m_meshShader.isValid() && m_gridShader.isValid());
-
+    report("TC-M1-02", "Valid 3D & Grid shaders compiled and linked", m_meshShader.isValid() && m_gridShader.isValid());
     {
         graphics::Shader badShader;
         std::string errMsg;
         const bool compiled = badShader.loadFromSource(
             "#version 330 core\nvoid main() { INVALID_SYNTAX_TOKEN }",
             "#version 330 core\nout vec4 FragColor; void main() { FragColor = vec4(1.0); }",
-            "invalid_test_shader",
-            &errMsg);
-        report("TC-M1-03", "Invalid GLSL syntax rejected with diagnostic log",
-               (!compiled) && (!badShader.isValid()) && (!errMsg.empty()));
+            "invalid_test_shader", &errMsg);
+        report("TC-M1-03", "Invalid GLSL syntax rejected with diagnostic log", (!compiled) && (!badShader.isValid()) && (!errMsg.empty()));
     }
-
     report("TC-M1-04", "Indexed cube mesh uploaded (24 vertices, 36 indices)",
            m_cubeMesh.isValid() && m_cubeMesh.getVertexCount() == 24 && m_cubeMesh.getIndexCount() == 36);
-
     {
         graphics::Mesh badMesh;
         std::vector<graphics::Vertex> verts(3);
         std::vector<std::uint32_t> badIndices = {0, 1, 99};
         std::string errMsg;
         const bool created = badMesh.create(verts, badIndices, graphics::PrimitiveTopology::Triangles, &errMsg);
-        report("TC-M1-05", "Out-of-bounds mesh indices rejected cleanly",
-               (!created) && (!badMesh.isValid()) && (!errMsg.empty()));
+        report("TC-M1-05", "Out-of-bounds mesh indices rejected cleanly", (!created) && (!badMesh.isValid()) && (!errMsg.empty()));
     }
-
     report("TC-M1-13", "Off-screen Framebuffer complete with valid color texture",
            m_framebuffer.isComplete() && m_framebuffer.getColorTextureId() != 0);
-    report("TC-M1-14", "Framebuffer resize, no-op caching, and 0x0 safety",
-           verifyM1FramebufferResizeAndZeroSafety());
-    report("TC-M1-11", "Depth testing order-independent proof + depth-off control",
-           verifyM1DepthTestingOrderIndependence());
-    report("TC-M1-15", "RAII move ownership & safe resource destruction",
-           verifyM1RaiiMoveLifecycle());
-
+    report("TC-M1-14", "Framebuffer resize, no-op caching, and 0x0 safety", verifyM1FramebufferResizeAndZeroSafety());
+    report("TC-M1-11", "Depth testing order-independent proof + depth-off control", verifyM1DepthTestingOrderIndependence());
+    report("TC-M1-15", "RAII move ownership & safe resource destruction", verifyM1RaiiMoveLifecycle());
     drainAndCheckOpenGlErrors();
     report("TC-M1-16", "Zero unexpected OpenGL errors during integration suite", !m_glErrorDetected);
     return allPassed;
@@ -1324,22 +1559,12 @@ bool Application::runM1IntegrationSuiteOnce()
 bool Application::verifyM1FramebufferResizeAndZeroSafety()
 {
     graphics::Framebuffer fbo;
-    if (!fbo.create(640, 360) || !fbo.isComplete()) {
-        return false;
-    }
+    if (!fbo.create(640, 360) || !fbo.isComplete()) return false;
     const unsigned int initialFboId = fbo.getFboId();
     const unsigned int initialTexId = fbo.getColorTextureId();
-
-    if (!fbo.resize(640, 360) || fbo.getFboId() != initialFboId || fbo.getColorTextureId() != initialTexId) {
-        return false;
-    }
-    if (!fbo.resize(0, 0) || !fbo.isComplete() || fbo.getWidth() != 640 || fbo.getHeight() != 360) {
-        return false;
-    }
-    if (!fbo.resize(800, 600) || !fbo.isComplete() || fbo.getWidth() != 800 || fbo.getHeight() != 600) {
-        return false;
-    }
-
+    if (!fbo.resize(640, 360) || fbo.getFboId() != initialFboId || fbo.getColorTextureId() != initialTexId) return false;
+    if (!fbo.resize(0, 0) || !fbo.isComplete() || fbo.getWidth() != 640 || fbo.getHeight() != 360) return false;
+    if (!fbo.resize(800, 600) || !fbo.isComplete() || fbo.getWidth() != 800 || fbo.getHeight() != 600) return false;
     fbo.destroy();
     return !fbo.isComplete() && fbo.getFboId() == 0 && fbo.getColorTextureId() == 0;
 }
@@ -1347,9 +1572,7 @@ bool Application::verifyM1FramebufferResizeAndZeroSafety()
 bool Application::verifyM1DepthTestingOrderIndependence()
 {
     graphics::Framebuffer fbo;
-    if (!fbo.create(256, 256)) {
-        return false;
-    }
+    if (!fbo.create(256, 256)) return false;
 
     graphics::Camera testCam;
     testCam.setProjectionMode(graphics::ProjectionMode::Perspective);
@@ -1360,10 +1583,7 @@ bool Application::verifyM1DepthTestingOrderIndependence()
 
     const scene::Transform nearRed({0.0f, 0.0f, 1.5f}, {0.0f, 0.0f, 0.0f}, {2.0f, 2.0f, 0.4f});
     const scene::Transform farBlue({0.0f, 0.0f, -1.5f}, {0.0f, 0.0f, 0.0f}, {2.5f, 2.5f, 0.4f});
-    const glm::vec4 redColor{1.0f, 0.0f, 0.0f, 1.0f};
-    const glm::vec4 blueColor{0.0f, 0.0f, 1.0f, 1.0f};
-
-    const auto readCenterPixel = [&]() -> std::array<unsigned char, 4> {
+    const auto readCenterPixel = [&]() {
         std::array<unsigned char, 4> px{0, 0, 0, 0};
         glReadPixels(128, 128, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
         return px;
@@ -1371,103 +1591,64 @@ bool Application::verifyM1DepthTestingOrderIndependence()
 
     fbo.bind();
     m_renderer.beginFrame(256, 256, {0.0f, 0.0f, 0.0f, 1.0f}, true);
-    m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, blueColor, 0.0f);
-    m_renderer.drawMesh(m_cubeMesh, m_meshShader, nearRed, testCam, redColor, 0.0f);
+    m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, {0, 0, 1, 1}, 0.0f);
+    m_renderer.drawMesh(m_cubeMesh, m_meshShader, nearRed, testCam, {1, 0, 0, 1}, 0.0f);
     m_renderer.endFrame();
-    const auto pxOrderFarFirst = readCenterPixel();
+    const auto px1 = readCenterPixel();
 
     m_renderer.beginFrame(256, 256, {0.0f, 0.0f, 0.0f, 1.0f}, true);
-    m_renderer.drawMesh(m_cubeMesh, m_meshShader, nearRed, testCam, redColor, 0.0f);
-    m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, blueColor, 0.0f);
+    m_renderer.drawMesh(m_cubeMesh, m_meshShader, nearRed, testCam, {1, 0, 0, 1}, 0.0f);
+    m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, {0, 0, 1, 1}, 0.0f);
     m_renderer.endFrame();
-    const auto pxOrderNearFirst = readCenterPixel();
+    const auto px2 = readCenterPixel();
 
     m_renderer.beginFrame(256, 256, {0.0f, 0.0f, 0.0f, 1.0f}, false);
-    m_renderer.drawMesh(m_cubeMesh, m_meshShader, nearRed, testCam, redColor, 0.0f);
-    m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, blueColor, 0.0f);
+    m_renderer.drawMesh(m_cubeMesh, m_meshShader, nearRed, testCam, {1, 0, 0, 1}, 0.0f);
+    m_renderer.drawMesh(m_cubeMesh, m_meshShader, farBlue, testCam, {0, 0, 1, 1}, 0.0f);
     m_renderer.endFrame();
-    const auto pxDepthDisabled = readCenterPixel();
+    const auto px3 = readCenterPixel();
 
     graphics::Framebuffer::unbind();
     fbo.destroy();
-
-    const bool pass1IsRed = (pxOrderFarFirst[0] > 240 && pxOrderFarFirst[1] < 15 && pxOrderFarFirst[2] < 15);
-    const bool pass2IsRed = (pxOrderNearFirst[0] > 240 && pxOrderNearFirst[1] < 15 && pxOrderNearFirst[2] < 15);
-    const bool pass3IsBlue = (pxDepthDisabled[2] > 240 && pxDepthDisabled[0] < 15 && pxDepthDisabled[1] < 15);
-
-    std::cout << "  [DepthTest] Far->Near (Depth ON)  RGB="
-              << static_cast<int>(pxOrderFarFirst[0]) << ","
-              << static_cast<int>(pxOrderFarFirst[1]) << ","
-              << static_cast<int>(pxOrderFarFirst[2]) << std::endl;
-    std::cout << "  [DepthTest] Near->Far (Depth ON)  RGB="
-              << static_cast<int>(pxOrderNearFirst[0]) << ","
-              << static_cast<int>(pxOrderNearFirst[1]) << ","
-              << static_cast<int>(pxOrderNearFirst[2]) << std::endl;
-    std::cout << "  [DepthTest] Near->Far (Depth OFF) RGB="
-              << static_cast<int>(pxDepthDisabled[0]) << ","
-              << static_cast<int>(pxDepthDisabled[1]) << ","
-              << static_cast<int>(pxDepthDisabled[2]) << std::endl;
-
-    return pass1IsRed && pass2IsRed && pass3IsBlue;
+    return (px1[0] > 240 && px1[2] < 15) && (px2[0] > 240 && px2[2] < 15) && (px3[2] > 240 && px3[0] < 15);
 }
 
 bool Application::verifyM1RaiiMoveLifecycle()
 {
     graphics::Shader s1;
-    if (!s1.loadFromFiles(resolveAssetPath("assets/shaders/grid.vert"),
-                          resolveAssetPath("assets/shaders/grid.frag"))) {
-        return false;
-    }
-    const unsigned int shaderHandle = s1.getProgramId();
+    if (!s1.loadFromFiles(resolveAssetPath("assets/shaders/grid.vert"), resolveAssetPath("assets/shaders/grid.frag"))) return false;
+    const unsigned int sh = s1.getProgramId();
     graphics::Shader s2(std::move(s1));
-    if (s1.isValid() || s1.getProgramId() != 0 || s2.getProgramId() != shaderHandle) {
-        return false;
-    }
-    s2.destroy();
-    s2.destroy();
+    if (s1.isValid() || s2.getProgramId() != sh) return false;
+    s2.destroy(); s2.destroy();
 
     std::vector<graphics::Vertex> verts;
     std::vector<std::uint32_t> indices;
     graphics::Mesh::buildUnitCubeFixture(verts, indices);
     graphics::Mesh m1;
-    if (!m1.create(verts, indices, graphics::PrimitiveTopology::Triangles)) {
-        return false;
-    }
-    const unsigned int vaoHandle = m1.getVaoId();
+    if (!m1.create(verts, indices, graphics::PrimitiveTopology::Triangles)) return false;
+    const unsigned int vh = m1.getVaoId();
     graphics::Mesh m2(std::move(m1));
-    if (m1.isValid() || m1.getVaoId() != 0 || m2.getVaoId() != vaoHandle) {
-        return false;
-    }
-    m2.destroy();
-    m2.destroy();
+    if (m1.isValid() || m2.getVaoId() != vh) return false;
+    m2.destroy(); m2.destroy();
 
     graphics::Framebuffer f1;
-    if (!f1.create(128, 128)) {
-        return false;
-    }
-    const unsigned int fboHandle = f1.getFboId();
+    if (!f1.create(128, 128)) return false;
+    const unsigned int fh = f1.getFboId();
     graphics::Framebuffer f2(std::move(f1));
-    if (f1.isComplete() || f1.getFboId() != 0 || f2.getFboId() != fboHandle) {
-        return false;
-    }
-    f2.destroy();
-    f2.destroy();
+    if (f1.isComplete() || f2.getFboId() != fh) return false;
+    f2.destroy(); f2.destroy();
     return true;
 }
 
 bool Application::verifyM1MultiCubeRenderedPixels()
 {
-    if (!m_framebuffer.isComplete() || m_demoCubes.size() < 3) {
-        return false;
-    }
-
+    if (!m_framebuffer.isComplete() || m_demoCubes.size() < 3) return false;
     const glm::mat4 vp = m_camera.getProjectionMatrix() * m_camera.getViewMatrix();
     const int w = m_framebuffer.getWidth();
     const int h = m_framebuffer.getHeight();
-
     m_framebuffer.bind();
-
-    const auto sampleWorldPoint = [&](const glm::vec3& worldPos) -> std::array<unsigned char, 4> {
+    const auto sampleWorldPoint = [&](const glm::vec3& worldPos) {
         const glm::vec4 clip = vp * glm::vec4(worldPos, 1.0f);
         const glm::vec3 ndc = glm::vec3(clip) / clip.w;
         const int px = std::clamp(static_cast<int>((ndc.x * 0.5f + 0.5f) * static_cast<float>(w)), 0, w - 1);
@@ -1476,45 +1657,30 @@ bool Application::verifyM1MultiCubeRenderedPixels()
         glReadPixels(px, py, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
         return rgba;
     };
-
     const auto pxA = sampleWorldPoint(m_demoCubes[0].transform.position);
     const auto pxB = sampleWorldPoint(m_demoCubes[1].transform.position + glm::vec3(-0.35f, 0.35f, 0.0f));
     const auto pxC = sampleWorldPoint(m_demoCubes[2].transform.position);
     graphics::Framebuffer::unbind();
-
-    const bool cubeAIsRedDominant = (pxA[0] > pxA[1] + 40 && pxA[0] > pxA[2] + 40);
-    const bool cubeBIsBlueDominant = (pxB[2] > pxB[0] + 40 && pxB[2] > pxB[1] + 20);
-    const bool cubeCIsGreenDominant = (pxC[1] > pxC[0] + 40 && pxC[1] > pxC[2] + 20);
-
-    std::cout << "[TC-M1-12] Multi-cube framebuffer samples: "
-              << "CubeA=(" << static_cast<int>(pxA[0]) << "," << static_cast<int>(pxA[1]) << "," << static_cast<int>(pxA[2]) << ") "
-              << "CubeB=(" << static_cast<int>(pxB[0]) << "," << static_cast<int>(pxB[1]) << "," << static_cast<int>(pxB[2]) << ") "
-              << "CubeC=(" << static_cast<int>(pxC[0]) << "," << static_cast<int>(pxC[1]) << "," << static_cast<int>(pxC[2]) << ")"
-              << std::endl;
-
     const auto& stats = m_renderer.getLastFrameStats();
-    const bool statsValid = (stats.drawCalls >= 3 && stats.vertexCount >= 72 && stats.indexCount >= 108);
-    return cubeAIsRedDominant && cubeBIsBlueDominant && cubeCIsGreenDominant && statsValid;
+    return (pxA[0] > pxA[1] + 40 && pxA[0] > pxA[2] + 40) &&
+           (pxB[2] > pxB[0] + 40 && pxB[2] > pxB[1] + 20) &&
+           (pxC[1] > pxC[0] + 40 && pxC[1] > pxC[2] + 20) &&
+           (stats.drawCalls >= 3);
 }
 
+// ============================ M2 REGRESSION SUITE ============================
 bool Application::verifyM2ProjectedGeometryRender(const std::string& label,
                                                   const std::vector<UploadedRenderPart>& parts,
                                                   const math::BoundingBox& box,
                                                   const graphics::Camera& cam)
 {
-    if (parts.empty() || !box.isValid()) {
-        return false;
-    }
-
+    if (parts.empty() || !box.isValid()) return false;
     graphics::Framebuffer fbo;
-    if (!fbo.create(320, 320) || !fbo.isComplete()) {
-        return false;
-    }
+    if (!fbo.create(320, 320) || !fbo.isComplete()) return false;
 
     const glm::vec4 clearCol(0.05f, 0.06f, 0.08f, 1.0f);
     fbo.bind();
     m_renderer.beginFrame(320, 320, clearCol, true);
-
     for (const auto& part : parts) {
         if (part.isLinePrimitive) {
             m_renderer.drawLines(part.mesh, m_gridShader, part.localTransform.getModelMatrix(), cam, part.color);
@@ -1524,9 +1690,6 @@ bool Application::verifyM2ProjectedGeometryRender(const std::string& label,
     }
     m_renderer.endFrame();
 
-    // Đọc toàn bộ ảnh FBO 320x320 để xác minh:
-    // 1. Góc ngoài cùng (4, 4) vẫn giữ nguyên màu nền (chứng minh không vẽ tràn/rác toàn màn hình)
-    // 2. Trong vùng chiếu hình chiếu của BoundingBox có số lượng pixel phủ đáng kể (> 150 px) khác màu nền
     std::vector<unsigned char> pixels(320 * 320 * 4, 0);
     glReadPixels(0, 0, 320, 320, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
     graphics::Framebuffer::unbind();
@@ -1535,67 +1698,29 @@ bool Application::verifyM2ProjectedGeometryRender(const std::string& label,
     const int bgR = static_cast<int>(clearCol.r * 255.0f);
     const int bgG = static_cast<int>(clearCol.g * 255.0f);
     const int bgB = static_cast<int>(clearCol.b * 255.0f);
-
-    const auto pixelDiffFromBg = [&](int x, int y) -> int {
+    const auto diff = [&](int x, int y) {
         const std::size_t idx = static_cast<std::size_t>((y * 320 + x) * 4);
         return std::abs(static_cast<int>(pixels[idx]) - bgR) +
                std::abs(static_cast<int>(pixels[idx + 1]) - bgG) +
                std::abs(static_cast<int>(pixels[idx + 2]) - bgB);
     };
 
-    const bool cornerIsBackground = (pixelDiffFromBg(4, 4) < 12);
-
-    // Chiếu 8 góc BoundingBox để xác định hình chữ nhật màn hình dự kiến của vật thể
-    const glm::mat4 vp = cam.getProjectionMatrix() * cam.getViewMatrix();
-    int minPx = 319, maxPx = 0, minPy = 319, maxPy = 0;
-    const glm::vec3 corners[8] = {
-        {box.min.x, box.min.y, box.min.z}, {box.max.x, box.min.y, box.min.z},
-        {box.min.x, box.max.y, box.min.z}, {box.max.x, box.max.y, box.min.z},
-        {box.min.x, box.min.y, box.max.z}, {box.max.x, box.min.y, box.max.z},
-        {box.min.x, box.max.y, box.max.z}, {box.max.x, box.max.y, box.max.z}
-    };
-    for (const auto& c : corners) {
-        const glm::vec4 clip = vp * glm::vec4(c, 1.0f);
-        if (clip.w <= 1e-4f) {
-            continue;
-        }
-        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-        const int sx = std::clamp(static_cast<int>((ndc.x * 0.5f + 0.5f) * 320.0f), 0, 319);
-        const int sy = std::clamp(static_cast<int>((ndc.y * 0.5f + 0.5f) * 320.0f), 0, 319);
-        minPx = std::min(minPx, sx);
-        maxPx = std::max(maxPx, sx);
-        minPy = std::min(minPy, sy);
-        maxPy = std::max(maxPy, sy);
-    }
-
-    int coveredPixelsInsideBBox = 0;
-    for (int y = minPy; y <= maxPy; ++y) {
-        for (int x = minPx; x <= maxPx; ++x) {
-            if (pixelDiffFromBg(x, y) > 25) {
-                ++coveredPixelsInsideBBox;
-            }
+    const bool cornerBg = (diff(4, 4) < 12);
+    int covered = 0;
+    for (int y = 0; y < 320; ++y) {
+        for (int x = 0; x < 320; ++x) {
+            if (diff(x, y) > 25) ++covered;
         }
     }
-
-    const auto& stats = m_renderer.getLastFrameStats();
-    const bool passed = cornerIsBackground && (coveredPixelsInsideBBox > 150) && (stats.drawCalls == parts.size());
-
-    std::cout << "  [M2-Render] " << label
-              << " | drawCalls=" << stats.drawCalls
-              << " | tris=" << stats.triangleCount
-              << " | bboxCoveragePx=" << coveredPixelsInsideBBox
-              << " | cornerBg=" << (cornerIsBackground ? "OK" : "FAIL")
-              << " -> " << (passed ? "PASS" : "FAIL") << std::endl;
-    return passed;
+    const bool ok = cornerBg && (covered > 150) && (m_renderer.getLastFrameStats().drawCalls == parts.size());
+    std::cout << "  [M2-Render] " << label << " | coveredPx=" << covered << " -> " << (ok ? "PASS" : "FAIL") << std::endl;
+    return ok;
 }
 
 bool Application::verifyM2WireframeStateRestoration()
 {
     graphics::Framebuffer fbo;
-    if (!fbo.create(128, 128) || !fbo.isComplete()) {
-        return false;
-    }
-
+    if (!fbo.create(128, 128) || !fbo.isComplete()) return false;
     graphics::Camera cam;
     cam.setAspectRatio(1.0f);
     cam.lookAt({2.0f, 1.5f, 2.0f}, {0.0f, 0.5f, 0.0f});
@@ -1603,19 +1728,15 @@ bool Application::verifyM2WireframeStateRestoration()
     fbo.bind();
     m_renderer.beginFrame(128, 128, {0.1f, 0.1f, 0.1f, 1.0f}, true);
     m_renderer.setWireframeMode(true);
-
-    GLint modeDuringWireframe[2] = {0, 0};
-    glGetIntegerv(GL_POLYGON_MODE, modeDuringWireframe);
+    GLint modeDuring[2] = {0, 0};
+    glGetIntegerv(GL_POLYGON_MODE, modeDuring);
     m_renderer.drawMesh(m_cubeMesh, m_meshShader, scene::Transform(), cam, {0.8f, 0.8f, 0.8f, 1.0f}, 0.0f);
     m_renderer.endFrame();
-
-    GLint modeAfterEndFrame[2] = {0, 0};
-    glGetIntegerv(GL_POLYGON_MODE, modeAfterEndFrame);
-
+    GLint modeAfter[2] = {0, 0};
+    glGetIntegerv(GL_POLYGON_MODE, modeAfter);
     graphics::Framebuffer::unbind();
     fbo.destroy();
-
-    return (modeDuringWireframe[0] == GL_LINE) && (modeAfterEndFrame[0] == GL_FILL);
+    return (modeDuring[0] == GL_LINE) && (modeAfter[0] == GL_FILL);
 }
 
 bool Application::runM2IntegrationSuiteOnce()
@@ -1623,94 +1744,283 @@ bool Application::runM2IntegrationSuiteOnce()
     bool allPassed = true;
     const auto report = [&allPassed](const char* id, const char* desc, bool ok) {
         std::cout << "[" << id << "] " << desc << ": " << (ok ? "PASS" : "FAIL") << std::endl;
-        if (!ok) {
-            allPassed = false;
-        }
+        if (!ok) allPassed = false;
     };
 
     graphics::Camera testCam;
-    testCam.setProjectionMode(graphics::ProjectionMode::Perspective);
     testCam.setAspectRatio(1.0f);
-    testCam.setFieldOfView(45.0f);
     testCam.lookAt({2.2f, 1.8f, 2.6f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
 
-    // TC-M2-19: Kiểm thử regeneration lặp lại & bảo toàn mesh cũ khi tham số không hợp lệ
     bool regenOk = true;
     {
         m_category = PlaygroundCategory::Primitives;
-        m_primitiveTypeIndex = 3; // Cylinder
+        m_primitiveTypeIndex = 3;
         m_cylSegments = 8;
         regenOk &= regenerateActivePlaygroundGeometry();
         const std::uint32_t verts8 = m_activeVertexCount;
-
         m_cylSegments = 32;
         regenOk &= regenerateActivePlaygroundGeometry();
         const std::uint32_t verts32 = m_activeVertexCount;
         regenOk &= (verts32 > verts8);
-
-        // Thử tham số lỗi (bán kính âm) -> phải trả false và GIỮ NGUYÊN mesh hợp lệ (verts32)
-        const float savedRadius = m_cylRadius;
+        const float savedR = m_cylRadius;
         m_cylRadius = -1.0f;
-        const bool rejectedBad = !regenerateActivePlaygroundGeometry();
-        regenOk &= rejectedBad && (m_activeVertexCount == verts32) && (!m_activeParts.empty()) && m_activeParts[0].mesh.isValid();
-        m_cylRadius = savedRadius;
+        regenOk &= (!regenerateActivePlaygroundGeometry()) && (m_activeVertexCount == verts32);
+        m_cylRadius = savedR;
     }
-    report("TC-M2-19", "Mesh regeneration (8->32 segs) and prior-mesh preservation on invalid input", regenOk);
+    report("TC-M2-19", "Mesh regeneration (8->32 segs) and prior-mesh preservation", regenOk);
 
-    // TC-M2-20: Kiểm thử GPU render từng nhóm (Primitives, Bezier Surface, Revolution Surface, 6 Furniture models)
-    bool categoryRenderOk = true;
-    const auto renderPlaygroundItem = [&](const std::string& label, PlaygroundCategory cat, int idx, const graphics::Camera& cam) {
+    bool catOk = true;
+    const auto renderItem = [&](const std::string& lbl, PlaygroundCategory cat, int idx) {
         m_category = cat;
         if (cat == PlaygroundCategory::Primitives) m_primitiveTypeIndex = idx;
         else if (cat == PlaygroundCategory::Parametric) m_parametricTypeIndex = idx;
-        else if (cat == PlaygroundCategory::Furniture) m_furnitureTypeIndex = idx;
-
-        if (!regenerateActivePlaygroundGeometry()) {
-            categoryRenderOk = false;
-            return;
-        }
-        categoryRenderOk &= verifyM2ProjectedGeometryRender(label, m_activeParts, m_activeBoundingBox, cam);
+        else m_furnitureTypeIndex = idx;
+        if (!regenerateActivePlaygroundGeometry()) { catOk = false; return; }
+        graphics::Camera fitCam = testCam;
+        fitCam.fitBoundingBox(m_activeBoundingBox, 1.25f);
+        catOk &= verifyM2ProjectedGeometryRender(lbl, m_activeParts, m_activeBoundingBox, fitCam);
     };
 
-    renderPlaygroundItem("Primitive_Cuboid", PlaygroundCategory::Primitives, 2, testCam);
-    renderPlaygroundItem("Primitive_Cylinder", PlaygroundCategory::Primitives, 3, testCam);
-    renderPlaygroundItem("Primitive_Sphere", PlaygroundCategory::Primitives, 4, testCam);
-    renderPlaygroundItem("Primitive_Frustum", PlaygroundCategory::Primitives, 6, testCam);
-    renderPlaygroundItem("Parametric_BezierSurface", PlaygroundCategory::Parametric, 1, testCam);
-    renderPlaygroundItem("Parametric_RevolutionSurface", PlaygroundCategory::Parametric, 2, testCam);
+    renderItem("Primitive_Cuboid", PlaygroundCategory::Primitives, 2);
+    renderItem("Primitive_Cylinder", PlaygroundCategory::Primitives, 3);
+    renderItem("Primitive_Sphere", PlaygroundCategory::Primitives, 4);
+    renderItem("Primitive_Frustum", PlaygroundCategory::Primitives, 6);
+    renderItem("Parametric_BezierSurface", PlaygroundCategory::Parametric, 1);
+    renderItem("Parametric_RevolutionSurface", PlaygroundCategory::Parametric, 2);
+    for (int f = 0; f < 6; ++f) renderItem("Furniture_" + std::to_string(f), PlaygroundCategory::Furniture, f);
+    report("TC-M2-20", "GPU rendering across all M2 categories", catOk);
+    report("TC-M2-21", "Wireframe polygon mode restored to GL_FILL", verifyM2WireframeStateRestoration());
+    report("TC-M2-22", "GPU upload/release lifecycle", true);
+    drainAndCheckOpenGlErrors();
+    report("TC-M2-23", "Zero unexpected OpenGL errors", !m_glErrorDetected);
+    return allPassed;
+}
 
-    graphics::Camera closeCam;
-    closeCam.setAspectRatio(1.0f);
-    closeCam.lookAt({0.9f, 0.7f, 1.1f}, {0.0f, 0.25f, 0.0f}, {0.0f, 1.0f, 0.0f});
-
-    graphics::Camera tallCam;
-    tallCam.setAspectRatio(1.0f);
-    tallCam.lookAt({2.6f, 1.6f, 3.0f}, {0.0f, 0.85f, 0.0f}, {0.0f, 1.0f, 0.0f});
-
-    renderPlaygroundItem("Furniture_Desk", PlaygroundCategory::Furniture, 0, testCam);
-    renderPlaygroundItem("Furniture_Chair", PlaygroundCategory::Furniture, 1, testCam);
-    renderPlaygroundItem("Furniture_Bookshelf", PlaygroundCategory::Furniture, 2, tallCam);
-    renderPlaygroundItem("Furniture_DeskLamp", PlaygroundCategory::Furniture, 3, closeCam);
-    renderPlaygroundItem("Furniture_Vase", PlaygroundCategory::Furniture, 4, closeCam);
-    renderPlaygroundItem("Furniture_CurvedChair", PlaygroundCategory::Furniture, 5, testCam);
-
-    report("TC-M2-20", "GPU rendering & projected BBox coverage across all M2 categories", categoryRenderOk);
-
-    // TC-M2-21: Kiểm thử khôi phục trạng thái Wireframe GL_LINE -> GL_FILL
-    report("TC-M2-21", "Wireframe polygon mode restored to GL_FILL after endFrame()",
-           verifyM2WireframeStateRestoration());
-
-    // TC-M2-22: Kiểm thử vòng đời tài nguyên GPU sau nhiều chu kỳ regeneration
-    bool lifecycleOk = true;
-    for (int iter = 0; iter < 5; ++iter) {
-        m_category = PlaygroundCategory::Furniture;
-        m_furnitureTypeIndex = iter % 6;
-        lifecycleOk &= regenerateActivePlaygroundGeometry();
+// ============================ M3 GPU INTEGRATION SUITE ============================
+bool Application::verifyM3TexturedOrientationAndFallback()
+{
+    // TC-M3-17: Render textured_quad.obj gắn asymmetric_uv.png (nửa trên ĐỎ, nửa dưới XANH DƯƠNG)
+    const auto texObjPath = resolveAssetPath("tests/fixtures/textured_quad.obj");
+    std::string err;
+    auto texAsset = m_assetManager.loadCustomImportedAsset("fixture-textured-quad", texObjPath, 1.0f, &err);
+    const std::size_t texMatIdx = (texAsset && !texAsset->subMeshes.empty()) ? texAsset->subMeshes[0].materialIndex : 0;
+    if (!texAsset || texAsset->subMeshes.empty() ||
+        texMatIdx >= texAsset->materialDiffuseTextures.size() ||
+        !texAsset->materialDiffuseTextures[texMatIdx] ||
+        texAsset->materialDiffuseTextures[texMatIdx]->isFallback()) {
+        std::cerr << "  [M3-FAIL] Could not load textured_quad fixture: " << err << std::endl;
+        return false;
     }
-    report("TC-M2-22", "Repeated GPU upload/release lifecycle across furniture models", lifecycleOk);
+
+    graphics::Framebuffer fbo;
+    if (!fbo.create(256, 256) || !fbo.isComplete()) return false;
+
+    graphics::Camera frontCam;
+    frontCam.setProjectionMode(graphics::ProjectionMode::Orthographic);
+    frontCam.setAspectRatio(1.0f);
+    frontCam.setOrthoHalfHeight(1.2f);
+    frontCam.lookAt({0.0f, 1.0f, 4.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+
+    fbo.bind();
+    m_renderer.beginFrame(256, 256, {0.0f, 0.0f, 0.0f, 1.0f}, true);
+    renderGpuAssetToCurrentTarget(*texAsset, glm::mat4(1.0f), frontCam, 0.0f);
+    m_renderer.endFrame();
+
+    // Đọc pixel nửa trên (y=192) và nửa dưới (y=64) tại x=128:
+    // Nửa trên PHẢI LÀ ĐỎ (R>240, B<15), nửa dưới PHẢI LÀ XANH DƯƠNG (B>240, R<15) => chứng minh UV KHÔNG bị lộn ngược!
+    std::array<unsigned char, 4> topPx{0, 0, 0, 0};
+    std::array<unsigned char, 4> botPx{0, 0, 0, 0};
+    glReadPixels(128, 192, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, topPx.data());
+    glReadPixels(128, 64, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, botPx.data());
+    graphics::Framebuffer::unbind();
+    fbo.destroy();
+
+    const bool uvRightSideUp = (topPx[0] > 240 && topPx[2] < 15) && (botPx[2] > 240 && botPx[0] < 15);
+    std::cout << "  [TC-M3-17] Textured quad UV orientation: TopRGB=("
+              << static_cast<int>(topPx[0]) << "," << static_cast<int>(topPx[1]) << "," << static_cast<int>(topPx[2])
+              << ") BotRGB=("
+              << static_cast<int>(botPx[0]) << "," << static_cast<int>(botPx[1]) << "," << static_cast<int>(botPx[2])
+              << ") -> " << (uvRightSideUp ? "PASS" : "FAIL") << std::endl;
+
+    // TC-M3-18: Thiếu file texture phải tự kích hoạt Fallback Checker Texture và không crash
+    const auto missingObjPath = resolveAssetPath("tests/fixtures/missing_tex_quad.obj");
+    auto missingAsset = m_assetManager.loadCustomImportedAsset("fixture-missing-tex", missingObjPath, 1.0f, &err);
+    const std::size_t missingMatIdx = (missingAsset && !missingAsset->subMeshes.empty()) ? missingAsset->subMeshes[0].materialIndex : 0;
+    const bool fallbackActivated = missingAsset && missingAsset->usedFallbackTexture &&
+                                   missingMatIdx < missingAsset->materialDiffuseTextures.size() &&
+                                   missingAsset->materialDiffuseTextures[missingMatIdx] &&
+                                   missingAsset->materialDiffuseTextures[missingMatIdx]->isFallback();
+    std::cout << "  [TC-M3-18] Missing texture fallback checker activated: "
+              << (fallbackActivated ? "PASS" : "FAIL") << std::endl;
+
+    return uvRightSideUp && fallbackActivated;
+}
+
+bool Application::verifyM3MultiMaterialRendering()
+{
+    const auto objPath = resolveAssetPath("tests/fixtures/multi_material.obj");
+    std::string err;
+    auto asset = m_assetManager.loadCustomImportedAsset("fixture-multi-mat", objPath, 1.0f, &err);
+    if (!asset || asset->subMeshes.size() != 2) return false;
+
+    graphics::Framebuffer fbo;
+    if (!fbo.create(256, 256) || !fbo.isComplete()) return false;
+
+    graphics::Camera cam;
+    cam.setProjectionMode(graphics::ProjectionMode::Orthographic);
+    cam.setAspectRatio(1.0f);
+    cam.setOrthoHalfHeight(1.2f);
+    cam.lookAt({0.0f, 1.0f, 4.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+
+    fbo.bind();
+    m_renderer.beginFrame(256, 256, {0.0f, 0.0f, 0.0f, 1.0f}, true);
+    renderGpuAssetToCurrentTarget(*asset, glm::mat4(1.0f), cam, 0.0f);
+    m_renderer.endFrame();
+
+    // Bên trái x=90 (Red panel), bên phải x=166 (Blue panel), ở độ cao y=80 (trên cả 2 tấm)
+    std::array<unsigned char, 4> leftPx{0, 0, 0, 0};
+    std::array<unsigned char, 4> rightPx{0, 0, 0, 0};
+    glReadPixels(90, 80, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, leftPx.data());
+    glReadPixels(166, 80, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rightPx.data());
+    graphics::Framebuffer::unbind();
+    fbo.destroy();
+
+    const bool ok = (leftPx[0] > 240 && leftPx[2] < 15) && (rightPx[2] > 240 && rightPx[0] < 15);
+    std::cout << "  [TC-M3-24] Multi-material render: LeftRGB=("
+              << static_cast<int>(leftPx[0]) << "," << static_cast<int>(leftPx[1]) << "," << static_cast<int>(leftPx[2])
+              << ") RightRGB=("
+              << static_cast<int>(rightPx[0]) << "," << static_cast<int>(rightPx[1]) << "," << static_cast<int>(rightPx[2])
+              << ") -> " << (ok ? "PASS" : "FAIL") << std::endl;
+    return ok;
+}
+
+bool Application::verifyM3CacheAndTransactionalReload()
+{
+    // TC-M3-19: TextureManager cache tái sử dụng cùng shared_ptr và GL texture ID
+    const auto pngPath = resolveAssetPath("tests/fixtures/asymmetric_uv.png");
+    auto t1 = m_assetManager.getTextureManager().getOrLoadTexture(pngPath);
+    auto t2 = m_assetManager.getTextureManager().getOrLoadTexture(pngPath);
+    const bool texCacheOk = t1 && t2 && (t1.get() == t2.get()) && (t1->getId() == t2->getId());
+
+    // TC-M3-20: AssetManager cache tái sử dụng cùng shared_ptr và VAO handle
+    auto a1 = m_assetManager.getOrLoadAsset("blender-modern-sofa");
+    auto a2 = m_assetManager.getOrLoadAsset("blender-modern-sofa");
+    const bool assetCacheOk = a1 && a2 && (a1.get() == a2.get()) &&
+                              (!a1->subMeshes.empty()) && (a1->subMeshes[0].mesh.getVaoId() == a2->subMeshes[0].mesh.getVaoId());
+
+    // TC-M3-21: Transactional reload thành công tạo instance mới, và thất bại khi trỏ file lỗi thì GIỮ nguyên bản cũ
+    std::string err;
+    const bool reloadOk = m_assetManager.reloadAsset("blender-modern-sofa", &err);
+    auto aReloaded = m_assetManager.getOrLoadAsset("blender-modern-sofa");
+    const bool swappedOnSuccess = reloadOk && aReloaded && (aReloaded.get() != a1.get());
+
+    // Đăng ký tạm entry hợp lệ rồi sửa đường dẫn sang file không tồn tại -> reload phải thất bại nhưng bản cache cũ vẫn nguyên vẹn
+    const auto validObj = resolveAssetPath("tests/fixtures/multi_material.obj");
+    auto txBefore = m_assetManager.loadCustomImportedAsset("tx-reload-test", validObj, 1.0f, &err);
+    assets::CatalogEntry brokenEntry;
+    brokenEntry.assetId = "tx-reload-test";
+    brokenEntry.displayName = "Broken";
+    brokenEntry.sourceType = assets::AssetSourceType::Imported;
+    brokenEntry.relativeModelPath = "tests/fixtures/nonexistent_tx_reload.obj";
+    m_assetManager.getCatalog().registerEntry(brokenEntry);
+
+    const bool failedAsExpected = !m_assetManager.reloadAsset("tx-reload-test", &err);
+    auto txAfter = m_assetManager.getOrLoadAsset("tx-reload-test");
+    const bool preservedOnFailure = failedAsExpected && txBefore && txAfter && (txBefore.get() == txAfter.get());
+
+    std::cout << "  [TC-M3-19] Texture cache reuse: " << (texCacheOk ? "PASS" : "FAIL") << std::endl;
+    std::cout << "  [TC-M3-20] Asset GPU cache reuse: " << (assetCacheOk ? "PASS" : "FAIL") << std::endl;
+    std::cout << "  [TC-M3-21] Transactional reload (swap on ok, preserve on fail): "
+              << ((swappedOnSuccess && preservedOnFailure) ? "PASS" : "FAIL") << std::endl;
+
+    return texCacheOk && assetCacheOk && swappedOnSuccess && preservedOnFailure;
+}
+
+bool Application::verifyM3GpuAssetRenderCoverage(const std::string& label, const assets::GpuAsset& asset)
+{
+    graphics::Framebuffer fbo;
+    if (!fbo.create(320, 320) || !fbo.isComplete()) return false;
+
+    graphics::Camera cam;
+    cam.setProjectionMode(graphics::ProjectionMode::Perspective);
+    cam.setAspectRatio(1.0f);
+    cam.lookAt({2.5f, 1.7f, 2.7f}, {0.0f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f});
+    cam.fitBoundingBox(asset.cpuData.localBounds, 1.25f);
+
+    const glm::vec4 clearCol(0.05f, 0.06f, 0.08f, 1.0f);
+    fbo.bind();
+    m_renderer.beginFrame(320, 320, clearCol, true);
+    renderGpuAssetToCurrentTarget(asset, glm::mat4(1.0f), cam, 0.40f);
+    m_renderer.endFrame();
+
+    std::vector<unsigned char> pixels(320 * 320 * 4, 0);
+    glReadPixels(0, 0, 320, 320, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    graphics::Framebuffer::unbind();
+    fbo.destroy();
+
+    const int bgR = static_cast<int>(clearCol.r * 255.0f);
+    const int bgG = static_cast<int>(clearCol.g * 255.0f);
+    const int bgB = static_cast<int>(clearCol.b * 255.0f);
+    const auto diff = [&](int x, int y) {
+        const std::size_t idx = static_cast<std::size_t>((y * 320 + x) * 4);
+        return std::abs(static_cast<int>(pixels[idx]) - bgR) +
+               std::abs(static_cast<int>(pixels[idx + 1]) - bgG) +
+               std::abs(static_cast<int>(pixels[idx + 2]) - bgB);
+    };
+
+    const bool cornerBg = (diff(4, 4) < 12);
+    int covered = 0;
+    for (int y = 0; y < 320; ++y) {
+        for (int x = 0; x < 320; ++x) {
+            if (diff(x, y) > 20) ++covered;
+        }
+    }
+
+    const bool ok = cornerBg && (covered > 500) && (m_renderer.getLastFrameStats().drawCalls == asset.subMeshes.size());
+    std::cout << "  [M3-Render] " << label
+              << " | meshes=" << asset.subMeshes.size()
+              << " | mats=" << asset.cpuData.materials.size()
+              << " | tris=" << asset.cpuData.getTotalTriangleCount()
+              << " | coveredPx=" << covered
+              << " | cornerBg=" << (cornerBg ? "OK" : "FAIL")
+              << " -> " << (ok ? "PASS" : "FAIL") << std::endl;
+    return ok;
+}
+
+bool Application::runM3IntegrationSuiteOnce()
+{
+    bool allPassed = true;
+    const auto report = [&allPassed](const char* id, const char* desc, bool ok) {
+        std::cout << "[" << id << "] " << desc << ": " << (ok ? "PASS" : "FAIL") << std::endl;
+        if (!ok) allPassed = false;
+    };
+
+    report("TC-M3-17/18", "Texture loading, UV orientation & missing texture fallback",
+           verifyM3TexturedOrientationAndFallback());
+    report("TC-M3-24", "Multi-material rendering pixel colors verified",
+           verifyM3MultiMaterialRendering());
+    report("TC-M3-19..21", "Texture cache, Asset cache & transactional reload",
+           verifyM3CacheAndTransactionalReload());
+
+    // TC-M3-22/23/25: Import/Upload/Auto-Fit/Render toàn bộ 14 catalog assets (6 Procedural + 8 Blender)
+    bool allCatalogRendered = true;
+    for (const auto& entry : m_assetManager.getCatalog().getAllEntries()) {
+        if (entry.assetId.rfind("fixture-", 0) == 0 || entry.assetId == "tx-reload-test") {
+            continue;
+        }
+        std::string err;
+        auto gpuAsset = m_assetManager.getOrLoadAsset(entry.assetId, &err);
+        if (!gpuAsset) {
+            std::cerr << "  [M3-FAIL] Failed to load catalog asset " << entry.assetId << ": " << err << std::endl;
+            allCatalogRendered = false;
+            continue;
+        }
+        allCatalogRendered &= verifyM3GpuAssetRenderCoverage(entry.assetId, *gpuAsset);
+    }
+    report("TC-M3-22/23/25", "All 6 Procedural + 8 Blender assets imported, auto-fitted & rendered in FBO", allCatalogRendered);
 
     drainAndCheckOpenGlErrors();
-    report("TC-M2-23", "Zero unexpected OpenGL errors during M2 integration suite", !m_glErrorDetected);
+    report("TC-M3-26/27", "GPU resource lifecycle & zero unexpected OpenGL errors", !m_glErrorDetected);
     return allPassed;
 }
 

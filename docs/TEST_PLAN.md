@@ -3,40 +3,49 @@
 ## 1. Chiến lược kiểm thử
 
 Dự án áp dụng mô hình kiểm thử 3 tầng:
-1. **Unit Testing thuần CPU** (`RoomCraft3D_UnitTests`, `RoomCraft3D_GeometryUnitTests`): Kiểm thử độc lập toán học (`Transform`, `Camera`, `BoundingBox`), kiểm tra dữ liệu lưới và toàn bộ thuật toán sinh hình học M2 (`PrimitiveGenerator`, `BezierCurve`, `BezierSurface`, `RevolutionSurface`, `FurnitureGenerator`) không cần OpenGL context.
-2. **Integration & Runtime Smoke Testing** (`--smoke-test`, `--m1-smoke-test`, `--m2-smoke-test`): Kiểm thử trên ngữ cảnh OpenGL 3.3 Core thật (shader, VAO/VBO/EBO, Depth Testing, FBO, regeneration, render từng nhóm hình học M2, khôi phục trạng thái wireframe, vòng đời GPU).
-3. **Manual GUI Testing**: Người dùng chạy trực tiếp `RoomCraft3D.exe` và xác nhận checklist trực quan.
+1. **Unit Testing thuần CPU**:
+   - `RoomCraft3D_UnitTests` (`M1_UnitTests`): `Transform`, `Camera` (bao gồm `fitBoundingBox`), `MeshValidation`.
+   - `RoomCraft3D_GeometryUnitTests` (`M2_GeometryUnitTests`): Primitives, Bézier Curve/Surface, Revolution Surface, BoundingBox, 6 Procedural Furniture models.
+   - `RoomCraft3D_AssetUnitTests` (`M3_AssetUnitTests`): `ModelLoader` (Assimp OBJ/MTL), `AssetNormalizer`, `FurnitureCatalog`, kiểm tra toàn bộ 8 file Blender asset và fixtures mà không cần OpenGL context.
+2. **Integration & Runtime Smoke Testing**:
+   - `--smoke-test` (`M0_SmokeTest`), `--m1-smoke-test` (`M1_IntegrationSmokeTest`), `--m2-smoke-test` (`M2_IntegrationSmokeTest`), `--m3-smoke-test` (`M3_IntegrationSmokeTest`): Kiểm thử trên ngữ cảnh OpenGL 3.3 Core thật (shader, VAO/VBO/EBO, Texture/UV orientation, fallback texture, multi-material, cache reuse, transactional reload, FBO rendering 14/14 asset, giải phóng tài nguyên GPU, `GL_NO_ERROR`).
+3. **Manual GUI Testing**: Người dùng chạy trực tiếp `RoomCraft3D.exe` và xác nhận checklist trực quan cho từng milestone.
 
-## 2. Danh mục Test Case — Milestone M0 & M1 (Regression)
+## 2. Danh mục Test Case — Regression M0, M1, M2
 
 - **M0 (`TC-M0-01`..`TC-M0-07`)**: Configure, Build Debug, OpenGL 3.3 Core, Render Triangle, Resize `960x540`, Dear ImGui, Clean Exit.
 - **M1 (`TC-M1-01`..`TC-M1-16`)**: M0 Regression, Shader valid/invalid, Indexed Mesh & Invalid Indices, Transform (T/R/S), Camera (Perspective/Orthographic), Depth Testing độc lập thứ tự draw, Multi-cube FBO, Framebuffer completeness/resize/`0x0`, RAII move lifecycle, Zero GL errors.
+- **M2 (`TC-M2-01`..`TC-M2-23`)**: Regression M0/M1, 7 Primitives, Bézier Curve/Surface, Revolution Surface, Normal/UV/Index/Degenerate validation, Invalid params, BoundingBox, Hierarchy, 6 Furniture models, Mesh regeneration, GPU rendering, Wireframe restoration, GPU lifecycle, Zero GL errors.
 
-## 3. Danh mục Test Case — Milestone M2 (Procedural Geometry & Modeling)
+## 3. Danh mục Test Case — Milestone M3 (Blender Asset Pipeline)
 
 | Test ID | Hạng mục | Kịch bản kiểm thử | Kết quả mong đợi |
 |---|---|---|---|
-| **TC-M2-01** | Regression M0/M1 | Chạy lại `M0_SmokeTest`, `M1_UnitTests`, `M1_IntegrationSmokeTest` | Toàn bộ 3 bộ regression trước đạt `PASS` |
-| **TC-M2-02** | Plane | Sinh mặt phẳng `3×2m` chia lưới `2×3` | Đúng kích thước, `y=0`, pháp tuyến `+Y`, winding CCW, UV `[0,1]` |
-| **TC-M2-03** | Cube / Cuboid | Sinh Cuboid `1.6×0.9×0.7m` và Cube `1.2m` | 24 vertices, 36 indices, pivot tâm đáy (`min.y=0`), pháp tuyến phẳng hướng ngoài |
-| **TC-M2-04** | Cylinder | Sinh Cylinder có nắp & không nắp (`16` segments) | Khớp công thức vertex/index từng phần, UV seam (`u=0` vs `u=1`), pháp tuyến hướng ngoài |
-| **TC-M2-05** | Sphere | Sinh Sphere `r=0.75m`, `12×20` segments | Đúng bán kính, pháp tuyến giải tích hướng tâm cầu, xử lý 2 cực không sinh tam giác suy biến |
-| **TC-M2-06** | Cone / Frustum | Sinh Cone (`r=0.6, h=1.2`) và Frustum (`0.6 -> 0.25, h=1.0`) | Apex hợp lệ không NaN/suy biến, pháp tuyến mặt bên nghiêng đúng hướng |
-| **TC-M2-07** | Bézier Curve Endpoints | Đánh giá tại `t=0`, `t=1` và đối chiếu Bernstein với de Casteljau tại `t=0.37` | `B(0)==P0`, `B(1)==P3`, Bernstein khớp de Casteljau |
-| **TC-M2-08** | Bézier Curve Derivatives | Đạo hàm `B'(0)=3(P1-P0)`, `B'(1)=3(P3-P2)`, tính thẳng hàng, lấy mẫu `10/25` đoạn, từ chối `t` lỗi | Đạo hàm chính xác, điểm thẳng hàng giữ thẳng hàng, `sample(N)` trả `N+1` điểm |
-| **TC-M2-09** | Bézier Surface Corners | Kiểm tra 4 góc `(0,0)`, `(1,0)`, `(0,1)`, `(1,1)` của mặt cong `4×4` | Khớp chính xác `P[0][0]`, `P[3][0]`, `P[0][3]`, `P[3][3]` |
-| **TC-M2-10** | Bézier Surface Normals & Topology | Kiểm tra flat patch (`+Y`), curved patch (`(uSeg+1)*(vSeg+1)` đỉnh), winding khớp pháp tuyến, từ chối patch suy biến | Đúng topology, pháp tuyến chuẩn hóa, từ chối segment lỗi và patch sụp về 1 điểm |
-| **TC-M2-11** | Revolution Surface | Xoay profile Bézier + profile có cực `r=0` quanh `+Y` | Đúng rings, UV seam, nắp đáy phẳng, không tam giác suy biến ở `r=0` |
-| **TC-M2-12** | Normal Validation | Kiểm tra `|length(normal) - 1| <= 1e-2` và hữu hạn trên mọi surface mesh | 100% vector pháp tuyến chuẩn hóa và hữu hạn |
-| **TC-M2-13** | UV Validation | Kiểm tra UV hữu hạn trong `[0,1]` và UV seam tách biệt `u=0/1` | 100% tọa độ UV hợp lệ |
-| **TC-M2-14** | Index Bounds & Degenerate Check | Kiểm tra `MeshData::validate()` (chỉ mục `< vertexCount`, không trùng chỉ mục, diện tích tam giác `> 0`) | Toàn bộ mesh sinh ra không có lỗi biên hoặc tam giác diện tích 0 |
-| **TC-M2-15** | Invalid Parameter Handling | Truyền kích thước âm/0/NaN, segment ngoài biên, bán kính revolution âm, tham số furniture lỗi | Từ chối sạch, trả về `false` kèm thông báo lỗi |
-| **TC-M2-16** | BoundingBox | Kiểm tra `expand`, `min/max/center/size` và `transformed()` khi xoay 90° quanh `+Y` | Kích thước chính xác; xoay 90° hoán đổi đúng chiều X ↔ Z |
-| **TC-M2-17** | Furniture Hierarchy | Áp dụng `M_parent` (tịnh tiến + xoay 90° Y) lên toàn bộ parts của `Desk` | `M_world_part = M_parent * M_local_part` dịch chuyển và xoay đồng bộ cả 6 thành phần, giữ `min.y = 0` |
-| **TC-M2-18** | Procedural Furniture Models | Sinh và xác thực tối thiểu 5 (thực tế 6) loại nội thất: Desk, Chair, Bookshelf, Desk Lamp, Vase, Curved Chair | Toàn bộ 6 mô hình hợp lệ, đứng trên mặt sàn `y = 0`, kích thước khớp tham số |
-| **TC-M2-19** | Mesh Regeneration | Tái sinh Cylinder `8 -> 32` segments và thử tham số lỗi (`r = -1`) | Số đỉnh tăng đúng khi tăng segment; khi gặp lỗi giữ nguyên GPU mesh hợp lệ trước đó |
-| **TC-M2-20** | GPU Rendering Categories | Upload & render từng nhóm (Primitives, Bézier Surface, Revolution Surface, 6 Furniture models) vào FBO | FBO complete, đúng draw call, góc nền sạch (`cornerBg=OK`) và vùng chiếu BBox phủ pixel thực tế |
-| **TC-M2-21** | Wireframe State Restoration | Bật `setWireframeMode(true)` vẽ 1 pass rồi gọi `endFrame()` | `GL_POLYGON_MODE` là `GL_LINE` trong pass và tự khôi phục `GL_FILL` sau `endFrame()` |
-| **TC-M2-22** | GPU Resource Lifecycle | Tái sinh liên tục nhiều vòng qua 6 mô hình nội thất + giải phóng trước `onClose` | Không rò rỉ handle, không crash, không double-delete |
-| **TC-M2-23** | OpenGL Errors & Shutdown | Quét `glGetError()` sau suite và 10 khung hình render | `OpenGL errors: NONE`, thoát với mã `0` |
-| **TC-M2-MANUAL** | Geometry Playground GUI | Người dùng chạy `RoomCraft3D.exe` kiểm tra tương tác tất cả danh mục, tham số, wireframe, normal overlay | Xác nhận trực quan bởi người dùng |
+| **TC-M3-01** | Regression M0/M1/M2 | Chạy lại `M0_SmokeTest`, `M1_UnitTests`, `M1_IntegrationSmokeTest`, `M2_GeometryUnitTests`, `M2_IntegrationSmokeTest` | Toàn bộ 5 bộ regression đạt `PASS` |
+| **TC-M3-02** | Build & Link Assimp + stb | CMake configure + build `roomcraft_assets`, `roomcraft_engine`, `RoomCraft3D`, `RoomCraft3D_AssetUnitTests` | `0` errors, `0` project warnings; binary độc lập không phụ thuộc DLL MinGW ngoài |
+| **TC-M3-03** | OBJ Import cơ bản | Nạp `modern_sofa.obj` qua `ModelLoader::loadFromFile` | Có đầy đủ `subMeshes`, `materials`, đỉnh/chỉ mục hợp lệ, `validate() == true` |
+| **TC-M3-04** | Triangulation & GenNormals/UV | Nạp fixture `quad_no_normals_no_uv.obj` (mặt tứ giác không normal, không UV) | Tự động chia thành 2 tam giác (6 indices), sinh normal đơn vị hợp lệ, UV hữu hạn |
+| **TC-M3-05** | Multi-material OBJ/MTL | Nạp fixture `multi_material.obj` gồm 2 nhóm vật liệu (`MatRed`, `MatBlue`) | Tách thành 2 sub-mesh ứng với 2 vật liệu đúng màu khuếch tán `Kd` |
+| **TC-M3-06** | Node Transform & Normal Matrix | Kiểm tra `convertRowMajor4x4` và biến đổi pháp tuyến bằng $(M^{-1})^T$ với non-uniform scale | Vị trí và pháp tuyến bảo toàn trực giao với tiếp tuyến, độ dài normal `= 1` |
+| **TC-M3-07** | Đường dẫn texture tương đối | Nạp `textured_quad.obj` + `modern_sofa.obj` có `map_Kd` tương đối | Giải phân đường dẫn texture theo thư mục chứa `.obj`, không chứa đường dẫn tuyệt đối cứng |
+| **TC-M3-08** | Xử lý file không tồn tại | Gọi `ModelLoader::loadFromFile` với đường dẫn không tồn tại | Trả về `false`, điền thông báo lỗi rõ ràng, không crash |
+| **TC-M3-09** | Xử lý file OBJ rỗng / lỗi | Nạp fixture `invalid_empty.obj` | Trả về `false`, từ chối sạch, không để lại dữ liệu rác |
+| **TC-M3-10** | Normalization: Pivot tâm đáy | Chuẩn hóa mesh đặt lệch `(10, 5, -3)` qua `AssetNormalizer::normalize` | Sau chuẩn hóa: `min.y == 0`, `(min.x + max.x)/2 == 0`, `(min.z + max.z)/2 == 0` |
+| **TC-M3-11** | Normalization: Idempotent | Gọi `AssetNormalizer::normalize` 2 lần liên tiếp | Kết quả lần 2 trùng khớp lần 1 (không bị trôi tọa độ/kích thước) |
+| **TC-M3-12** | Normalization: Unit Scale | Chuẩn hóa cuboid phóng to `100×` (đơn vị cm) với `unitScale = 0.01f` | Kích thước về đúng mét `(2.0, 0.8, 0.9)` và giữ nguyên pivot tâm đáy |
+| **TC-M3-13** | Normalization: Bảo toàn Normals | So sánh pháp tuyến trước và sau `AssetNormalizer::normalize` | Pháp tuyến giữ độ dài `= 1` và đúng hướng |
+| **TC-M3-14** | Camera Auto-Fit | Gọi `Camera::fitBoundingBox()` cho AABB nhỏ (`0.3m`) và lớn (`4.0m`) ở Perspective & Orthographic | Mục tiêu tại tâm BBox, 8 góc AABB chiếu vào bên trong NDC `[-1, 1]` |
+| **TC-M3-15** | FurnitureCatalog Registry | Khởi tạo `FurnitureCatalog` mặc định | Chứa đủ 14 mục (6 Procedural `procedural-*` + 8 Blender `blender-*`), ID duy nhất, tìm kiếm/lọc đúng |
+| **TC-M3-16** | Kiểm tra 8 Blender Assets (CPU) | Nạp + chuẩn hóa + kiểm tra polygon budget cả 8 file trong `assets/models/` | 8/8 file hợp lệ, kích thước thực tế hợp lý, số tam giác `<=` ngân sách từng mẫu |
+| **TC-M3-17** | Texture UV Orientation (GPU) | Render `textured_quad.obj` với `asymmetric_uv.png` (nửa trên Đỏ, nửa dưới Xanh) vào FBO | Đọc pixel FBO: nửa trên `RGB ≈ (255,0,0)`, nửa dưới `RGB ≈ (0,0,255)` (không lật ngược) |
+| **TC-M3-18** | Missing Texture Fallback (GPU) | Render `missing_tex_quad.obj` trỏ tới texture không tồn tại | Không crash, tự kích hoạt fallback checkerboard texture từ `TextureManager` |
+| **TC-M3-19** | Texture Cache Reuse (GPU) | Gọi `TextureManager::getOrLoad` 2 lần cho cùng file texture | Trả về cùng `GLuint` handle, không tăng số texture trong cache |
+| **TC-M3-20** | Asset GPU Cache Reuse | Gọi `AssetManager::getOrLoad` 2 lần cho cùng `assetId` | Trả về cùng con trỏ `GpuAsset*` và giữ nguyên VAO/VBO handle |
+| **TC-M3-21** | Transactional Reload (GPU) | Reload thành công (cập nhật asset) và reload thất bại khi nguồn lỗi | Thành công thì hoán đổi asset mới; thất bại thì **giữ nguyên** asset hợp lệ trước đó |
+| **TC-M3-22** | Render 6 Procedural Assets (GPU) | Nạp qua `AssetManager`, Auto-Fit và render từng mẫu Procedural vào FBO | 6/6 render thành công, góc nền sạch (`cornerBg=OK`), diện tích phủ pixel thực tế `> 0` |
+| **TC-M3-23** | Render 8 Blender Assets (GPU) | Nạp qua `AssetManager`, Auto-Fit và render từng mẫu Blender vào FBO | 8/8 render thành công, góc nền sạch (`cornerBg=OK`), diện tích phủ pixel thực tế `> 0` |
+| **TC-M3-24** | Multi-Material Render (GPU) | Render `multi_material.obj` vào FBO | Đọc pixel trái = Đỏ `(255,0,0)`, phải = Xanh dương `(0,0,255)` |
+| **TC-M3-25** | M3 Asset Browser Frame Loop | Chạy vòng lặp render 10 khung hình với ImGui + FBO preview ở chế độ M3 | Không lỗi, thống kê drawCalls/vertices/triangles thực tế khớp asset đang chọn |
+| **TC-M3-26** | GPU Resource Cleanup | Giải phóng `AssetManager`, `TextureManager`, `Framebuffer`, `Shader`, ImGui trước khi hủy GL context | Cache về `0`, không crash, không double-delete |
+| **TC-M3-27** | OpenGL Errors & Standalone Exit | Kiểm tra `glGetError()` và chạy binary độc lập ngoài PATH WinLibs | `OpenGL errors: NONE`, mã thoát `0` |
+| **TC-M3-MANUAL** | Furniture Asset Browser GUI | Người dùng chạy `RoomCraft3D.exe` kiểm tra trực quan 14 mẫu, search/filter, Fit Model, Wireframe, Normals, Reload Asset, chuyển mode M3/M2/M1 | Xác nhận trực quan bởi người dùng |

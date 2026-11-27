@@ -17,14 +17,18 @@ int main(int argc, char** argv)
             config.title = "RoomCraft 3D - M1 Regression Smoke Test";
         } else if (arg == "--m2-smoke-test") {
             config.mode = roomcraft::core::ApplicationMode::SmokeTestM2;
-            config.title = "RoomCraft 3D - M2 Procedural Geometry GPU Smoke Test";
+            config.title = "RoomCraft 3D - M2 Regression Smoke Test";
+        } else if (arg == "--m3-smoke-test") {
+            config.mode = roomcraft::core::ApplicationMode::SmokeTestM3;
+            config.title = "RoomCraft 3D - M3 Asset Pipeline GPU Smoke Test";
         } else if (arg == "--help" || arg == "-h") {
-            std::cout << "RoomCraft 3D (M2 Procedural Geometry & Modeling)\n"
+            std::cout << "RoomCraft 3D (M3 Blender Asset Pipeline)\n"
                       << "Usage: RoomCraft3D [option]\n"
-                      << "  (no option)      Run interactive M2 Geometry Playground\n"
+                      << "  (no option)      Run interactive Furniture Asset Browser (M3) & Geometry Playground (M2)\n"
                       << "  --smoke-test     Run M0 regression smoke test\n"
                       << "  --m1-smoke-test  Run M1 regression GPU integration smoke test\n"
-                      << "  --m2-smoke-test  Run M2 procedural geometry GPU integration smoke test\n";
+                      << "  --m2-smoke-test  Run M2 regression GPU integration smoke test\n"
+                      << "  --m3-smoke-test  Run M3 Blender Asset Pipeline GPU integration smoke test\n";
             return 0;
         }
     }

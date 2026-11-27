@@ -41,7 +41,7 @@ void Renderer::drawMesh(const Mesh& mesh,
                         const glm::vec4& color,
                         float faceContrast)
 {
-    drawMeshWithMatrix(mesh, shader, transform.getModelMatrix(), camera, color, faceContrast);
+    drawMeshTextured(mesh, shader, transform.getModelMatrix(), camera, color, nullptr, faceContrast);
 }
 
 void Renderer::drawMeshWithMatrix(const Mesh& mesh,
@@ -50,6 +50,17 @@ void Renderer::drawMeshWithMatrix(const Mesh& mesh,
                                   const Camera& camera,
                                   const glm::vec4& color,
                                   float faceContrast)
+{
+    drawMeshTextured(mesh, shader, modelMatrix, camera, color, nullptr, faceContrast);
+}
+
+void Renderer::drawMeshTextured(const Mesh& mesh,
+                                Shader& shader,
+                                const glm::mat4& modelMatrix,
+                                const Camera& camera,
+                                const glm::vec4& color,
+                                const Texture* diffuseTexture,
+                                float faceContrast)
 {
     if (!mesh.isValid() || !shader.isValid()) {
         return;
@@ -62,7 +73,21 @@ void Renderer::drawMeshWithMatrix(const Mesh& mesh,
     shader.setVec4("uColor", color);
     shader.setFloat("uFaceContrast", faceContrast);
 
+    const bool useTexture = (diffuseTexture != nullptr && diffuseTexture->isValid());
+    if (useTexture) {
+        diffuseTexture->bind(0);
+        shader.setInt("uDiffuseMap", 0);
+        shader.setInt("uHasTexture", 1);
+    } else {
+        shader.setInt("uHasTexture", 0);
+    }
+
     mesh.draw();
+
+    if (useTexture) {
+        Texture::unbind(0);
+        shader.setInt("uHasTexture", 0);
+    }
 
     ++m_currentFrameStats.drawCalls;
     m_currentFrameStats.vertexCount += mesh.getVertexCount();
@@ -97,7 +122,6 @@ void Renderer::drawLines(const Mesh& lineMesh,
 
 void Renderer::endFrame()
 {
-    // Luôn khôi phục GL_FILL trước khi kết thúc frame để không làm hỏng giao diện Dear ImGui hoặc pass kế tiếp
     if (m_wireframeEnabled) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         m_wireframeEnabled = false;

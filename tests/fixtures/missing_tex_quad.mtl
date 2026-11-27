@@ -1,0 +1,3 @@
+newmtl MatMissingTex
+Kd 1.0 1.0 1.0
+map_Kd does_not_exist_12345.png

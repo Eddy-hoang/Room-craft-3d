@@ -1,5 +1,6 @@
 #pragma once
 
+#include "roomcraft/assets/AssetManager.hpp"
 #include "roomcraft/core/Window.hpp"
 #include "roomcraft/geometry/BezierCurve.hpp"
 #include "roomcraft/geometry/BezierSurface.hpp"
@@ -19,37 +20,43 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace roomcraft::core {
 
-// Chế độ chạy của ứng dụng RoomCraft 3D tại Milestone M2
+// Chế độ chạy của ứng dụng RoomCraft 3D tại Milestone M3
 enum class ApplicationMode {
-    InteractivePlayground, // Chế độ Geometry Playground M2 (mặc định khi mở ứng dụng)
-    SmokeTestM0,           // Regression smoke test M0 (tam giác cơ bản + resize + ImGui)
-    SmokeTestM1,           // Regression GPU integration smoke test M1 (depth test, FBO, 3 cube)
-    SmokeTestM2            // GPU integration & runtime smoke test M2 (primitives, Bézier, revolution, furniture, wireframe)
+    InteractiveApp, // Giao diện tương tác (mặc định mở Furniture Asset Browser M3, có thể chuyển sang M2/M1)
+    SmokeTestM0,    // Regression smoke test M0
+    SmokeTestM1,    // Regression GPU integration smoke test M1
+    SmokeTestM2,    // Regression GPU integration smoke test M2
+    SmokeTestM3     // GPU integration & runtime smoke test M3 (Assimp, Texture, Cache, Reload, Auto-Fit, 8 Blender models)
 };
 
-// Nhóm đối tượng trong Geometry Playground
+// Không gian làm việc đang chọn trong chế độ tương tác
+enum class InteractiveWorkspace {
+    AssetBrowserM3 = 0,
+    GeometryPlaygroundM2 = 1,
+    ReferenceSceneM1 = 2
+};
+
+// Nhóm đối tượng trong Geometry Playground (M2)
 enum class PlaygroundCategory {
     Primitives = 0,
     Parametric = 1,
-    Furniture = 2,
-    M1ReferenceScene = 3
+    Furniture = 2
 };
 
-// Cấu hình khởi tạo cho Application
 struct ApplicationConfig {
     int width = 1280;
     int height = 720;
-    std::string title = "RoomCraft 3D - M2 Procedural Geometry Playground (OpenGL 3.3 Core)";
-    ApplicationMode mode = ApplicationMode::InteractivePlayground;
+    std::string title = "RoomCraft 3D - M3 Furniture Asset Browser (OpenGL 3.3 Core)";
+    ApplicationMode mode = ApplicationMode::InteractiveApp;
     int smokeTestFrames = 10;
 };
 
-// Đối tượng lập phương thử nghiệm giữ lại cho M1 Reference Scene & M1 Regression
 struct DemoCubeObject {
     std::string name;
     scene::Transform transform;
@@ -57,7 +64,6 @@ struct DemoCubeObject {
     glm::vec4 color{1.0f};
 };
 
-// Một thành phần GPU đã upload của mô hình sinh thủ tục hiện tại (tránh upload lại mỗi frame)
 struct UploadedRenderPart {
     std::string name;
     graphics::Mesh mesh;
@@ -66,7 +72,8 @@ struct UploadedRenderPart {
     bool isLinePrimitive = false;
 };
 
-// Lớp Application điều phối Window, Renderer, Framebuffer, Camera, Dear ImGui và Geometry Playground M2.
+// Lớp Application điều phối Window, Renderer, Framebuffer, Camera, AssetManager, Dear ImGui
+// cho cả Asset Browser (M3), Geometry Playground (M2) và M1/M0 regression tests.
 class Application {
 public:
     explicit Application(ApplicationConfig config);
@@ -81,11 +88,15 @@ public:
 private:
     bool initImGui();
     bool initM0Resources();
-    bool initM1AndM2Resources();
+    bool initEngineResources();
     void setupDefaultM1DemoScene();
     void resetCurrentPlaygroundParameters();
 
-    // Tái sinh hình học CPU và upload GPU duy nhất khi tham số/loại thay đổi (KHÔNG gọi mỗi frame)
+    // Asset Browser (M3) helpers
+    bool selectBrowserAsset(const std::string& assetId, bool autoFitCamera = true);
+    void fitCameraToActiveModel();
+
+    // Geometry Playground (M2) helpers
     bool regenerateActivePlaygroundGeometry();
     bool uploadPlaygroundParts(std::vector<geometry::FurniturePart>& parts,
                                const math::BoundingBox& overallBox,
@@ -102,23 +113,38 @@ private:
     void renderInteractiveFrame();
     void renderM1DemoSceneToFramebuffer(float faceContrast);
     void renderPlaygroundSceneToFramebuffer(float faceContrast);
-    void renderPlaygroundControlUi();
-    void renderViewportUi();
+    void renderAssetBrowserSceneToFramebuffer(float faceContrast);
+    void renderGpuAssetToCurrentTarget(const assets::GpuAsset& asset,
+                                       const glm::mat4& parentMatrix,
+                                       const graphics::Camera& cam,
+                                       float faceContrast);
 
-    // Kiểm thử tự động M1 Regression
+    // Giao diện Dear ImGui
+    void renderTopWorkspaceBar();
+    void renderAssetBrowserUi();
+    void renderPlaygroundControlUi();
+    void renderM1ReferenceControlUi();
+    void renderViewportPanel(const char* panelTitle, float posX, float posY, float width, float height, bool showTopToolbar);
+
+    // Regression & Integration Suites (M1, M2, M3)
     bool runM1IntegrationSuiteOnce();
     bool verifyM1DepthTestingOrderIndependence();
     bool verifyM1FramebufferResizeAndZeroSafety();
     bool verifyM1RaiiMoveLifecycle();
     bool verifyM1MultiCubeRenderedPixels();
 
-    // Kiểm thử tự động M2 GPU Integration Smoke Test
     bool runM2IntegrationSuiteOnce();
     bool verifyM2WireframeStateRestoration();
     bool verifyM2ProjectedGeometryRender(const std::string& label,
                                          const std::vector<UploadedRenderPart>& parts,
                                          const math::BoundingBox& box,
                                          const graphics::Camera& cam);
+
+    bool runM3IntegrationSuiteOnce();
+    bool verifyM3TexturedOrientationAndFallback();
+    bool verifyM3MultiMaterialRendering();
+    bool verifyM3CacheAndTransactionalReload();
+    bool verifyM3GpuAssetRenderCoverage(const std::string& label, const assets::GpuAsset& asset);
 
     // Sự kiện cửa sổ
     void handleReshape(int width, int height);
@@ -134,8 +160,9 @@ private:
     graphics::Renderer m_renderer;
     graphics::Camera m_camera;
     graphics::Framebuffer m_framebuffer;
+    assets::AssetManager m_assetManager;
 
-    // Tài nguyên đồ họa nền (M1 + M2)
+    // Tài nguyên đồ họa dùng chung
     graphics::Shader m_meshShader;
     graphics::Shader m_gridShader;
     graphics::Mesh m_cubeMesh;
@@ -146,11 +173,21 @@ private:
     graphics::Mesh m_axisZMesh;
     std::vector<DemoCubeObject> m_demoCubes;
 
-    // Tài nguyên Geometry Playground hiện đang hiển thị (chỉ cập nhật khi regenerate)
+    // Trạng thái Asset Browser (M3)
+    InteractiveWorkspace m_workspace = InteractiveWorkspace::AssetBrowserM3;
+    int m_browserSourceFilter = 0;   // 0=All, 1=Procedural, 2=Blender
+    int m_browserCategoryFilter = 0; // 0=All, 1..7=AssetCategory
+    std::array<char, 128> m_browserSearchBuf{};
+    std::string m_selectedAssetId = "blender-modern-sofa";
+    std::shared_ptr<assets::GpuAsset> m_activeBrowserAsset;
+    std::string m_lastAssetError;
+    std::string m_lastAssetStatus;
+
+    // Trạng thái Geometry Playground (M2)
     PlaygroundCategory m_category = PlaygroundCategory::Furniture;
-    int m_primitiveTypeIndex = 3;   // Cylinder
-    int m_parametricTypeIndex = 1;  // Bezier Surface
-    int m_furnitureTypeIndex = 0;   // Desk
+    int m_primitiveTypeIndex = 3;
+    int m_parametricTypeIndex = 1;
+    int m_furnitureTypeIndex = 0;
     std::vector<UploadedRenderPart> m_activeParts;
     graphics::Mesh m_activeBBoxLines;
     graphics::Mesh m_activeControlLines;
@@ -164,18 +201,18 @@ private:
     std::uint32_t m_activeIndexCount = 0;
     std::uint32_t m_activeTriangleCount = 0;
 
-    // Tham số tương tác cho Geometry Playground
+    // Tham số tương tác chung
     bool m_autoRegenerate = true;
     bool m_wireframeMode = false;
     bool m_depthTestEnabled = true;
     bool m_showGrid = true;
     bool m_showAxes = true;
-    bool m_showBoundingBox = false;
+    bool m_showBoundingBox = true;
     bool m_showControlOverlay = true;
     bool m_showVertexNormals = false;
-    float m_normalVisualLength = 0.08f;
+    float m_normalVisualLength = 0.06f;
 
-    // Tham số Primitives
+    // Tham số Primitives & Parametric & Furniture (M2)
     float m_planeWidth = 2.0f;
     float m_planeDepth = 2.0f;
     int m_planeSubX = 4;
@@ -202,7 +239,6 @@ private:
     bool m_frustumCapBottom = true;
     bool m_frustumCapTop = true;
 
-    // Tham số Parametric
     std::array<glm::vec3, 4> m_bezierCurvePts = {
         glm::vec3(-1.0f, 0.2f, 0.0f),
         glm::vec3(-0.4f, 1.5f, 0.4f),
@@ -225,7 +261,6 @@ private:
     bool m_revCapBottom = true;
     bool m_revCapTop = false;
 
-    // Tham số 6 mẫu Furniture
     geometry::DeskParams m_deskParams;
     geometry::ChairParams m_chairParams;
     geometry::BookshelfParams m_bookshelfParams;
@@ -239,13 +274,11 @@ private:
     unsigned int m_m0Vbo = 0;
     bool m_showM0Triangle = true;
 
-    // Trạng thái chung
     bool m_initialized = false;
     bool m_imguiInitialized = false;
     int m_selectedCubeIndex = 0;
     glm::vec4 m_clearColor{0.094f, 0.102f, 0.125f, 1.0f}; // #181A20
 
-    // Thống kê thời gian & FPS thực tế
     int m_frameCount = 0;
     int m_lastFpsTimeMs = 0;
     int m_lastFrameTimeMs = 0;
@@ -254,7 +287,7 @@ private:
     float m_frameTimeMs = 0.0f;
     bool m_glErrorDetected = false;
 
-    // Trạng thái Smoke Tests (M0, M1, M2)
+    // Trạng thái Smoke Tests
     bool m_m0ResizeTriggered = false;
     bool m_m0ResizeObserved = false;
     bool m_m0PixelVerified = false;
@@ -266,6 +299,9 @@ private:
 
     bool m_m2SuiteExecuted = false;
     bool m_m2SuitePassed = false;
+
+    bool m_m3SuiteExecuted = false;
+    bool m_m3SuitePassed = false;
 };
 
 } // namespace roomcraft::core

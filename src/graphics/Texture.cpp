@@ -1,0 +1,223 @@
+#include "roomcraft/graphics/Texture.hpp"
+
+#include <glad/glad.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
+#include <iostream>
+#include <utility>
+#include <vector>
+
+namespace roomcraft::graphics {
+
+namespace {
+constexpr int kMaxTextureDimension = 8192;
+} // namespace
+
+Texture::~Texture()
+{
+    destroy();
+}
+
+Texture::Texture(Texture&& other) noexcept
+    : m_textureId(std::exchange(other.m_textureId, 0))
+    , m_width(std::exchange(other.m_width, 0))
+    , m_height(std::exchange(other.m_height, 0))
+    , m_channels(std::exchange(other.m_channels, 0))
+    , m_isFallback(std::exchange(other.m_isFallback, false))
+    , m_sourcePath(std::move(other.m_sourcePath))
+{
+}
+
+Texture& Texture::operator=(Texture&& other) noexcept
+{
+    if (this != &other) {
+        destroy();
+        m_textureId = std::exchange(other.m_textureId, 0);
+        m_width = std::exchange(other.m_width, 0);
+        m_height = std::exchange(other.m_height, 0);
+        m_channels = std::exchange(other.m_channels, 0);
+        m_isFallback = std::exchange(other.m_isFallback, false);
+        m_sourcePath = std::move(other.m_sourcePath);
+    }
+    return *this;
+}
+
+bool Texture::loadFromFile(const std::filesystem::path& filePath, std::string* outError)
+{
+    std::error_code ec;
+    if (filePath.empty() || !std::filesystem::exists(filePath, ec)) {
+        if (outError != nullptr) {
+            *outError = "Texture file does not exist: " + filePath.string();
+        }
+        return false;
+    }
+
+    // Lật ảnh theo trục dọc để hàng dưới cùng của ảnh tương ứng v = 0 của OpenGL
+    // (nhất quán với việc KHÔNG dùng aiProcess_FlipUVs trong ModelLoader)
+    stbi_set_flip_vertically_on_load(1);
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    unsigned char* data = stbi_load(filePath.string().c_str(), &width, &height, &channels, 0);
+    if (data == nullptr) {
+        if (outError != nullptr) {
+            *outError = std::string("stb_image failed to decode '") + filePath.string() +
+                        "': " + (stbi_failure_reason() ? stbi_failure_reason() : "unknown error");
+        }
+        return false;
+    }
+
+    const bool ok = createFromMemory(width, height, channels, data, true, outError);
+    stbi_image_free(data);
+
+    if (ok) {
+        m_isFallback = false;
+        m_sourcePath = filePath.string();
+    }
+    return ok;
+}
+
+bool Texture::createFromMemory(int width,
+                               int height,
+                               int channels,
+                               const std::uint8_t* pixels,
+                               bool generateMipmaps,
+                               std::string* outError)
+{
+    if (pixels == nullptr || width <= 0 || height <= 0 ||
+        width > kMaxTextureDimension || height > kMaxTextureDimension) {
+        if (outError != nullptr) {
+            *outError = "Invalid texture dimensions or null pixel buffer.";
+        }
+        return false;
+    }
+
+    GLenum internalFormat = GL_RGBA8;
+    GLenum dataFormat = GL_RGBA;
+    std::vector<std::uint8_t> convertedRgb;
+    const std::uint8_t* uploadPtr = pixels;
+
+    if (channels == 1) {
+        // Mở rộng ảnh xám 1 kênh sang RGB để shader diffuse đọc đồng nhất
+        convertedRgb.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3);
+        for (std::size_t i = 0; i < static_cast<std::size_t>(width) * static_cast<std::size_t>(height); ++i) {
+            convertedRgb[i * 3 + 0] = pixels[i];
+            convertedRgb[i * 3 + 1] = pixels[i];
+            convertedRgb[i * 3 + 2] = pixels[i];
+        }
+        internalFormat = GL_RGB8;
+        dataFormat = GL_RGB;
+        uploadPtr = convertedRgb.data();
+    } else if (channels == 3) {
+        internalFormat = GL_RGB8;
+        dataFormat = GL_RGB;
+    } else if (channels == 4) {
+        internalFormat = GL_RGBA8;
+        dataFormat = GL_RGBA;
+    } else {
+        if (outError != nullptr) {
+            *outError = "Unsupported texture channel count: " + std::to_string(channels);
+        }
+        return false;
+    }
+
+    destroy();
+
+    glGenTextures(1, &m_textureId);
+    glBindTexture(GL_TEXTURE_2D, m_textureId);
+
+    // Đặt GL_UNPACK_ALIGNMENT = 1 để tránh lệch hàng hoặc crash với ảnh RGB có bề rộng không chia hết cho 4
+    GLint prevAlignment = 4;
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prevAlignment);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(internalFormat),
+                 width, height, 0, dataFormat, GL_UNSIGNED_BYTE, uploadPtr);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, prevAlignment);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    if (generateMipmaps) {
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    } else {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    m_width = width;
+    m_height = height;
+    m_channels = channels;
+    return true;
+}
+
+bool Texture::createFallbackChecker(int size)
+{
+    const int dim = (size >= 8 && size <= 512) ? size : 64;
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(dim * dim * 4), 255);
+    const int cell = dim / 8;
+
+    for (int y = 0; y < dim; ++y) {
+        for (int x = 0; x < dim; ++x) {
+            const bool dark = (((x / cell) + (y / cell)) % 2) == 0;
+            const std::size_t idx = static_cast<std::size_t>((y * dim + x) * 4);
+            // Mẫu bàn cờ hồng-xám dễ nhận biết khi thiếu texture nhưng không gây chói
+            pixels[idx + 0] = dark ? 95 : 210;
+            pixels[idx + 1] = dark ? 70 : 120;
+            pixels[idx + 2] = dark ? 105 : 195;
+            pixels[idx + 3] = 255;
+        }
+    }
+
+    if (!createFromMemory(dim, dim, 4, pixels.data(), true)) {
+        return false;
+    }
+    m_isFallback = true;
+    m_sourcePath = "<fallback-checker>";
+    return true;
+}
+
+bool Texture::createSolidColor(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a)
+{
+    const std::uint8_t pixel[4] = {r, g, b, a};
+    if (!createFromMemory(1, 1, 4, pixel, false)) {
+        return false;
+    }
+    m_isFallback = false;
+    m_sourcePath = "<solid-1x1>";
+    return true;
+}
+
+void Texture::bind(unsigned int textureUnit) const
+{
+    glActiveTexture(GL_TEXTURE0 + textureUnit);
+    glBindTexture(GL_TEXTURE_2D, m_textureId);
+}
+
+void Texture::unbind(unsigned int textureUnit)
+{
+    glActiveTexture(GL_TEXTURE0 + textureUnit);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Texture::destroy()
+{
+    if (m_textureId != 0) {
+        glDeleteTextures(1, &m_textureId);
+        m_textureId = 0;
+    }
+    m_width = 0;
+    m_height = 0;
+    m_channels = 0;
+    m_isFallback = false;
+    m_sourcePath.clear();
+}
+
+} // namespace roomcraft::graphics

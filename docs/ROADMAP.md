@@ -4,10 +4,10 @@ Dự án được chia thành 10 milestone trong khoảng thời gian dự kiế
 
 | Milestone | Tên giai đoạn | Thời gian dự kiến | Phiên bản mục tiêu | Trạng thái |
 |---|---|---|---|---|
-| **M0** | Project Foundation | Tuần 1 | `v0.0.1` | VERIFIED (Auto PASS; Manual GUI pending) |
+| **M0** | Project Foundation | Tuần 1 | `v0.0.1` | VERIFIED (Auto 7/7 PASS; Manual GUI pending) |
 | **M1** | Core Graphics Engine | Tuần 1–2 | `v0.1.0` | VERIFIED (Auto 16/16 PASS; Manual GUI pending) |
 | **M2** | Procedural Geometry & Modeling | Tuần 2–3 | `v0.2.0` | VERIFIED (Auto 23/23 PASS; Manual GUI pending) |
-| **M3** | Blender Asset Pipeline | Tuần 3–4 | `v0.3.0` | TODO |
+| **M3** | Blender Asset Pipeline | Tuần 3–4 | `v0.3.0` | VERIFIED (Auto 27/27 PASS; Manual GUI pending) |
 | **M4** | Scene Management & Room Editor | Tuần 4–5 | `v0.4.0` | TODO |
 | **M5** | Camera, Transformation & Object Picking | Tuần 4–5 | `v0.5.0` | TODO |
 | **M6** | Professional Editor UI/UX | Tuần 5–6 | `v0.6.0` | TODO |

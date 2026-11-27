@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RoomCraft3D
-    VERSION 0.0.1
+    VERSION 0.1.0
     DESCRIPTION "RoomCraft 3D - Desktop 3D Interior Design and Room Planner"
     LANGUAGES C CXX
 )
@@ -30,6 +30,7 @@ if(ROOMCRAFT_USE_VCPKG)
     find_package(FreeGLUT CONFIG REQUIRED)
     find_package(glad CONFIG REQUIRED)
     find_package(imgui CONFIG REQUIRED)
+    find_package(glm CONFIG REQUIRED)
 
     if(TARGET FreeGLUT::freeglut)
         set(ROOMCRAFT_FREEGLUT_TARGET FreeGLUT::freeglut)
@@ -41,6 +42,7 @@ if(ROOMCRAFT_USE_VCPKG)
 
     set(ROOMCRAFT_GLAD_TARGET glad::glad)
     set(ROOMCRAFT_IMGUI_TARGET imgui::imgui)
+    set(ROOMCRAFT_GLM_TARGET glm::glm)
 else()
     message(STATUS "[RoomCraft3D] Dependency mode: Pinned FetchContent (locked commits/tags)")
     include(FetchContent)
@@ -77,7 +79,6 @@ else()
     endif()
 
     # 2. GLAD v0.1.36 (OpenGL 3.3 Core Profile, khóa commit SHA)
-    # Sinh trực tiếp mã nguồn C bằng Python3 để tương thích cả CMake 3.x và CMake 4.x
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
     if(POLICY CMP0169)
@@ -146,19 +147,56 @@ else()
         OpenGL::GL
     )
     set(ROOMCRAFT_IMGUI_TARGET imgui)
+
+    # 4. GLM 1.0.1 (khóa commit SHA, thư viện toán học vector/ma trận cho M1+)
+    set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
+    set(GLM_ENABLE_CXX_17 ON CACHE BOOL "" FORCE)
+
+    FetchContent_Declare(
+        glm
+        GIT_REPOSITORY https://github.com/g-truc/glm.git
+        GIT_TAG        0af55ccecd98d4e5a8d1fad7de25ba429d60e863 # 1.0.1
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(glm)
+
+    if(TARGET glm::glm-header-only)
+        set(ROOMCRAFT_GLM_TARGET glm::glm-header-only)
+    elseif(TARGET glm::glm)
+        set(ROOMCRAFT_GLM_TARGET glm::glm)
+    else()
+        message(FATAL_ERROR "Expected glm target from GLM FetchContent")
+    endif()
 endif()
 
-# Executable chính cho Milestone M0
-add_executable(RoomCraft3D
-    src/main.cpp
-    src/core/Application.cpp
+# Module toán học và kiểm tra hình học thuần CPU (không phụ thuộc GPU/OpenGL -> unit test chạy độc lập)
+add_library(roomcraft_math STATIC
+    src/scene/Transform.cpp
+    src/graphics/Camera.cpp
+    src/graphics/MeshValidation.cpp
 )
-
-target_include_directories(RoomCraft3D PRIVATE
+target_include_directories(roomcraft_math PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
+target_link_libraries(roomcraft_math PUBLIC
+    ${ROOMCRAFT_GLM_TARGET}
+)
 
-target_link_libraries(RoomCraft3D PRIVATE
+# Module Core Graphics Engine (Window, Shader, Mesh, Framebuffer, Renderer, Application)
+add_library(roomcraft_engine STATIC
+    src/core/Window.cpp
+    src/core/Application.cpp
+    src/graphics/Shader.cpp
+    src/graphics/Mesh.cpp
+    src/graphics/Framebuffer.cpp
+    src/graphics/Renderer.cpp
+)
+target_include_directories(roomcraft_engine PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+target_link_libraries(roomcraft_engine PUBLIC
+    roomcraft_math
     ${ROOMCRAFT_GLAD_TARGET}
     ${ROOMCRAFT_FREEGLUT_TARGET}
     ${ROOMCRAFT_IMGUI_TARGET}
@@ -166,10 +204,24 @@ target_link_libraries(RoomCraft3D PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(RoomCraft3D PRIVATE winmm gdi32 user32)
+    target_link_libraries(roomcraft_engine PUBLIC winmm gdi32 user32)
 endif()
 
-# Bật cảnh báo biên dịch chặt cho mã nguồn project
+# Bật cảnh báo biên dịch chặt cho toàn bộ mã nguồn của dự án
+if(MSVC)
+    target_compile_options(roomcraft_math PRIVATE /W4 /permissive- /utf-8)
+    target_compile_options(roomcraft_engine PRIVATE /W4 /permissive- /utf-8)
+else()
+    target_compile_options(roomcraft_math PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(roomcraft_engine PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Executable chính RoomCraft3D
+add_executable(RoomCraft3D
+    src/main.cpp
+)
+target_link_libraries(RoomCraft3D PRIVATE roomcraft_engine)
+
 if(MSVC)
     target_compile_options(RoomCraft3D PRIVATE /W4 /permissive- /utf-8)
 else()
@@ -190,9 +242,43 @@ add_custom_command(TARGET RoomCraft3D POST_BUILD
     COMMENT "Copying RoomCraft 3D assets next to executable"
 )
 
-# Đăng ký kiểm thử tự động (CTest) cho Milestone M0
+# ==============================================================================
+# Kiểm thử tự động (CTest): Unit Tests (thuần CPU) + Integration/Runtime Tests
+# ==============================================================================
 enable_testing()
+
+add_executable(RoomCraft3D_UnitTests
+    tests/unit/TestMain.cpp
+    tests/unit/TransformTests.cpp
+    tests/unit/CameraTests.cpp
+    tests/unit/MeshValidationTests.cpp
+)
+target_link_libraries(RoomCraft3D_UnitTests PRIVATE roomcraft_math)
+
+if(MSVC)
+    target_compile_options(RoomCraft3D_UnitTests PRIVATE /W4 /permissive- /utf-8)
+else()
+    target_compile_options(RoomCraft3D_UnitTests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if(MINGW)
+    target_link_options(RoomCraft3D_UnitTests PRIVATE -static)
+endif()
+
+# TC-M1-01: Regression Smoke Test từ Milestone M0
 add_test(
     NAME M0_SmokeTest
     COMMAND $<TARGET_FILE:RoomCraft3D> --smoke-test
+)
+
+# TC-M1-05..TC-M1-10: Unit Test toán học Transform, Camera và kiểm tra dữ liệu Mesh
+add_test(
+    NAME M1_UnitTests
+    COMMAND $<TARGET_FILE:RoomCraft3D_UnitTests>
+)
+
+# TC-M1-02..05, TC-M1-11..16: Integration & Runtime Smoke Test cho Core Graphics Engine
+add_test(
+    NAME M1_IntegrationSmokeTest
+    COMMAND $<TARGET_FILE:RoomCraft3D> --m1-smoke-test
 )

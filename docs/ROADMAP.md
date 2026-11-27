@@ -4,8 +4,8 @@ Dự án được chia thành 10 milestone trong khoảng thời gian dự kiế
 
 | Milestone | Tên giai đoạn | Thời gian dự kiến | Phiên bản mục tiêu | Trạng thái |
 |---|---|---|---|---|
-| **M0** | Project Foundation | Tuần 1 | `v0.0.1` | DONE |
-| **M1** | Core Graphics Engine | Tuần 1–2 | `v0.1.0` | TODO |
+| **M0** | Project Foundation | Tuần 1 | `v0.0.1` | VERIFIED (Automated PASS; Manual GUI pending) |
+| **M1** | Core Graphics Engine | Tuần 1–2 | `v0.1.0` | VERIFIED (Automated 16/16 PASS; Manual GUI pending) |
 | **M2** | Procedural Geometry & Modeling | Tuần 2–3 | `v0.2.0` | TODO |
 | **M3** | Blender Asset Pipeline | Tuần 3–4 | `v0.3.0` | TODO |
 | **M4** | Scene Management & Room Editor | Tuần 4–5 | `v0.4.0` | TODO |
@@ -37,4 +37,4 @@ Chỉ chuyển sang milestone kế tiếp sau khi milestone hiện tại:
 1. Build thành công không lỗi.
 2. Đạt toàn bộ acceptance criteria và kiểm thử bắt buộc của milestone đó.
 3. Đã cập nhật `docs/PROGRESS.md`, `docs/TEST_RESULTS.md`, `docs/KNOWN_ISSUES.md` và `CHANGELOG.md`.
-4. Được người dùng kiểm tra và xác nhận.
+4. Được người dùng kiểm tra thủ công và xác nhận.

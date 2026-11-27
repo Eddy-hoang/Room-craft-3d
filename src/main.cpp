@@ -9,12 +9,18 @@ int main(int argc, char** argv)
 
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
-        if (arg == "--smoke-test") {
-            config.smokeTestMode = true;
+        if (arg == "--smoke-test" || arg == "--m0-smoke-test") {
+            config.mode = roomcraft::core::ApplicationMode::SmokeTestM0;
+            config.title = "RoomCraft 3D - M0 Regression Smoke Test";
+        } else if (arg == "--m1-smoke-test") {
+            config.mode = roomcraft::core::ApplicationMode::SmokeTestM1;
+            config.title = "RoomCraft 3D - M1 Integration & Runtime Smoke Test";
         } else if (arg == "--help" || arg == "-h") {
-            std::cout << "RoomCraft 3D (M0 Foundation)\n"
-                      << "Usage: RoomCraft3D [--smoke-test]\n"
-                      << "  --smoke-test  Run automated M0 verification (init, render, resize, clean exit)\n";
+            std::cout << "RoomCraft 3D (M1 Core Graphics Engine)\n"
+                      << "Usage: RoomCraft3D [option]\n"
+                      << "  (no option)      Run interactive M1 Core Graphics Engine demo\n"
+                      << "  --smoke-test     Run M0 regression smoke test (basic triangle + resize + ImGui)\n"
+                      << "  --m1-smoke-test  Run M1 GPU integration & runtime smoke test\n";
             return 0;
         }
     }

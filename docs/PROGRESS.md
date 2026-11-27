@@ -6,9 +6,9 @@ Cập nhật lần cuối: **2026-11-27**
 
 | Milestone | Mô tả | Trạng thái | Ghi chú |
 |---|---|---|---|
-| **M0** | Project Foundation | **DONE** | Đã configure, build, chạy CTest & smoke test thực tế trên Intel UHD Graphics (OpenGL 3.3 Core) |
-| **M1** | Core Graphics Engine | TODO | Chờ xác nhận cổng M0 |
-| **M2** | Procedural Geometry & Modeling | TODO | Chưa bắt đầu |
+| **M0** | Project Foundation | **VERIFIED** | 7/7 test tự động PASS (regression vẫn PASS trong M1); `TC-M0-MANUAL` giữ `NOT VERIFIED` |
+| **M1** | Core Graphics Engine | **VERIFIED** | 16/16 test tự động PASS (`3/3 CTest`); `TC-M1-MANUAL` giữ `NOT VERIFIED` chờ người dùng xác nhận |
+| **M2** | Procedural Geometry & Modeling | TODO | Chờ xác nhận cổng M1 |
 | **M3** | Blender Asset Pipeline | TODO | Chưa bắt đầu |
 | **M4** | Scene Management & Room Editor | TODO | Chưa bắt đầu |
 | **M5** | Camera, Transformation & Object Picking | TODO | Chưa bắt đầu |
@@ -17,17 +17,23 @@ Cập nhật lần cuối: **2026-11-27**
 | **M8** | Collision Detection & Project Persistence | TODO | Chưa bắt đầu |
 | **M9** | Testing, Optimization & Release | TODO | Chưa bắt đầu |
 
-## Chi tiết công việc Milestone M0 — Project Foundation
+## Chi tiết công việc Milestone M1 — Core Graphics Engine
 
-| Task ID | Công việc | Trạng thái | Bằng chứng / Ghi chú |
+| Task ID | Nội dung | Trạng thái | Bằng chứng / Ghi chú |
 |---|---|---|---|
-| **M0-T01** | Kiểm tra compiler C++ | DONE | Phát hiện ban đầu chỉ có MinGW 32-bit GCC 6.3.0 (không đạt x64/C++17) và chưa có MSVC; đã cài WinLibs MinGW-w64 x64 UCRT (`GCC 16.2.0`) |
-| **M0-T02** | Thiết lập CMake và quản lý dependency | DONE | Tạo `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json` khóa baseline/commit SHA; configure thành công bằng CMake `4.4.4` + Ninja `1.13.2` |
-| **M0-T03** | Khởi tạo Git repository | DONE | Đã chạy `git init` tại `d:\CG`, tạo `.gitignore`, `LICENSE`, `AGENTS.md` |
-| **M0-T04** | Tích hợp FreeGLUT | DONE | FreeGLUT `v3.8.0` biên dịch tĩnh thành công, mở cửa sổ `1280x720` |
-| **M0-T05** | Khởi tạo OpenGL 3.3 Core Context | DONE | Xác nhận runtime `OpenGL 3.3.0` (`Core Profile`), `GLSL 3.30` trên `Intel(R) UHD Graphics` |
-| **M0-T06** | Tích hợp GLAD | DONE | Sinh GLAD `v0.1.36` cho `gl=3.3` `core` và nạp thành công qua `gladLoadGL()` |
-| **M0-T07** | Render tam giác đầu tiên | DONE | Shader `basic.vert`/`basic.frag` compile & link thành công; xác minh pixel tâm tam giác `RGB=(140,147,160)` bằng `glReadPixels`, không lỗi OpenGL |
-| **M0-T08** | Kiểm tra resize và đóng cửa sổ | DONE | Xác nhận callback reshape về `960x540`, `glutCloseFunc` giải phóng VAO/VBO/Shader & ImGui trước khi thoát với exit code `0` |
-| **M0-T09** | Kiểm tra tích hợp Dear ImGui | DONE | `imgui_impl_glut` + `imgui_impl_opengl3` (`#version 330 core`) khởi tạo và render khung hình không lỗi trên OpenGL 3.3 Core |
-| **M0-T10** | Tạo tài liệu project và build guide | DONE | Hoàn thiện `README.md`, `AGENTS.md`, `CHANGELOG.md` và toàn bộ 10 tài liệu trong `docs/` |
+| **M1-T01** | Review mã nguồn M0 & chạy regression | DONE | `git status` sạch; `M0_SmokeTest` PASS trước và sau M1 |
+| **M1-T02** | Tích hợp GLM | DONE | Khóa `GLM 1.0.1` (`0af55ccecd98d4e5a8d1fad7de25ba429d60e863`) trong `CMakeLists.txt` và bổ sung `glm` vào `vcpkg.json` |
+| **M1-T03** | Tách `Window` khỏi `Application` | DONE | `Window.hpp/cpp` quản lý FreeGLUT, OpenGL 3.3 Core Context, GLAD và callback sự kiện |
+| **M1-T04** | Xây dựng `Shader` class | DONE | `Shader.hpp/cpp` (RAII, move-only, load file/source, log lỗi, cache uniform) |
+| **M1-T05** | Xây dựng `Vertex` struct | DONE | `Vertex.hpp` (`position`, `normal`, `texCoord`, kiểm tra `standard_layout`) |
+| **M1-T06** | Xây dựng `Mesh` class | DONE | `Mesh.hpp/cpp` + `MeshValidation.cpp` (VAO/VBO/EBO, `offsetof`/`sizeof`, kiểm tra biên chỉ mục) |
+| **M1-T07** | Xây dựng `Transform` | DONE | `Transform.hpp/cpp` (`M = T * Ry * Rx * Rz * S`, Y-up, mét, 10 unit test PASS) |
+| **M1-T08** | Xây dựng `Camera` | DONE | `Camera.hpp/cpp` (View/Perspective/Orthographic, validation input lỗi, 7 unit test PASS) |
+| **M1-T09** | Xây dựng `Renderer` | DONE | `Renderer.hpp/cpp` (`beginFrame`/`drawMesh`/`drawLines`/`endFrame` + `RenderStats` thực tế) |
+| **M1-T10** | Render cube thử nghiệm | DONE | 3 cube khác vị trí/xoay/scale/màu dùng chung 1 Indexed Cube Mesh, đã xác minh pixel 3 màu trong FBO |
+| **M1-T11** | Depth Testing | DONE | Chứng minh tự động trên cả 2 thứ tự draw (Xa→Gần & Gần→Xa) và đối chứng khi tắt Depth Test (`TC-M1-11`) |
+| **M1-T12** | Framebuffer | DONE | `Framebuffer.hpp/cpp` (`RGBA8` + `DEPTH24_STENCIL8`), completeness + resize + `0x0` safety + ImGui UV flip |
+| **M1-T13** | Grid và XYZ Axis | DONE | `grid.vert/frag` + VAO/VBO/EBO `GL_LINES` (không dùng immediate mode) |
+| **M1-T14** | Diagnostics UI | DONE | Mở rộng bảng Diagnostics với FPS, frame time, draw calls, vertex/index count, Depth/Grid toggles, Camera & Transform controls |
+| **M1-T15** | Unit Test & Smoke Test | DONE | `3/3 CTest` PASS (`M0_SmokeTest`, `M1_UnitTests`, `M1_IntegrationSmokeTest`) |
+| **M1-T16** | Documentation | DONE | Cập nhật toàn bộ tài liệu `README.md`, `docs/*`, `CHANGELOG.md` kèm sơ đồ Mermaid |

@@ -2,15 +2,19 @@
 
 Cập nhật lần cuối: **2026-11-27**
 
-## 1. Giới hạn về môi trường phát triển tại Milestone M0
+## 1. Giới hạn về môi trường & build
 
 | ID | Mức độ | Mô tả | Trạng thái / Hướng xử lý |
 |---|---|---|---|
-| **KI-M0-01** | Trung bình | Máy phát triển hiện chưa cài **Visual Studio 2022 / MSVC Build Tools** và **vcpkg** (và phiên làm việc không có quyền Administrator để cài MSVC tự động). Do đó preset `msvc-x64-vcpkg-debug` đã được cấu hình sẵn nhưng chưa kiểm chứng build thực tế (`NOT RUN`). | Đã cài **WinLibs MinGW-w64 x64 UCRT (`GCC 16.2.0`, `CMake 4.4.4`, `Ninja 1.13.2`)** ở phạm vi user-space và kiểm chứng đầy đủ build/runtime Windows x64. Khi cài xong MSVC + vcpkg có thể chuyển sang preset MSVC ngay. |
-| **KI-M0-02** | Thấp | Trong System PATH của máy vẫn tồn tại `C:\MinGW\bin` (MinGW.org 32-bit GCC 6.3.0 cũ từ năm 2016). | Đã khóa compiler trong `CMakePresets.json` (`x86_64-w64-mingw32-gcc`/`g++`) để tránh CMake nhận nhầm GCC 32-bit cũ. Người dùng vẫn cần đảm bảo `mingw64\bin` của WinLibs có trong PATH khi chạy `cmake`/`ninja` (xem `docs/BUILD_GUIDE.md`). |
-| **KI-M0-03** | Thấp | Ở chế độ standalone (`ROOMCRAFT_USE_VCPKG=OFF`), lần `cmake --preset` đầu tiên cần kết nối Internet và Python 3 để tải FreeGLUT, GLAD, Dear ImGui và đặc tả `gl.xml` cho GLAD. | Sau lần configure đầu tiên, mã nguồn đã được cache cục bộ trong `build/<preset>/_deps` và `generated/glad`. |
+| **KI-M0-01** | Trung bình | Máy phát triển chưa cài **Visual Studio 2022 / MSVC Build Tools** và **vcpkg**; preset `msvc-x64-vcpkg-debug` chưa được kiểm chứng thực tế (`NOT RUN`). | Môi trường chính đã thống nhất sử dụng **WinLibs MinGW-w64 x64 UCRT (`GCC 16.2.0`) + CMake FetchContent khóa commit + Ninja**; giữ `vcpkg.json` (đã thêm `glm`) làm phương án thay thế. |
+| **KI-M0-02** | Thấp | Trong System PATH của máy vẫn còn `C:\MinGW\bin` (32-bit GCC 6.3.0 cũ). | Preset `mingw-x64-debug` khóa `x86_64-w64-mingw32-gcc/g++`; cần đưa WinLibs `mingw64\bin` lên đầu PATH khi chạy `cmake`/`ninja`. |
+| **KI-M1-01** | Thấp | Khi CMake `4.4.4` cấu hình `GLM 1.0.1` qua FetchContent, CMake phát sinh cảnh báo deprecation từ file `CMakeLists.txt` nội bộ của GLM (`cmake_minimum_required < 3.10`). | Cảnh báo đến từ mã nguồn upstream GLM `1.0.1`, không ảnh hưởng tới build hoặc runtime; mã nguồn project đạt `0` warnings dưới `-Wall -Wextra -Wpedantic`. |
 
-## 2. Giới hạn theo phạm vi Milestone M0
+## 2. Giới hạn theo phạm vi Milestone M1
 
-- **KI-M0-04 (Thông tin)**: Ứng dụng mới dừng ở nền tảng M0 (vẽ tam giác kiểm chứng + cửa sổ chẩn đoán Dear ImGui). Chưa triển khai Camera 3D, ma trận MVP, Mesh/Shader abstraction, Procedural Modeling, Assimp, Lighting, Collision hay Save/Load (đúng phạm vi yêu cầu M0).
-- **KI-M0-05 (Thông tin)**: Kiểm thử hiện tại xác nhận tự động qua `ctest` / `--smoke-test` (gồm cả `glReadPixels` xác minh pixel tam giác và kiểm thử resize `960x540`), nhưng tương tác kéo chuột trực quan của người dùng trên cửa sổ ImGui vẫn nên được xác nhận thủ công bằng cách chạy `.\build\mingw-x64-debug\RoomCraft3D.exe`.
+| ID | Mức độ | Mô tả | Hướng xử lý dự kiến |
+|---|---|---|---|
+| **KI-M1-02** | Thông tin | `TC-M0-MANUAL` và `TC-M1-MANUAL` (kiểm thử tương tác GUI trực quan bằng chuột/bàn phím trên cửa sổ thật) đang ở trạng thái `NOT VERIFIED`. | Người dùng chạy `.\build\mingw-x64-debug\RoomCraft3D.exe` và xác nhận checklist kiểm thử thủ công trước khi chốt M1. |
+| **KI-M1-03** | Thông tin | Camera trong M1 chỉ cung cấp các góc nhìn preset (`Default 3D`, `Top Ortho`, `Front Ortho`, `Reset`) và chỉnh `FOV`/`Ortho Size` trong Diagnostics; chưa có tương tác Orbit/Pan/Zoom bằng chuột hay Object Picking. | Thuộc phạm vi **Milestone M5**. |
+| **KI-M1-04** | Thông tin | `mesh.frag` mới dùng màu cơ bản `uColor` kết hợp hệ số tương phản hướng mặt `uFaceContrast` để dễ nhìn hình khối 3D; chưa triển khai chiếu sáng Phong/Blinn-Phong hay Texture Mapping. | Thuộc phạm vi **Milestone M7**. |
+| **KI-M1-05** | Thông tin | Hình lập phương và lưới trong `Mesh::build*Fixture` chỉ là dữ liệu kiểm thử tối thiểu cho M1, chưa phải hệ thống `PrimitiveGenerator` / Bézier / Surface of Revolution. | Thuộc phạm vi **Milestone M2**. |

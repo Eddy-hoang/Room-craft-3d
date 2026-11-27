@@ -4,6 +4,29 @@ Tất cả các thay đổi đáng chú ý của dự án được ghi nhận tr
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-28 (Milestone M4: Scene Management & Room Editor)
+### Added
+- Tạo thư viện tĩnh thuần CPU **`roomcraft_scene`** (KHÔNG phụ thuộc OpenGL/FreeGLUT/ImGui):
+  - `scene::ObjectId` (`ObjectId.hpp`): định danh `uint64_t` ổn định, tăng đơn điệu, không dùng vector index và không tái sử dụng ID đã xóa.
+  - `scene::SceneObject` (`SceneObject.hpp`): tách biệt instance trong phòng khỏi `GpuAsset` dùng chung; tính `getWorldBounds()` từ 8 góc AABB.
+  - `scene::RoomSettings` (`RoomSettings.hpp`) & `scene::Room` (`Room.hpp/cpp`): tự sinh sàn (`y = 0`), 4 bức tường dựng ngoài biên sử dụng không khe hở góc, trần tùy chọn và lưới sàn từ `PrimitiveGenerator`; transactional rebuild (đổi màu/visibility không rebuild mesh); 4 chế độ ẩn tường (`AllWalls`, `HideCeiling`, `CutawayView`, `Manual`).
+  - `scene::Scene` (`Scene.hpp/cpp`): quản lý `Room` và danh sách `SceneObject` (`addObject`, `removeObject`, `duplicateObject`, `findObject`, `renameObject`, `setObjectVisibility`, `setObjectTransform`, `clearObjects`, kiểm tra sơ bộ `isBoundsWithinRoom`).
+  - `systems::SelectionState` (`SelectionState.hpp`) & `systems::PlacementSystem` (`PlacementSystem.hpp/cpp`): quản lý đối tượng đang chọn theo `ObjectId`, đặt nội thất vào phòng và hỗ trợ Grid Snapping (`snapToGrid`).
+  - `scene::ScenePresets` (`ScenePresets.hpp/cpp`): 3 căn phòng mẫu (`Modern Bedroom 5×6×3m`, `Gaming Workspace 4×5×3m`, `Minimalist Living Room 6×7×3m`) dựng từ 14 asset hiện có + bộ dựng cảnh benchmark 10 / 30 / 100 vật thể.
+- Mở rộng tầng GPU & giao diện (`roomcraft_engine`):
+  - `graphics::SceneRenderer` (`SceneRenderer.hpp/cpp`): đồng bộ lưới phòng theo `geometryRevision`, render nhiều đối tượng dùng chung `GpuAsset` từ `AssetManager` theo `M_world_part = M_object * M_asset_part`, thống kê tách biệt Unique GPU vs Submitted/Frame.
+  - `editor::RoomEditor` (`RoomEditor.hpp/cpp`): giao diện Room Editor hoàn chỉnh (Toolbar, Furniture Library, Scene Hierarchy, 3D Room Viewport, Properties Inspector, Room Settings, Status Bar, hộp thoại xác nhận khi đổi preset).
+  - Nâng cấp `Application` & `main.cpp` hỗ trợ chế độ mặc định **M4 Room Editor** (giữ nguyên M3/M2/M1), `--m4-smoke-test` và `--m4-benchmark`.
+- Bổ sung bộ CPU Unit Test `RoomCraft3D_SceneUnitTests` (`M4_SceneUnitTests`) và `M4_IntegrationSmokeTest` vào CTest.
+- Khóa bổ sung `URL_HASH SHA256` cho archive FetchContent của Assimp `v6.0.6` và `stb` trong `CMakeLists.txt`, đồng thời sửa chính xác commit SHA của tag Assimp `v6.0.6` (`a79ff6bbce54d3e01186a918dc6374ed55317426`) và thống kê `11` texture PNG trong tài liệu.
+- Tạo mới [`docs/SCENE_MANAGEMENT.md`](docs/SCENE_MANAGEMENT.md), [`docs/ROOM_EDITOR_GUIDE.md`](docs/ROOM_EDITOR_GUIDE.md) và cập nhật toàn bộ tài liệu dự án.
+
+### Verified
+- Build Debug thành công (`0` errors, `0` project warnings dưới `-Wall -Wextra -Wpedantic`); `RoomCraft3D.exe` chỉ link 7 DLL hệ thống Windows.
+- Toàn bộ **`9/9` CTest suites đạt `PASS` trong `2.76s`** (`M0`–`M4`), `OpenGL errors: NONE`.
+- Benchmark thực tế `--m4-benchmark` (Debug, `1280×720`, Intel UHD Graphics, off-screen FBO + `glFinish()`): 10 objects `0.68 ms (1,470.8 FPS)`, 30 objects `1.50 ms (667.8 FPS)`, 100 objects `5.03 ms (198.7 FPS)` với chỉ `6` unique GPU assets được cache.
+- Kiểm thử tương tác GUI thủ công (`TC-M4-MANUAL` và các manual test M0–M3) giữ trạng thái `NOT VERIFIED` chờ người dùng xác nhận.
+
 ## [0.3.0] - 2026-11-27 (Milestone M3: Blender Asset Pipeline)
 ### Added
 - Tích hợp **Assimp `v6.0.6`** (static, chỉ bật OBJ importer, tắt exporters/tests/tools) và **`stb_image`** (`6b5799ba...`) qua CMake `FetchContent` khóa commit archive (kèm cập nhật `vcpkg.json` và tự động thiết lập `CMAKE_TLS_CAINFO` cho WinLibs CMake trên Windows).

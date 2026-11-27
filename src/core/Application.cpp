@@ -210,6 +210,28 @@ int Application::run()
         return passed ? 0 : 1;
     }
 
+    if (m_config.mode == ApplicationMode::SmokeTestM4) {
+        const auto& stats = m_renderer.getLastFrameStats();
+        std::cout << "[M4-SMOKE] Frames rendered       : " << m_frameCount << std::endl;
+        std::cout << "[M4-SMOKE] Last frame draw calls : " << stats.drawCalls
+                  << " (vertices=" << stats.vertexCount << ", indices=" << stats.indexCount
+                  << ", triangles=" << stats.triangleCount << ")" << std::endl;
+        std::cout << "[M4-SMOKE] Integration suite     : " << (m_m4SuitePassed ? "PASS" : "FAIL") << std::endl;
+        std::cout << "[M4-SMOKE] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
+
+        const bool passed = (m_frameCount >= m_config.smokeTestFrames) &&
+                            m_m4SuiteExecuted && m_m4SuitePassed && !m_glErrorDetected;
+        std::cout << "[M4-SMOKE] Final Result          : " << (passed ? "PASS" : "FAIL") << std::endl;
+        return passed ? 0 : 1;
+    }
+
+    if (m_config.mode == ApplicationMode::BenchmarkM4) {
+        std::cout << "[M4-BENCH] Benchmark suite       : " << (m_m4BenchmarkPassed ? "PASS" : "FAIL") << std::endl;
+        std::cout << "[M4-BENCH] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
+        const bool passed = m_m4BenchmarkExecuted && m_m4BenchmarkPassed && !m_glErrorDetected;
+        return passed ? 0 : 1;
+    }
+
     return 0;
 }
 
@@ -351,8 +373,7 @@ bool Application::initEngineResources()
         if (!regenerateActivePlaygroundGeometry()) {
             return false;
         }
-    } else {
-        // Mặc định M3: khởi chạy chế độ Furniture Asset Browser & tải sẵn Modern Sofa + Camera Auto-Fit
+    } else if (m_config.mode == ApplicationMode::SmokeTestM3) {
         m_workspace = InteractiveWorkspace::AssetBrowserM3;
         m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
         m_camera.lookAt({2.6f, 1.8f, 2.8f}, {0.0f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f});
@@ -360,15 +381,24 @@ bool Application::initEngineResources()
                                 static_cast<float>(m_framebuffer.getHeight()));
         regenerateActivePlaygroundGeometry();
         if (!selectBrowserAsset("blender-modern-sofa", true)) {
-            // Nếu file OBJ chưa tồn tại, dự phòng sang Procedural Desk
             selectBrowserAsset("procedural-desk", true);
         }
+    } else {
+        // Mặc định M4: khởi chạy Room Editor với Modern Bedroom preset, đồng thời nạp sẵn M3/M2 để chuyển mượt
+        m_workspace = InteractiveWorkspace::RoomEditorM4;
+        m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
+                                static_cast<float>(m_framebuffer.getHeight()));
+        regenerateActivePlaygroundGeometry();
+        if (!selectBrowserAsset("blender-modern-sofa", false)) {
+            selectBrowserAsset("procedural-desk", false);
+        }
+        m_roomEditor.initialize(m_assetManager, m_camera);
     }
 
     m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
                             static_cast<float>(m_framebuffer.getHeight()));
 
-    std::cout << "[RoomCraft3D] M1/M2/M3 Engine & Asset Pipeline resources initialized." << std::endl;
+    std::cout << "[RoomCraft3D] M1/M2/M3/M4 Engine, Asset Pipeline & Room Editor resources initialized." << std::endl;
     return true;
 }
 
@@ -662,7 +692,8 @@ void Application::shutdownGraphics()
         m_imguiInitialized = false;
     }
 
-    // Giải phóng toàn bộ tài nguyên AssetManager (Meshes + Textures) TRƯỚC khi OpenGL context bị hủy
+    // Giải phóng toàn bộ tài nguyên RoomEditor, AssetManager (Meshes + Textures) TRƯỚC khi OpenGL context bị hủy
+    m_roomEditor.shutdownGpuResources();
     m_activeBrowserAsset.reset();
     m_assetManager.clear();
 
@@ -773,6 +804,22 @@ void Application::renderFrame()
         selectBrowserAsset("blender-modern-sofa", true);
     }
 
+    if (m_config.mode == ApplicationMode::SmokeTestM4 && !m_m4SuiteExecuted) {
+        m_m4SuiteExecuted = true;
+        m_m4SuitePassed = runM4IntegrationSuiteOnce();
+        m_workspace = InteractiveWorkspace::RoomEditorM4;
+        m_framebuffer.resize(800, 600);
+        m_camera.setAspectRatio(800.0f / 600.0f);
+        m_roomEditor.initialize(m_assetManager, m_camera);
+    }
+
+    if (m_config.mode == ApplicationMode::BenchmarkM4 && !m_m4BenchmarkExecuted) {
+        m_m4BenchmarkExecuted = true;
+        m_m4BenchmarkPassed = runM4BenchmarkSuiteOnce();
+        m_window.requestClose();
+        return;
+    }
+
     renderInteractiveFrame();
 
     if (m_config.mode == ApplicationMode::SmokeTestM1) {
@@ -785,7 +832,9 @@ void Application::renderFrame()
         }
     }
 
-    if (m_config.mode == ApplicationMode::SmokeTestM2 || m_config.mode == ApplicationMode::SmokeTestM3) {
+    if (m_config.mode == ApplicationMode::SmokeTestM2 ||
+        m_config.mode == ApplicationMode::SmokeTestM3 ||
+        m_config.mode == ApplicationMode::SmokeTestM4) {
         if (m_frameCount >= m_config.smokeTestFrames) {
             m_window.requestClose();
             return;
@@ -995,7 +1044,19 @@ void Application::renderPlaygroundSceneToFramebuffer(float faceContrast)
 
 void Application::renderInteractiveFrame()
 {
-    if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
+    if (m_workspace == InteractiveWorkspace::RoomEditorM4) {
+        m_roomEditor.renderSceneToFramebuffer(m_assetManager,
+                                              m_camera,
+                                              m_framebuffer,
+                                              m_renderer,
+                                              m_meshShader,
+                                              m_gridShader,
+                                              m_axisXMesh,
+                                              m_axisYMesh,
+                                              m_axisZMesh,
+                                              m_clearColor,
+                                              0.35f);
+    } else if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
         renderAssetBrowserSceneToFramebuffer(0.45f);
     } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2) {
         renderPlaygroundSceneToFramebuffer(0.45f);
@@ -1009,7 +1070,16 @@ void Application::renderInteractiveFrame()
 
     renderTopWorkspaceBar();
 
-    if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
+    if (m_workspace == InteractiveWorkspace::RoomEditorM4) {
+        m_roomEditor.renderUi(m_window.getWidth(),
+                              m_window.getHeight(),
+                              ImGui::GetFrameHeight(),
+                              m_assetManager,
+                              m_camera,
+                              m_framebuffer,
+                              m_currentFps,
+                              m_frameTimeMs);
+    } else if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
         renderAssetBrowserUi();
     } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2) {
         renderPlaygroundControlUi();
@@ -1043,13 +1113,18 @@ void Application::renderInteractiveFrame()
 void Application::renderTopWorkspaceBar()
 {
     if (ImGui::BeginMainMenuBar()) {
-        ImGui::TextUnformatted("RoomCraft 3D v0.3.0");
+        ImGui::TextUnformatted("RoomCraft 3D v0.4.0");
         ImGui::Separator();
 
+        const bool isM4 = (m_workspace == InteractiveWorkspace::RoomEditorM4);
         const bool isM3 = (m_workspace == InteractiveWorkspace::AssetBrowserM3);
         const bool isM2 = (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2);
         const bool isM1 = (m_workspace == InteractiveWorkspace::ReferenceSceneM1);
 
+        if (ImGui::MenuItem("Room Editor (M4)", nullptr, isM4)) {
+            m_workspace = InteractiveWorkspace::RoomEditorM4;
+            m_roomEditor.setPerspective3DCamera(m_camera);
+        }
         if (ImGui::MenuItem("Asset Browser (M3)", nullptr, isM3)) {
             m_workspace = InteractiveWorkspace::AssetBrowserM3;
             fitCameraToActiveModel();
@@ -2021,6 +2096,280 @@ bool Application::runM3IntegrationSuiteOnce()
 
     drainAndCheckOpenGlErrors();
     report("TC-M3-26/27", "GPU resource lifecycle & zero unexpected OpenGL errors", !m_glErrorDetected);
+    return allPassed;
+}
+
+bool Application::benchmarkSingleObjectCount(std::size_t objectCount, int warmupFrames, int measuredFrames)
+{
+    scene::Scene benchScene;
+    std::string err;
+    if (!scene::ScenePresets::buildBenchmarkScene(objectCount, benchScene, m_assetManager.getCatalog(), &err)) {
+        std::cerr << "[M4-BENCH][ERROR] Failed to build " << objectCount << "-object scene: " << err << std::endl;
+        return false;
+    }
+
+    graphics::Framebuffer fbo;
+    constexpr int kBenchW = 1280;
+    constexpr int kBenchH = 720;
+    if (!fbo.create(kBenchW, kBenchH) || !fbo.isComplete()) {
+        std::cerr << "[M4-BENCH][ERROR] Failed to create 1280x720 FBO." << std::endl;
+        return false;
+    }
+
+    graphics::Camera cam;
+    cam.setProjectionMode(graphics::ProjectionMode::Perspective);
+    cam.setAspectRatio(static_cast<float>(kBenchW) / static_cast<float>(kBenchH));
+    cam.lookAt({8.0f, 7.0f, 9.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+    cam.fitBoundingBox(benchScene.getRoom().getExteriorBounds(), 1.18f);
+
+    systems::SelectionState sel;
+    graphics::SceneRenderer sceneRenderer;
+    graphics::SceneRenderOptions opts;
+    opts.showSelectedBoundingBox = false;
+
+    const glm::vec4 clearCol(0.09f, 0.10f, 0.12f, 1.0f);
+    graphics::SceneRenderMetrics lastMetrics{};
+
+    // Warm-up: nạp toàn bộ GPU cache & shader state trước khi bấm giờ
+    for (int i = 0; i < warmupFrames; ++i) {
+        fbo.bind();
+        lastMetrics = sceneRenderer.renderScene(benchScene, m_assetManager, sel, cam, m_renderer,
+                                                m_meshShader, m_gridShader,
+                                                &m_axisXMesh, &m_axisYMesh, &m_axisZMesh,
+                                                kBenchW, kBenchH, clearCol, opts);
+        fbo.unbind();
+    }
+    glFinish();
+
+    // Đo thực tế trong measuredFrames (đồng bộ glFinish để bao gồm thời gian GPU thực thi FBO)
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < measuredFrames; ++i) {
+        fbo.bind();
+        lastMetrics = sceneRenderer.renderScene(benchScene, m_assetManager, sel, cam, m_renderer,
+                                                m_meshShader, m_gridShader,
+                                                &m_axisXMesh, &m_axisYMesh, &m_axisZMesh,
+                                                kBenchW, kBenchH, clearCol, opts);
+        fbo.unbind();
+    }
+    glFinish();
+    const auto t1 = std::chrono::steady_clock::now();
+
+    const double totalMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    const double avgFrameMs = totalMs / static_cast<double>(measuredFrames);
+    const double avgFps = (avgFrameMs > 1e-6) ? (1000.0 / avgFrameMs) : 0.0;
+
+    sceneRenderer.destroyGpuResources();
+    fbo.destroy();
+
+    const char* buildType =
+#ifdef NDEBUG
+        "Release";
+#else
+        "Debug";
+#endif
+
+    std::cout << "[M4-BENCH] Config=" << buildType
+              << " | GPU=" << m_window.getGpuInfo().renderer
+              << " | FBO=" << kBenchW << "x" << kBenchH
+              << " | VSync=N/A (Off-screen FBO + glFinish)"
+              << " | Warmup=" << warmupFrames
+              << " | Measured=" << measuredFrames << std::endl;
+    std::cout << "  Objects=" << lastMetrics.totalObjects
+              << " (Visible=" << lastMetrics.visibleObjects << ")"
+              << " | UniqueAssets=" << lastMetrics.uniqueAssetsUsed
+              << " (CacheAssets=" << m_assetManager.getCachedAssetCount()
+              << ", CacheTex=" << m_assetManager.getTextureManager().getCachedTextureCount() << ")" << std::endl;
+    std::cout << "  UniqueGPU(stored once): verts=" << lastMetrics.uniqueGpuVertices
+              << ", indices=" << lastMetrics.uniqueGpuIndices
+              << ", tris=" << lastMetrics.uniqueGpuTriangles << std::endl;
+    std::cout << "  Submitted/Frame       : drawCalls=" << lastMetrics.submittedDrawCalls
+              << " (room=" << lastMetrics.roomDrawCalls << ", objs=" << lastMetrics.objectDrawCalls << ")"
+              << ", verts=" << lastMetrics.submittedVertices
+              << ", indices=" << lastMetrics.submittedIndices
+              << ", tris=" << lastMetrics.submittedTriangles << std::endl;
+    std::cout << "  Timing                : avgFrameMs=" << avgFrameMs
+              << " ms | avgFPS=" << avgFps << std::endl;
+
+    return (lastMetrics.totalObjects == objectCount) &&
+           (lastMetrics.visibleObjects == objectCount) &&
+           (lastMetrics.submittedDrawCalls > objectCount) &&
+           (avgFrameMs > 0.0);
+}
+
+bool Application::runM4BenchmarkSuiteOnce()
+{
+    bool ok = true;
+    ok &= benchmarkSingleObjectCount(10, 5, 30);
+    ok &= benchmarkSingleObjectCount(30, 5, 30);
+    ok &= benchmarkSingleObjectCount(100, 5, 20);
+    drainAndCheckOpenGlErrors();
+    return ok && !m_glErrorDetected;
+}
+
+bool Application::runM4IntegrationSuiteOnce()
+{
+    bool allPassed = true;
+    const auto report = [&allPassed](const char* id, const char* desc, bool ok) {
+        std::cout << "[" << id << "] " << desc << ": " << (ok ? "PASS" : "FAIL") << std::endl;
+        if (!ok) allPassed = false;
+    };
+
+    graphics::Framebuffer fbo;
+    if (!fbo.create(640, 480) || !fbo.isComplete()) {
+        report("TC-M4-27", "Create 640x480 FBO for M4 integration suite", false);
+        return false;
+    }
+
+    graphics::SceneRenderer sceneRenderer;
+    scene::Scene testScene;
+    systems::SelectionState selection;
+    const auto& catalog = m_assetManager.getCatalog();
+
+    // Helper đọc pixel FBO và kiểm tra vùng ảnh phủ so với màu nền
+    const glm::vec4 clearCol(0.06f, 0.07f, 0.09f, 1.0f);
+    auto renderAndMeasureCoverage = [&](const graphics::Camera& cam,
+                                        const graphics::SceneRenderOptions& opts,
+                                        graphics::SceneRenderMetrics& outMetrics) -> int {
+        fbo.bind();
+        outMetrics = sceneRenderer.renderScene(testScene, m_assetManager, selection, cam, m_renderer,
+                                               m_meshShader, m_gridShader,
+                                               &m_axisXMesh, &m_axisYMesh, &m_axisZMesh,
+                                               fbo.getWidth(), fbo.getHeight(), clearCol, opts);
+        std::vector<unsigned char> pixels(static_cast<std::size_t>(fbo.getWidth() * fbo.getHeight() * 4), 0);
+        glReadPixels(0, 0, fbo.getWidth(), fbo.getHeight(), GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        fbo.unbind();
+
+        const int bgR = static_cast<int>(clearCol.r * 255.0f);
+        const int bgG = static_cast<int>(clearCol.g * 255.0f);
+        const int bgB = static_cast<int>(clearCol.b * 255.0f);
+        int covered = 0;
+        for (int i = 0; i < fbo.getWidth() * fbo.getHeight(); ++i) {
+            const std::size_t idx = static_cast<std::size_t>(i * 4);
+            const int d = std::abs(static_cast<int>(pixels[idx]) - bgR) +
+                          std::abs(static_cast<int>(pixels[idx + 1]) - bgG) +
+                          std::abs(static_cast<int>(pixels[idx + 2]) - bgB);
+            if (d > 18) ++covered;
+        }
+        return covered;
+    };
+
+    graphics::Camera cam;
+    cam.setProjectionMode(graphics::ProjectionMode::Perspective);
+    cam.setAspectRatio(640.0f / 480.0f);
+    cam.lookAt({5.5f, 4.8f, 6.2f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+    cam.fitBoundingBox(testScene.getRoom().getExteriorBounds(), 1.20f);
+
+    // TC-M4-21/22/23: Shared GPU asset reuse + Multi-object rendering + Parent*SubMesh transforms
+    const auto deskId = testScene.addObject("procedural-desk", "Desk 1",
+                                            scene::Transform({-1.0f, 0.0f, -1.0f}), catalog);
+    const auto chair1 = testScene.addObject("blender-gaming-chair", "Chair 1",
+                                            scene::Transform({0.0f, 0.0f, 0.0f}), catalog);
+    const auto chair2 = testScene.duplicateObject(chair1, glm::vec3(1.2f, 0.0f, 0.0f));
+    const auto chair3 = testScene.duplicateObject(chair1, glm::vec3(-1.2f, 0.0f, 1.0f));
+    const auto compId = testScene.addObject("blender-computer-setup", "PC On Desk",
+                                            scene::Transform({-1.0f, 0.75f, -1.0f}), catalog);
+    selection.selectObject(chair2);
+
+    auto chairGpu1 = m_assetManager.getOrLoadAsset("blender-gaming-chair");
+    const std::size_t cacheBefore = m_assetManager.getCachedAssetCount();
+
+    graphics::SceneRenderMetrics m1{};
+    graphics::SceneRenderOptions opts;
+    const int covered1 = renderAndMeasureCoverage(cam, opts, m1);
+
+    auto chairGpu2 = m_assetManager.getOrLoadAsset("blender-gaming-chair");
+    const bool sharedReuseOk = chairGpu1 && chairGpu2 && (chairGpu1.get() == chairGpu2.get()) &&
+                               (m1.totalObjects == 5) && (m1.visibleObjects == 5) &&
+                               (m1.uniqueAssetsUsed == 3) &&
+                               (m_assetManager.getCachedAssetCount() >= cacheBefore);
+    report("TC-M4-21", "Shared GPU asset reuse across 3 gaming chairs + desk + computer", sharedReuseOk);
+
+    const bool multiRenderOk = (covered1 > 5000) && (m1.roomDrawCalls == 3) && (m1.objectDrawCalls > 50);
+    report("TC-M4-22/23", "Multi-object rendering & parent*submesh transforms in FBO", multiRenderOk);
+
+    // Kiểm tra Hide/Show, Delete object đang chọn, Reload Asset vẫn render an toàn
+    testScene.setObjectVisibility(chair3, false);
+    graphics::SceneRenderMetrics mHidden{};
+    renderAndMeasureCoverage(cam, opts, mHidden);
+    const bool hideOk = (mHidden.visibleObjects == 4) && (mHidden.objectDrawCalls < m1.objectDrawCalls);
+
+    testScene.removeObject(chair2);
+    selection.reconcileWithScene(testScene);
+    const bool deleteSelectedOk = !selection.hasSelection() && (testScene.getObjectCount() == 4);
+
+    std::string reloadErr;
+    const bool reloadOk = m_assetManager.reloadAsset("blender-gaming-chair", &reloadErr);
+    graphics::SceneRenderMetrics mAfterReload{};
+    const int coveredAfterReload = renderAndMeasureCoverage(cam, opts, mAfterReload);
+    const bool safeAfterReload = reloadOk && (coveredAfterReload > 4000) && (mAfterReload.visibleObjects == 3);
+    report("TC-M4-15/20", "Hide/Show, safe delete of selected object & post-reload rendering",
+           hideOk && deleteSelectedOk && safeAfterReload);
+
+    // TC-M4-06 & TC-M4-25: Room resize + Camera Fit Room
+    scene::RoomSettings resized = testScene.getRoom().getSettings();
+    resized.width = 8.0f;
+    resized.length = 9.0f;
+    resized.height = 3.5f;
+    const bool resizeApplied = testScene.getRoom().applySettings(resized);
+    const bool fitOk = cam.fitBoundingBox(testScene.getRoom().getExteriorBounds(), 1.20f);
+    graphics::SceneRenderMetrics mResized{};
+    const int coveredResized = renderAndMeasureCoverage(cam, opts, mResized);
+    report("TC-M4-06/25", "Room resize GPU sync & Camera Fit Room", resizeApplied && fitOk && coveredResized > 5000);
+
+    // TC-M4-24: Kiểm tra cả 3 Scene Presets render thực tế vào FBO
+    bool presetsOk = true;
+    const scene::ScenePresetType presetList[] = {
+        scene::ScenePresetType::ModernBedroom,
+        scene::ScenePresetType::GamingWorkspace,
+        scene::ScenePresetType::MinimalistLivingRoom
+    };
+    for (auto p : presetList) {
+        std::string pErr;
+        const bool applied = scene::ScenePresets::applyPreset(p, testScene, catalog, &pErr);
+        cam.fitBoundingBox(testScene.getRoom().getExteriorBounds(), 1.20f);
+        graphics::SceneRenderMetrics mp{};
+        const int cov = renderAndMeasureCoverage(cam, opts, mp);
+        const bool oneOk = applied && (mp.totalObjects >= 7) && (cov > 5000);
+        std::cout << "  [M4-Preset] " << scene::scenePresetTypeToString(p)
+                  << " | objs=" << mp.totalObjects
+                  << " | uniqueAssets=" << mp.uniqueAssetsUsed
+                  << " | draws=" << mp.submittedDrawCalls
+                  << " | tris=" << mp.submittedTriangles
+                  << " | coveredPx=" << cov
+                  << " -> " << (oneOk ? "PASS" : "FAIL") << std::endl;
+        presetsOk &= oneOk;
+    }
+    report("TC-M4-24", "All 3 Scene Presets (Bedroom, Gaming, Living) loaded & rendered in FBO", presetsOk);
+
+    // TC-M4-27: Framebuffer resize
+    const bool fboResizeOk = fbo.resize(960, 540) && fbo.isComplete() &&
+                             (fbo.getWidth() == 960) && (fbo.getHeight() == 540);
+    cam.setAspectRatio(960.0f / 540.0f);
+    graphics::SceneRenderMetrics mFbo{};
+    const int covResize = renderAndMeasureCoverage(cam, opts, mFbo);
+    report("TC-M4-27", "Framebuffer resize to 960x540 & re-render", fboResizeOk && covResize > 5000);
+
+    // TC-M4-26: Clear Scene & resource lifecycle
+    testScene.clearObjects();
+    selection.reconcileWithScene(testScene);
+    graphics::SceneRenderMetrics mCleared{};
+    renderAndMeasureCoverage(cam, opts, mCleared);
+    const bool clearOk = (testScene.getObjectCount() == 0) && (mCleared.objectDrawCalls == 0) &&
+                         (mCleared.roomDrawCalls == 3);
+    report("TC-M4-26", "Clear Scene empties furniture draw calls & preserves clean lifecycle", clearOk);
+
+    sceneRenderer.destroyGpuResources();
+    fbo.destroy();
+
+    // TC-M4-28: Chạy thực tế benchmark 30 vật thể (execution verification)
+    const bool bench30Ok = benchmarkSingleObjectCount(30, 3, 15);
+    report("TC-M4-28", "30-object performance benchmark execution at 1280x720", bench30Ok);
+
+    drainAndCheckOpenGlErrors();
+    report("TC-M4-29", "Zero unexpected OpenGL errors during M4 suite", !m_glErrorDetected);
+
+    (void)deskId;
+    (void)compId;
     return allPassed;
 }
 

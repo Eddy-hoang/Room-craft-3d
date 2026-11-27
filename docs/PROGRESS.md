@@ -1,6 +1,6 @@
 # Theo dõi tiến độ dự án — RoomCraft 3D (Progress)
 
-Cập nhật lần cuối: **2026-11-27**
+Cập nhật lần cuối: **2026-11-28**
 
 ## Tổng quan các Milestone
 
@@ -8,10 +8,10 @@ Cập nhật lần cuối: **2026-11-27**
 |---|---|---|---|
 | **M0** | Project Foundation | **VERIFIED** | 7/7 tự động PASS; `TC-M0-MANUAL` giữ `NOT VERIFIED` |
 | **M1** | Core Graphics Engine | **VERIFIED** | 16/16 tự động PASS; `TC-M1-MANUAL` giữ `NOT VERIFIED` |
-| **M2** | Procedural Geometry & Modeling | **VERIFIED** | 23/23 tự động PASS (`5/5 CTest`); `TC-M2-MANUAL` giữ `NOT VERIFIED` |
-| **M3** | Blender Asset Pipeline | **VERIFIED** | 27/27 tự động PASS (`7/7 CTest`, `1.45s`); `TC-M3-MANUAL` giữ `NOT VERIFIED` chờ người dùng xác nhận |
-| **M4** | Scene Management & Room Editor | TODO | Chờ xác nhận cổng M3 |
-| **M5** | Camera, Transformation & Object Picking | TODO | Chưa bắt đầu |
+| **M2** | Procedural Geometry & Modeling | **VERIFIED** | 23/23 tự động PASS; `TC-M2-MANUAL` giữ `NOT VERIFIED` |
+| **M3** | Blender Asset Pipeline | **VERIFIED** | 27/27 tự động PASS; đã đối chiếu 11 PNG & SHA256; `TC-M3-MANUAL` giữ `NOT VERIFIED` |
+| **M4** | Scene Management & Room Editor | **VERIFIED** | 29/29 tự động PASS (`9/9 CTest`, `2.76s`); benchmark 10/30/100 vật thể hoàn tất; `TC-M4-MANUAL` giữ `NOT VERIFIED` |
+| **M5** | Camera, Transformation & Object Picking | TODO | Chờ xác nhận cổng M4 |
 | **M6** | Professional Editor UI/UX | TODO | Chưa bắt đầu |
 | **M7** | Lighting, Materials & Visual Quality | TODO | Chưa bắt đầu |
 | **M8** | Collision Detection & Project Persistence | TODO | Chưa bắt đầu |
@@ -19,36 +19,29 @@ Cập nhật lần cuối: **2026-11-27**
 
 ---
 
-## Chi tiết công việc Milestone M3 — Blender Asset Pipeline
+## Chi tiết công việc Milestone M4 — Scene Management & Room Editor
 
 | Task ID | Công việc | Ưu tiên | Trạng thái | Bằng chứng / Ghi chú |
 |---|---|---|---|---|
-| **M3-T01** | Audit repo và regression M0/M1/M2 | P0 | DONE | Toàn bộ `5/5` bộ test M0–M2 PASS trước và sau M3 |
-| **M3-T02** | Cài đặt & tích hợp Assimp (`v6.0.6`) | P0 | DONE | CMake FetchContent release archive khóa commit `a79ff6bb...`, static OBJ-only; cập nhật `vcpkg.json` |
-| **M3-T03** | Cài đặt & tích hợp `stb_image` | P0 | DONE | CMake FetchContent commit `6b5799ba...`, biên dịch implementation trong `Texture.cpp` |
-| **M3-T04** | Thiết kế `AssetData` (Unified CPU representation) | P0 | DONE | `AssetData.hpp` tách CPU trong `roomcraft_assets` (SubMeshData, MaterialData, BoundingBox) |
-| **M3-T05** | `ModelLoader` (Assimp OBJ + MTL) | P0 | DONE | `ModelLoader.hpp/cpp`: node recursion, normal inverse-transpose baking, relative texture paths |
-| **M3-T06** | `AssetNormalizer` (Unit scale & Bottom-center pivot) | P0 | DONE | `AssetNormalizer.hpp/cpp`: scale đơn vị + `min.y = 0`, tâm XZ = `0`, cập nhật AABB |
-| **M3-T07** | `Texture` & `TextureManager` (GPU + Cache + Fallback) | P0 | DONE | `Texture.hpp/cpp`, `TextureManager.hpp/cpp`: flip-Y, mipmap, RAII move-only, fallback checkerboard tím-đen |
-| **M3-T08** | `Material` & Shader hỗ trợ Diffuse Texture | P0 | DONE | `Material.hpp`, `mesh.frag` (`uDiffuseMap`, `uHasTexture`), `Renderer::drawMeshTextured()` |
-| **M3-T09** | `FurnitureCatalog` (Unified Procedural + Blender) | P0 | DONE | `FurnitureCatalog.hpp/cpp`: 14 mục (6 `procedural-*` + 8 `blender-*`) với stable ID & metadata |
-| **M3-T10** | `AssetManager` (Cache + Transactional Reload) | P0 | DONE | `AssetManager.hpp/cpp`: load theo ID, tái sử dụng GPU handle, swap an toàn khi reload |
-| **M3-T11** | Camera Auto-Fit (`fitBoundingBox`) | P0 | DONE | `Camera::fitBoundingBox()` cho cả Perspective & Orthographic + nút `Fit Model` |
-| **M3-T12** | Môi trường Blender 5.2.3 LTS & Script `bpy` | P0 | DONE | Giải nén portable `Blender 5.2.3 LTS` từ `.msi`, tạo 10 script `blender/scripts/*.py` |
-| **M3-T13** | Tạo & xuất 8 Blender furniture assets | P0 | DONE | 8 `.blend` (`blender/source/`) + 8 `.obj`/`.mtl` + 11 `.png` (`assets/models/`), 100% dưới budget tam giác |
-| **M3-T14** | Furniture Asset Browser UI (3-panel Dear ImGui) | P0 | DONE | `Asset Library` (search/filter), `3D Asset Preview` (`Fit Model`), `Asset Inspector` (`Reload Asset`, stats, overlays) |
-| **M3-T15** | Chuyển đổi chế độ M3 / M2 / M1 | P0 | DONE | Menu chuyển chế độ bảo toàn đầy đủ M2 Geometry Playground và M1 Reference Scene |
-| **M3-T16** | Unit Tests thuần CPU (`M3_AssetUnitTests`) | P0 | DONE | `AssetTestMain.cpp`, `ModelLoaderTests.cpp`, `AssetNormalizerTests.cpp`, `AssetCatalogTests.cpp` (18/18 checks PASS) |
-| **M3-T17** | GPU Integration Smoke Test (`M3_IntegrationSmokeTest`) | P0 | DONE | `--m3-smoke-test` kiểm chứng UV orientation, fallback, multi-material, cache, reload, render 14/14 asset, `GL_NO_ERROR` |
-| **M3-T18** | Thumbnail Preview (ảnh thu nhỏ pre-rendered) | P1 | TODO | Tùy chọn nâng cao; hiện Asset Library dùng danh sách/thẻ có nhãn nguồn rõ ràng |
-| **M3-T19** | Hỗ trợ định dạng glTF 2.0 / `.glb` | P2 | TODO | Tùy chọn mở rộng; M3 khóa OBJ/MTL để giữ build Assimp gọn nhẹ |
-| **M3-T20** | Tài liệu Asset Pipeline & Blender Guide | P0 | DONE | Tạo mới `docs/ASSET_PIPELINE.md`, `docs/BLENDER_GUIDE.md`, `blender/README.md` |
-| **M3-T21** | Cập nhật toàn bộ tài liệu dự án & Changelog | P0 | DONE | Cập nhật `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `GRAPHICS_THEORY.md`, `PROGRESS.md`, `TEST_PLAN.md`, `TEST_RESULTS.md`, `KNOWN_ISSUES.md`, `BUILD_GUIDE.md`, `ASSET_LICENSES.md`, `CHANGELOG.md` |
-
----
-
-## Tóm tắt Milestone đã hoàn thành trước đó (M0–M2)
-
-- **M0 (Project Foundation)**: `M0_SmokeTest` (7/7 PASS); `TC-M0-MSVC` (`NOT RUN`), `TC-M0-MANUAL` (`NOT VERIFIED`).
-- **M1 (Core Graphics Engine)**: `M1_UnitTests` (23/23 assertions PASS) + `M1_IntegrationSmokeTest` (10/10 GPU checks PASS); `TC-M1-MANUAL` (`NOT VERIFIED`).
-- **M2 (Procedural Geometry & Modeling)**: `M2_GeometryUnitTests` (18/18 checks PASS) + `M2_IntegrationSmokeTest` (`TC-M2-19..23` PASS); `TC-M2-MANUAL` (`NOT VERIFIED`).
+| **M4-T01** | Audit M3 & regression tests | P0 | DONE | Xác minh 11 PNG, sửa Assimp `v6.0.6` commit SHA, khóa `URL_HASH SHA256` trong `CMakeLists.txt`, chạy lại `7/7` CTest PASS |
+| **M4-T02** | Thiết kế `SceneObject` | P0 | DONE | `SceneObject.hpp`: `id`, `name`, `assetId`, `transform`, `visible`, `locked`, `getWorldBounds()` — tách khỏi GPU handle |
+| **M4-T03** | Stable Object ID | P0 | DONE | `ObjectId.hpp`: `uint64_t` tăng đơn điệu, không dùng vector index, không tái sử dụng ID đã xóa |
+| **M4-T04** | Xây dựng `Scene` class | P0 | DONE | `Scene.hpp/cpp`: `addObject`, `removeObject`, `duplicateObject`, `findObject`, `renameObject`, `setObjectVisibility`, `setObjectTransform`, `clearObjects` |
+| **M4-T05** | Xây dựng `RoomSettings` | P0 | DONE | `RoomSettings.hpp`: 5×6×3m mặc định, giới hạn 2–20m / 2–6m / 0.05–0.50m, validation đầy đủ, `geometryEquals()` |
+| **M4-T06** | Sinh sàn và tường theo tham số | P0 | DONE | `Room.hpp/cpp`: tái sử dụng `PrimitiveGenerator::createCuboid`, sàn `y = 0`, 4 tường ngoài biên không hở góc, trần & lưới sàn |
+| **M4-T07** | Room resize | P0 | DONE | `Room::applySettings()` transactional rebuild; đổi màu/visibility không rebuild mesh; giữ nguyên transform nội thất |
+| **M4-T08** | Wall Visibility System | P0 | DONE | 4 chế độ (`AllWalls`, `HideCeiling`, `CutawayView`, `Manual`) bật/tắt từng tường & trần, không đổi interior bounds |
+| **M4-T09** | Furniture Placement | P0 | DONE | `PlacementSystem.hpp/cpp`: đặt 14 asset vào phòng, offset lệch sơ bộ, hỗ trợ chỉnh `Position Y` lên mặt bàn |
+| **M4-T10** | Multi-object rendering | P0 | DONE | `SceneRenderer.hpp/cpp`: render phòng + nhiều `SceneObject` + Grid/Axes + Selected BBox vào FBO |
+| **M4-T11** | Shared GPU asset resources | P0 | DONE | Dùng chung `std::shared_ptr<GpuAsset>` từ `AssetManager`; an toàn khi xóa, nhân bản, clear scene & reload asset |
+| **M4-T12** | Scene Hierarchy | P0 | DONE | Hiển thị Room Structure & Furniture Objects với Stable `ObjectId` làm ImGui ID, Select/Visibility/Duplicate/Delete/Search |
+| **M4-T13** | `SelectionState` | P0 | DONE | `SelectionState.hpp`: chọn theo `ObjectId`, tự xóa chọn an toàn qua `reconcileWithScene()` khi xóa object |
+| **M4-T14** | Properties Inspector | P0 | DONE | Hiển thị & sửa Name, Visible, Position/Rotation/Scale (Uniform Scale), Reset Transform, Asset/World BBox, cảnh báo vượt biên |
+| **M4-T15** | Add/Delete/Duplicate/Rename | P0 | DONE | Liên kết trực tiếp giữa Library, Hierarchy, Toolbar và Inspector tới `Scene` thật |
+| **M4-T16** | Room Settings UI | P0 | DONE | Sửa kích thước, màu sắc, Wall Mode, tường riêng lẻ, Apply/Reset, hiển thị Area/Volume/Object Count/Interior Bounds |
+| **M4-T17** | Room Camera Fit | P0 | DONE | `Fit Room`, `Fit Selected`, `3D`, `Iso`, `Top 2D`, `Front` dùng `Camera::fitBoundingBox()` |
+| **M4-T18** | Three Scene Presets | P0 | DONE | `Modern Bedroom (5×6×3m)`, `Gaming Workspace (4×5×3m)`, `Minimalist Living Room (6×7×3m)` kèm hộp thoại xác nhận khi có chỉnh sửa |
+| **M4-T19** | Grid Snapping cơ bản | P1 | DONE | `PlacementSystem::snapToGrid()` (snap X/Z, giữ nguyên Y) + checkbox `Snap` trên Toolbar |
+| **M4-T20** | Performance Benchmark | P0 | DONE | `--m4-benchmark` đo thực tế 10 / 30 / 100 vật thể tại `1280×720` trên Intel UHD Graphics (`667.8 FPS` ở 30 vật thể Debug) |
+| **M4-T21** | Unit & Integration Tests | P0 | DONE | `M4_SceneUnitTests` (23/23 checks PASS) + `M4_IntegrationSmokeTest` (`TC-M4-21..29` PASS) → `9/9 CTest` PASS |
+| **M4-T22** | Documentation | P0 | DONE | Tạo `docs/SCENE_MANAGEMENT.md`, `docs/ROOM_EDITOR_GUIDE.md` và cập nhật toàn bộ tài liệu dự án |

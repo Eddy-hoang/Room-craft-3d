@@ -10,8 +10,8 @@ Tài liệu này theo dõi bản quyền, tác giả và giấy phép của mọ
 | **GLAD** | `v0.1.36` (`1ecd45775d96f35170458e6b148eb0708967e402`) | MIT (generator) / Public Domain (generated code) | https://github.com/Dav1dde/glad | OpenGL 3.3 Core Function Loader (M0) |
 | **Dear ImGui** | `v1.93.0-docking` (`b916186e66aa3c02b72c6ca17455516512ed8049`) | MIT | https://github.com/ocornut/imgui | Giao diện người dùng đồ họa `imgui_impl_glut` + `imgui_impl_opengl3` (M0) |
 | **GLM** | `1.0.1` (`0af55ccecd98d4e5a8d1fad7de25ba429d60e863`) | Happy Bunny License / MIT | https://github.com/g-truc/glm | Toán học vector, ma trận 3D chuẩn OpenGL (M1) |
-| **Assimp** | `v6.0.6` (`a79ff6bbce54d3e792691ef4b72ae26434c3e799`) | BSD 3-Clause | https://github.com/assimp/assimp | Import mô hình 3D `.obj`/`.mtl` thuần CPU (M3) |
-| **stb (`stb_image.h`)** | Commit `6b5799bae8a1fe3792691ef4b72ae26434c3e799` | MIT / Public Domain | https://github.com/nothings/stb | Giải mã ảnh texture `.png`/`.jpg` (M3) |
+| **Assimp** | `v6.0.6` (`a79ff6bbce54d3e01186a918dc6374ed55317426`) | BSD 3-Clause | https://github.com/assimp/assimp | Import mô hình 3D `.obj`/`.mtl` thuần CPU (M3) |
+| **stb (`stb_image.h v2.34`)** | Commit `6b5799bae8a1fe3792691ef4b72ae26434c3e799` | MIT / Public Domain | https://github.com/nothings/stb | Giải mã ảnh texture `.png`/`.jpg` (M3) |
 
 ## 2. Mô hình 3D (Blender Assets — Milestone M3)
 

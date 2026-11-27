@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RoomCraft3D
-    VERSION 0.3.0
+    VERSION 0.4.0
     DESCRIPTION "RoomCraft 3D - Desktop 3D Interior Design and Room Planner"
     LANGUAGES C CXX
 )
@@ -194,10 +194,11 @@ else()
         endif()
     endif()
 
-    # 5. Assimp v6.0.6 (khóa release archive v6.0.6, liên kết tĩnh, CHỈ bật OBJ importer)
+    # 5. Assimp v6.0.6 (tag commit a79ff6bbce54d3e01186a918dc6374ed55317426, khóa SHA256 archive)
     FetchContent_Declare(
         assimp
         URL https://github.com/assimp/assimp/archive/refs/tags/v6.0.6.tar.gz
+        URL_HASH SHA256=5f7ed412b76575621df0525a762b31da5874afff352b3a890c6308db4ac7204c
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(assimp)
@@ -210,10 +211,11 @@ else()
         message(FATAL_ERROR "Expected assimp target from Assimp FetchContent")
     endif()
 
-    # 6. stb (stb_image.h, khóa commit SHA qua archive)
+    # 6. stb (stb_image.h v2.34, khóa commit SHA + SHA256 archive)
     FetchContent_Declare(
         stb_src
         URL https://github.com/nothings/stb/archive/6b5799bae8a1fe3792691ef4b72ae26434c3e799.tar.gz
+        URL_HASH SHA256=87e9ecd2d2e0cb8fa35bf5a93ea6ca3999595ea4f0a4738ed1aac0a34cbd4da9
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(stb_src)
@@ -276,7 +278,24 @@ target_link_libraries(roomcraft_assets PUBLIC
 )
 
 # ==============================================================================
-# 4. roomcraft_engine (GPU + Window + ImGui): Core Engine, Texture/AssetManager, App
+# 4. roomcraft_scene (CPU-only, KHÔNG phụ thuộc OpenGL/FreeGLUT/ImGui):
+#    ObjectId, SceneObject, RoomSettings, Room, Scene, SelectionState, PlacementSystem, ScenePresets
+# ==============================================================================
+add_library(roomcraft_scene STATIC
+    src/scene/Room.cpp
+    src/scene/Scene.cpp
+    src/scene/ScenePresets.cpp
+    src/systems/PlacementSystem.cpp
+)
+target_include_directories(roomcraft_scene PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+target_link_libraries(roomcraft_scene PUBLIC
+    roomcraft_assets
+)
+
+# ==============================================================================
+# 5. roomcraft_engine (GPU + Window + ImGui): Core Engine, SceneRenderer, RoomEditor, App
 # ==============================================================================
 add_library(roomcraft_engine STATIC
     src/core/Window.cpp
@@ -287,13 +306,15 @@ add_library(roomcraft_engine STATIC
     src/graphics/Renderer.cpp
     src/graphics/Texture.cpp
     src/graphics/TextureManager.cpp
+    src/graphics/SceneRenderer.cpp
     src/assets/AssetManager.cpp
+    src/editor/RoomEditor.cpp
 )
 target_include_directories(roomcraft_engine PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 target_link_libraries(roomcraft_engine PUBLIC
-    roomcraft_assets
+    roomcraft_scene
     ${ROOMCRAFT_STB_TARGET}
     ${ROOMCRAFT_GLAD_TARGET}
     ${ROOMCRAFT_FREEGLUT_TARGET}
@@ -310,11 +331,13 @@ if(MSVC)
     target_compile_options(roomcraft_math PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(roomcraft_geometry PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(roomcraft_assets PRIVATE /W4 /permissive- /utf-8)
+    target_compile_options(roomcraft_scene PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(roomcraft_engine PRIVATE /W4 /permissive- /utf-8)
 else()
     target_compile_options(roomcraft_math PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(roomcraft_geometry PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(roomcraft_assets PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(roomcraft_scene PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(roomcraft_engine PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
@@ -379,20 +402,33 @@ target_compile_definitions(RoomCraft3D_AssetUnitTests PRIVATE
     ROOMCRAFT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
+# 4. M4 Scene Management Unit Tests (CPU-only, không cần OpenGL context)
+add_executable(RoomCraft3D_SceneUnitTests
+    tests/unit/SceneTestMain.cpp
+    tests/unit/RoomTests.cpp
+    tests/unit/SceneTests.cpp
+    tests/unit/PlacementTests.cpp
+    tests/unit/ScenePresetTests.cpp
+)
+target_link_libraries(RoomCraft3D_SceneUnitTests PRIVATE roomcraft_scene)
+
 if(MSVC)
     target_compile_options(RoomCraft3D_UnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_GeometryUnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_AssetUnitTests PRIVATE /W4 /permissive- /utf-8)
+    target_compile_options(RoomCraft3D_SceneUnitTests PRIVATE /W4 /permissive- /utf-8)
 else()
     target_compile_options(RoomCraft3D_UnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_GeometryUnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_AssetUnitTests PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(RoomCraft3D_SceneUnitTests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 if(MINGW)
     target_link_options(RoomCraft3D_UnitTests PRIVATE -static)
     target_link_options(RoomCraft3D_GeometryUnitTests PRIVATE -static)
     target_link_options(RoomCraft3D_AssetUnitTests PRIVATE -static)
+    target_link_options(RoomCraft3D_SceneUnitTests PRIVATE -static)
 endif()
 
 add_test(NAME M0_SmokeTest             COMMAND $<TARGET_FILE:RoomCraft3D> --smoke-test)
@@ -402,3 +438,5 @@ add_test(NAME M2_GeometryUnitTests     COMMAND $<TARGET_FILE:RoomCraft3D_Geometr
 add_test(NAME M2_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m2-smoke-test)
 add_test(NAME M3_AssetUnitTests        COMMAND $<TARGET_FILE:RoomCraft3D_AssetUnitTests>)
 add_test(NAME M3_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m3-smoke-test)
+add_test(NAME M4_SceneUnitTests        COMMAND $<TARGET_FILE:RoomCraft3D_SceneUnitTests>)
+add_test(NAME M4_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m4-smoke-test)

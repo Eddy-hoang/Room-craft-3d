@@ -114,3 +114,17 @@ Tại Milestone M3, hệ thống kết nối mô hình Blender (`.obj` + `.mtl` 
   $$d = \text{padding} \cdot \max\!\left(\frac{R}{\sin(\theta_v/2)},\; \frac{R}{\sin(\theta_h/2)}\right)$$
 
 Xem chi tiết kiến trúc, sơ đồ và thuật toán tại [`docs/ASSET_PIPELINE.md`](ASSET_PIPELINE.md) và [`docs/BLENDER_GUIDE.md`](BLENDER_GUIDE.md).
+
+---
+
+## 9. Milestone M4 — Scene Management, Không gian Phòng & Multi-Object Rendering
+
+Tại Milestone M4, ứng dụng mở rộng từ hiển thị một vật thể đơn lẻ sang quản lý toàn bộ căn phòng chứa nhiều đối tượng:
+- **Quy ước không gian phòng (Room Coordinate Convention)**: Tâm mặt trên của sàn đặt tại gốc $(0, 0, 0)$. Chiều rộng $W$ (trục $X$) và chiều dài $L$ (trục $Z$) là không gian sử dụng bên trong ($[-\frac{W}{2}, \frac{W}{2}] \times [0, H] \times [-\frac{L}{2}, \frac{L}{2}]$); sàn kéo dày xuống $-t_{\text{floor}}$ còn 4 bức tường được dựng ra phía ngoài với 2 tường Bắc/Nam phủ kín góc giúp loại bỏ khe hở và z-fighting đồng phẳng.
+- **Tách biệt Asset và Instance (`SceneObject`)**: Mỗi đối tượng sở hữu `ObjectId` đơn điệu và `Transform` riêng nhưng chia sẻ chung `GpuAsset` từ `AssetManager`.
+- **Biến đổi phân cấp đa đối tượng**: Với mỗi sub-mesh của một đối tượng trong phòng:
+  $$M_{\text{world\_part}} = M_{\text{object}} \cdot M_{\text{asset\_part}}$$
+  cho phép đặt vật thể chồng lên bề mặt khác (như `Computer Setup` và `Desk Lamp` tại $y = 0.75\text{ m}$ trên mặt bàn).
+- **World-Space AABB (`SceneObject::getWorldBounds`)**: Biến đổi cả 8 góc của `localBounds` bằng $M_{\text{object}}$ để xác định phạm vi thế giới chính xác sau khi xoay/co giãn, phục vụ `Fit Selected Object` và kiểm tra sơ bộ vượt biên phòng.
+
+Xem chi tiết sơ đồ lớp, sơ đồ tuần tự và luồng render tại [`docs/SCENE_MANAGEMENT.md`](SCENE_MANAGEMENT.md).

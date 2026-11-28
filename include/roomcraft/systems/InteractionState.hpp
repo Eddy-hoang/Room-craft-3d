@@ -91,9 +91,12 @@ struct InteractionState {
     glm::vec2 totalMouseDelta{0.0f, 0.0f};
     bool hasValidDragAnchor = false;
 
-    // Trạng thái snapping & phản hồi giao diện
+    // Trạng thái snapping, Move Gizmo & phản hồi giao diện
     bool gridSnapEnabled = false;
     float angleSnapDegrees = 15.0f;
+    bool gizmoEnabled = true;
+    AxisConstraint hoveredGizmoAxis = AxisConstraint::None;
+    bool startedFromGizmo = false;
     std::optional<glm::vec3> hoverWorldPos;
     std::string warningMessage;
 
@@ -118,6 +121,7 @@ struct InteractionState {
         startMousePos = glm::vec2(0.0f);
         totalMouseDelta = glm::vec2(0.0f);
         hasValidDragAnchor = false;
+        startedFromGizmo = false;
     }
 
     // Kiểm tra tính hợp lệ khi scene thay đổi đột ngột (xóa object / chuyển preset / khóa object)

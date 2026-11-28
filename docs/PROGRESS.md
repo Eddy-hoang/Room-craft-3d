@@ -11,39 +11,39 @@ Cập nhật lần cuối: **2026-11-28**
 | **M2** | Procedural Geometry & Modeling | **VERIFIED** | 23/23 tự động PASS; `TC-M2-MANUAL` giữ `NOT VERIFIED` |
 | **M3** | Blender Asset Pipeline | **VERIFIED** | 27/27 tự động PASS; đã đối chiếu `TC-M3-02` OBJ import; `TC-M3-MANUAL` giữ `NOT VERIFIED` |
 | **M4** | Scene Management & Room Editor | **VERIFIED** | 29/29 tự động PASS; benchmark 10/30/100 hoàn tất; `TC-M4-MANUAL` giữ `NOT VERIFIED` |
-| **M5** | Camera, Transformation & Object Picking | **VERIFIED** | 39/39 tự động PASS (`11/11 CTest`, `4.17s`); bao gồm Ray–Triangle & Wall Occlusion; `TC-M5-MANUAL` giữ `NOT VERIFIED` |
-| **M6** | Professional Editor UI/UX | TODO | Chờ xác nhận cổng M5 |
-| **M7** | Lighting, Materials & Visual Quality | TODO | Chưa bắt đầu |
+| **M5** | Camera, Transformation & Object Picking | **VERIFIED** | 39/39 tự động PASS (đã ghi rõ ánh xạ trong `TEST_RESULTS.md`); `TC-M5-MANUAL` giữ `NOT VERIFIED` |
+| **M6** | Professional Editor UI/UX | **VERIFIED** | **`13/13` CTest PASS (`2.90s`)**; gồm Design System, `Roboto-Medium.ttf`, Vector Icons, 14/14 GPU FBO Thumbnails, 3-Axis Move Gizmo (P1); `TC-M6-MANUAL` & kiểm tra thị giác/screenshot giữ `NOT VERIFIED` |
+| **M7** | Lighting, Materials & Visual Quality | TODO | Chưa bắt đầu (dừng sau M6 chờ xác nhận cổng) |
 | **M8** | Collision Detection & Project Persistence | TODO | Chưa bắt đầu |
 | **M9** | Testing, Optimization & Release | TODO | Chưa bắt đầu |
 
 ---
 
-## Chi tiết công việc Milestone M5 — Camera, Object Picking & Interactive Transformation
+## Chi tiết công việc Milestone M6 — Professional Editor UI/UX
 
 | Task ID | Công việc | Ưu tiên | Trạng thái | Bằng chứng / Ghi chú |
 |---|---|---|---|---|
-| **M5-T01** | Repository Audit & Regression M0–M4 | P0 | DONE | `9/9` CTest PASS trước M5; đối chiếu `TC-M3-02` bằng kết quả OBJ import thực từ `ModelLoaderTests.cpp` |
-| **M5-T02** | `InputManager` | P0 | DONE | `InputManager.hpp/cpp`: phân biệt `Pressed`/`Released` 1-frame với `Held`, chống auto-repeat `Delete`/`Ctrl+D`, chuyển tiếp đầy đủ tới ImGui |
-| **M5-T03** | Viewport Input Routing | P0 | DONE | `ViewportInteraction.hpp/cpp` + `ViewportRect` đo từ `ImGui::GetItemRectMin/Max`, `IsItemHovered`, `WantTextInput`, Popup |
-| **M5-T04** | Orbit Camera | P0 | DONE | `CameraController::orbit()` tọa độ cầu quanh target, kẹp pitch `[-85°, +85°]` |
-| **M5-T05** | Pan Camera | P0 | DONE | `CameraController::pan()` dịch chuyển `position` và `target` đồng bộ theo `right`/`trueUp` |
-| **M5-T06** | Camera Zoom | P0 | DONE | `CameraController::zoom()` đổi `distance` (Perspective) / `orthoHalfHeight` (Orthographic), không scale cảnh |
-| **M5-T07** | Camera Focus & Presets Sync | P0 | DONE | `syncFromCamera()` sau mọi Preset (`1/2/3/Front`) và `Fit Room` / `Fit Selected` (`Home`/`F`) |
-| **M5-T08** | Ray Data Structure | P0 | DONE | `Ray.hpp`: `Ray`, `ViewportRect`, kiểm tra finite & chuẩn hóa hướng |
-| **M5-T09** | Screen-to-World Ray | P0 | DONE | `Ray::screenToWorldRay()` giải chiếu Near/Far bằng `(P*V)^-1`, hỗ trợ cả Perspective, Orthographic & DPI scaling |
-| **M5-T10** | Ray–AABB Intersection | P0 | DONE | `Intersection.cpp`: Slab Method xử lý tia song song, hướng âm, gốc trong box, box sau tia |
-| **M5-T11** | Object Picking System | P0 | DONE | `PickingSystem.hpp/cpp`: chọn gần nhất, loại bỏ hidden, chính sách locked, xóa chọn khi click trống, Wall Occlusion |
-| **M5-T12** | Selection Highlight | P0 | DONE | Khung bao cyan độc lập theo instance (không sửa material dùng chung), kiểm chứng pixel trong `--m5-smoke-test` |
-| **M5-T13** | Ray–Plane Intersection | P0 | DONE | `Plane.hpp` + `intersectRayPlane()` kiểm tra song song, gốc trên mặt phẳng, phía sau tia |
-| **M5-T14** | Mouse-based Furniture Dragging | P0 | DONE | `TransformController::beginMove/updateMove`: giữ nguyên `grabOffset` và cao độ `Y` trên mặt phẳng kéo |
-| **M5-T15** | Grid Snapping | P0 | DONE | Tính trực tiếp từ vị trí target chưa snap (không tích lũy sai số), hỗ trợ tọa độ âm & giữ nguyên `Y` |
-| **M5-T16** | Interactive Rotation | P0 | DONE | `TransformController::beginRotate/updateRotate`: xoay quanh `Y` (hoặc `X`/`Z`), angle snap `15°` |
-| **M5-T17** | Interactive Scaling | P0 | DONE | `TransformController::beginScale/updateScale`: hàm mũ luôn dương trong `[0.1, 10.0]`, hỗ trợ uniform / theo trục |
-| **M5-T18** | Cancel Transformation | P0 | DONE | `Esc` khôi phục nguyên trạng `initialTransform` và không đóng app khi đang chỉnh sửa |
-| **M5-T19** | Keyboard Shortcuts | P0 | DONE | `Q/G/R/S`, `X/Y/Z`, `F`, `Home`, `Delete`, `Ctrl+D`, `1/2/3`, `Esc` (tắt khi đang gõ text/popup) |
-| **M5-T20** | Selection / Inspector Synchronization | P0 | DONE | Viewport Picking, Scene Hierarchy và Properties Inspector dùng chung `SelectionState` và cập nhật trong cùng frame |
-| **M5-T21** | Ray–Triangle Refinement (Optional P1) | P1 | DONE | Thuật toán Möller–Trumbore trong `PickingSystem`; đã kiểm thử xuyên qua gầm bàn & trên GPU smoke test |
-| **M5-T22** | Basic 3-Axis Transform Gizmo (Optional P1) | P1 | TODO | Để mở rộng ở giai đoạn hoàn thiện (chưa triển khai handle 3 trục; không tạo mũi tên trang trí giả) |
-| **M5-T23** | Unit & Integration Testing | P0 | DONE | `M5_InteractionUnitTests` (30/30 CPU checks PASS) + `M5_IntegrationSmokeTest` PASS → `11/11 CTest` PASS |
-| **M5-T24** | Documentation | P0 | DONE | Tạo `CAMERA_SYSTEM.md`, `OBJECT_PICKING.md`, `INTERACTION_GUIDE.md` và cập nhật toàn bộ tài liệu dự án |
+| **M6-T01** | Repository Audit & Regression M0–M5 | P0 | DONE | `11/11` CTest PASS trước M6; `Dear ImGui v1.93.0-docking`; kiểm tra trạng thái process trước build |
+| **M6-T02** | Design System & Theme Tokens (`EditorTheme`) | P0 | DONE | `EditorTheme.hpp/cpp`: bảng màu Modern Dark CAD (`#171A20`, `#20242B`, `#292E38`, `#799CE3`...), trục X/Y/Z, spacing 4–24px, `UI Scale 100/125/150%` |
+| **M6-T03** | Typography & Safe Font Loading | P0 | DONE | `assets/fonts/Roboto-Medium.ttf` (Apache 2.0, 15px + Vietnamese glyphs) + fallback an toàn về ImGui default |
+| **M6-T04** | Vector Icon System (`EditorIcons`) | P0 | DONE | `EditorIcons.hpp/cpp`: 21+ biểu tượng vector thuần `ImDrawList` (MIT), không phụ thuộc emoji Unicode, sắc nét ở mọi DPI |
+| **M6-T05** | Product Main Menu Bar & Loại bỏ Tab Milestone | P0 | DONE | `Application::renderProductMainMenuBar()`: `RoomCraft | File | Edit | View | Room | Tools | Help`; loại bỏ hoàn toàn nhãn `M1`/`M2`/`M3`/`M4`/`M5` trên giao diện chính |
+| **M6-T06** | Relocate Tools (`Geometry Lab`, `Asset Inspector`, `Developer Tools`) | P0 | DONE | Đưa vào menu `Tools`, `switchWorkspace()` lưu/khôi phục `Scene`, `Camera`, `SelectionState` của Room Editor |
+| **M6-T07** | Responsive Workspace Layout & Splitters (`EditorLayout`) | P0 | DONE | `EditorLayout.hpp/cpp` (thuần CPU trong `roomcraft_scene`): thanh kéo dọc/ngang, kẹp min/max không chồng lấn ở `1280×720..1920×1080` & `100..150%` scale, `Reset Workspace Layout` |
+| **M6-T08** | Main Toolbar Chuyên nghiệp | P0 | DONE | Biểu tượng vector + tooltip phím tắt (`New`, `Select/Move/Rotate/Scale`, `Snap`, `Gizmo`, `Grid`, `3D/Top/Iso/Fit`, `Room Presets` dropdown) |
+| **M6-T09** | GPU Asset Thumbnail Renderer (`ThumbnailRenderer`) | P0 | DONE | `ThumbnailRenderer.hpp/cpp`: render FBO `256×256` góc nhìn studio cho 14/14 mẫu (`3.70 ms` tổng), cache theo ID + asset token, invalidate khi `Reload Asset`, bảo toàn OpenGL state |
+| **M6-T10** | Redesigned Furniture Library Panel | P0 | DONE | Chế độ Grid 2 cột ảnh thu nhỏ 256×256 + List View, tìm kiếm, lọc nguồn (`All/C++/OBJ`) & danh mục, double-click hoặc `+ Add Furniture` |
+| **M6-T11** | Clean 3D Viewport & Overlay Controls | P0 | DONE | Khung trung tâm lớn nhất, pill góc trên-trái (`Perspective / Top 2D`), chuyển nhanh `Solid / Wire` góc trên-phải, badge trạng thái tương tác góc dưới-trái |
+| **M6-T12** | Scene Hierarchy Panel + Icon Controls & Context Menu | P0 | DONE | Gốc tên phòng + `Floor & Walls`, danh sách đối tượng ổn định theo `ObjectId`, nút icon `Eye` / `Lock`, chuột phải Context Menu (`Focus`, `Duplicate`, `Hide/Show`, `Lock/Unlock`, `Reset Transform`, `Delete`) |
+| **M6-T13** | Redesigned Properties Inspector | P0 | DONE | Nhóm thu gọn `Object`, `Transform` (ô X/Y/Z mã màu Đỏ/Xanh lá/Xanh dương, `Snap` khi kết thúc edit), `Dimensions`, `Material`, `Geometry`, `Actions` + tab `Room Settings` |
+| **M6-T14** | Clean Status Bar | P0 | DONE | Hiển thị kích thước phòng, số vật thể, lưới, chế độ tương tác, tọa độ thế giới con trỏ và trạng thái `Scene ready` (FPS chuyển vào `Performance Monitor` / tùy chọn bật) |
+| **M6-T15** | Non-blocking Notification System (`NotificationSystem`) | P0 | DONE | `NotificationSystem.hpp` (thuần CPU): hàng đợi Toast tối đa 4 mục góc dưới-phải Viewport, tự ẩn sau `3.0 s`, phân loại `Info / Success / Warning` |
+| **M6-T16** | Confirmation Modals | P0 | DONE | Hộp thoại `Confirm Replace Scene` (khi `New Room` / đổi Preset có thay đổi) và `Confirm Delete Object` (khi xóa từ nút/menu) |
+| **M6-T17** | Product Dialogs (`Performance`, `OpenGL`, `Shortcuts`, `Guide`, `System`, `About`) | P0 | DONE | `Application::renderProductDialogs()` đầy đủ, không tạo nút giả cho tính năng M7/M8 |
+| **M6-T18** | Input Capture & Interaction Integrity | P0 | DONE | Giữ nguyên toàn bộ Orbit/Pan/Zoom, Ray–AABB + Ray–Triangle + Wall Occlusion, Drag/Rotate/Scale/Cancel/Shortcuts; không xung đột với modal/text input |
+| **M6-T19** | Asset & Font Path Resolution Across Working Directories | P0 | DONE | Xác minh chạy `RoomCraft3D.exe --m6-smoke-test` từ `C:\` ngoài PATH WinLibs nạp đúng `assets/fonts/Roboto-Medium.ttf`, shaders và 14 mẫu |
+| **M6-T20** | Performance Check (M6 vs M4) | P0 | DONE | 30 vật thể off-screen `1280×720`: `1.68 ms (595.3 FPS)` vs M4 `1.50 ms (667.8 FPS)`; 14 thumbnails cache 1 lần `3.70 ms` (`0.265 ms/thumb`) |
+| **M6-T21** | Basic 3-Axis Move Gizmo (P1) | P1 | DONE | `TransformGizmo.hpp/cpp` + `SceneRenderer::renderMoveGizmo()`: hit-testing 3 trục X/Y/Z ưu tiên trước picking cảnh, kích thước màn hình ổn định, hover/active highlight, chặn khi `Locked`, `Esc` khôi phục |
+| **M6-T22** | Rotate / Scale Visual Gizmos (Optional P2) | P2 | TODO | Không bắt buộc trong M6; giữ `TODO` để mở rộng ở giai đoạn hoàn thiện mà không tạo hình vẽ giả |
+| **M6-T23** | UI Layout Persistence Across Sessions (Optional P1) | P1 | TODO | Chưa lưu/tải tỷ lệ splitter ra file cấu hình giữa các lần mở app (`Reset Workspace Layout` hoạt động trong phiên); dự kiến gom cùng Persistence M8/M9 |
+| **M6-T24** | Automated Testing & Documentation | P0 | DONE | `M6_EditorUiUnitTests` + `M6_IntegrationSmokeTest` → `13/13 CTest PASS (2.90s)`; tạo `DESIGN_SYSTEM.md`, `UI_ARCHITECTURE.md`, `EDITOR_USER_GUIDE.md` và cập nhật toàn bộ tài liệu |

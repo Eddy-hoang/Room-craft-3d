@@ -6,6 +6,7 @@
 #include "roomcraft/graphics/Renderer.hpp"
 #include "roomcraft/graphics/Shader.hpp"
 #include "roomcraft/scene/Scene.hpp"
+#include "roomcraft/systems/InteractionState.hpp"
 #include "roomcraft/systems/SelectionState.hpp"
 
 #include <glm/vec4.hpp>
@@ -21,6 +22,9 @@ struct SceneRenderOptions {
     bool showGrid = true;
     bool showAxes = true;
     bool showSelectedBoundingBox = true;
+    bool showMoveGizmo = false;
+    systems::AxisConstraint activeGizmoAxis = systems::AxisConstraint::None;
+    systems::AxisConstraint hoveredGizmoAxis = systems::AxisConstraint::None;
     float faceContrast = 0.35f;
 };
 
@@ -77,6 +81,13 @@ public:
 
 private:
     static bool uploadMeshData(const geometry::MeshData& src, Mesh& dst);
+    bool ensureGizmoMeshes();
+    void renderMoveGizmo(const glm::vec3& origin,
+                         bool locked,
+                         const Camera& camera,
+                         Renderer& renderer,
+                         Shader& meshShader,
+                         const SceneRenderOptions& options);
 
 private:
     Mesh m_floorMesh;
@@ -86,6 +97,8 @@ private:
     Mesh m_westWallMesh;
     Mesh m_ceilingMesh;
     Mesh m_roomGridMesh;
+    Mesh m_gizmoShaftMesh;
+    Mesh m_gizmoConeMesh;
     std::uint64_t m_uploadedRoomRevision = 0;
     SceneRenderMetrics m_lastMetrics{};
 };

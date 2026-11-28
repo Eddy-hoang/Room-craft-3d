@@ -1,18 +1,16 @@
-# Hướng dẫn sử dụng Room Editor — RoomCraft 3D (Milestone M4)
+# Hướng dẫn sử dụng Room Editor — RoomCraft 3D
+
+> **Cập nhật Milestone M6 (`v0.6.0`)**: Giao diện Room Editor đã được thiết kế lại toàn diện theo chuẩn sản phẩm (loại bỏ các tab milestone `M1`–`M5`, thay bằng Product Main Menu Bar, bổ sung Grid ảnh thu nhỏ 256×256, thanh kéo chia panel và 3-Axis Move Gizmo). Vui lòng xem bản hướng dẫn mới đầy đủ nhất tại **[`docs/EDITOR_USER_GUIDE.md`](EDITOR_USER_GUIDE.md)**.
 
 ## 1. Khởi chạy ứng dụng
 
-Từ thư mục gốc `D:\CG` (chạy độc lập, không cần thiết lập PATH WinLibs):
+Từ thư mục gốc `D:\CG` (hoặc bất kỳ thư mục làm việc nào — chạy độc lập, không cần thiết lập PATH WinLibs):
 
 ```powershell
 .\build\mingw-x64-debug\RoomCraft3D.exe
 ```
 
-Mặc định chương trình mở trực tiếp **Room Editor (M4)** với căn phòng mẫu **Modern Bedroom (`5.0 × 6.0 × 3.0 m`)**. Trên thanh menu trên cùng, bạn có thể chuyển qua lại bất kỳ lúc nào giữa:
-- **`Room Editor (M4)`**
-- **`Asset Browser (M3)`**
-- **`Geometry Playground (M2)`**
-- **`M1 Reference Scene`**
+Mặc định chương trình mở trực tiếp **Room Editor** với căn phòng mẫu **Modern Bedroom (`5.0 × 6.0 × 3.0 m`)**. Các công cụ chuyên sâu (**Geometry Lab**, **Asset Inspector**, **Developer Tools**) nằm trong menu **`Tools`** trên thanh menu chính và luôn giữ nguyên trạng thái phòng khi chuyển đổi.
 
 ---
 

@@ -3,6 +3,7 @@
 #include "roomcraft/math/Intersection.hpp"
 #include "roomcraft/math/Plane.hpp"
 #include "roomcraft/systems/TransformController.hpp"
+#include "roomcraft/systems/TransformGizmo.hpp"
 
 #include <glm/vec2.hpp>
 
@@ -36,8 +37,9 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
                                        !ctx.anyUiWidgetActive &&
                                        !ctx.uiWantsTextInput;
 
-    // Cập nhật tọa độ con trỏ chiếu lên mặt sàn Y = 0 khi di chuột qua viewport
+    // Cập nhật tọa độ con trỏ chiếu lên mặt sàn Y = 0 & trạng thái hover của Move Gizmo 3 trục
     state.hoverWorldPos.reset();
+    state.hoveredGizmoAxis = systems::AxisConstraint::None;
     if (ctx.viewportRect.contains(mousePos.x, mousePos.y) && !ctx.uiPopupOpen) {
         math::Ray hoverRay;
         if (math::Ray::screenToWorldRay(mousePos.x, mousePos.y, ctx.viewportRect,
@@ -45,6 +47,15 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
             math::RayPlaneHit groundHit;
             if (math::intersectRayPlane(hoverRay, math::Plane::horizontalAtY(0.0f), groundHit, true)) {
                 state.hoverWorldPos = groundHit.point;
+            }
+            if (state.gizmoEnabled &&
+                state.activeTool == systems::TransformMode::Move &&
+                state.isIdle() &&
+                selection.hasSelection()) {
+                if (const auto* selObj = scene.findObject(selection.getSelectedObjectId())) {
+                    const float gizmoLen = systems::TransformGizmo::computeHandleLength(selObj->transform.position, camera);
+                    state.hoveredGizmoAxis = systems::TransformGizmo::pickAxis(hoverRay, selObj->transform.position, gizmoLen);
+                }
             }
         }
     }
@@ -266,12 +277,35 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
         return out;
     }
 
-    // Chuột trái -> Picking + (tùy chế độ) bắt đầu Move / Rotate / Scale
+    // Chuột trái -> Ưu tiên Move Gizmo 3 trục (nếu đang bật) trước Picking vật thể phía sau
     if (input.isMousePressed(core::MouseButton::Left)) {
         math::Ray pickRay;
         if (!math::Ray::screenToWorldRay(mousePos.x, mousePos.y, ctx.viewportRect,
                                          camera.getViewMatrix(), camera.getProjectionMatrix(), pickRay, true)) {
             return out;
+        }
+
+        // 4a. Kiểm tra hit-testing Move Gizmo 3 trục trước (không bao giờ chọn nhầm vật thể phía sau handle)
+        if (state.gizmoEnabled &&
+            state.activeTool == systems::TransformMode::Move &&
+            selection.hasSelection()) {
+            if (const auto* selObj = scene.findObject(selection.getSelectedObjectId())) {
+                const float gizmoLen = systems::TransformGizmo::computeHandleLength(selObj->transform.position, camera);
+                const auto hitAxis = systems::TransformGizmo::pickAxis(pickRay, selObj->transform.position, gizmoLen);
+                if (hitAxis != systems::AxisConstraint::None) {
+                    state.axisConstraint = hitAxis;
+                    state.hoveredGizmoAxis = hitAxis;
+                    std::string err;
+                    if (systems::TransformController::beginMove(scene, selObj->id, pickRay, mousePos, state, &err)) {
+                        state.startedFromGizmo = true;
+                        out.statusMessage = std::string("Move Gizmo: ") + systems::axisConstraintToString(hitAxis);
+                    } else {
+                        state.axisConstraint = systems::AxisConstraint::None;
+                        out.errorMessage = err;
+                    }
+                    return out;
+                }
+            }
         }
 
         const auto pick = systems::PickingSystem::pickObject(pickRay, scene, assetLookup, pickOptions);

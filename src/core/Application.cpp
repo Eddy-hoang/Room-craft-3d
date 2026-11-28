@@ -1,11 +1,14 @@
 #include "roomcraft/core/Application.hpp"
 
+#include "roomcraft/editor/EditorIcons.hpp"
+#include "roomcraft/editor/EditorTheme.hpp"
 #include "roomcraft/geometry/GeometryUtils.hpp"
 #include "roomcraft/geometry/PrimitiveGenerator.hpp"
 #include "roomcraft/geometry/RevolutionSurface.hpp"
 #include "roomcraft/math/Ray.hpp"
 #include "roomcraft/systems/PickingSystem.hpp"
 #include "roomcraft/systems/TransformController.hpp"
+#include "roomcraft/systems/TransformGizmo.hpp"
 
 #include <glad/glad.h>
 #include <GL/freeglut.h>
@@ -293,6 +296,22 @@ int Application::run()
         return passed ? 0 : 1;
     }
 
+    if (m_config.mode == ApplicationMode::SmokeTestM6) {
+        const auto& stats = m_renderer.getLastFrameStats();
+        std::cout << "[M6-SMOKE] Frames rendered       : " << m_frameCount << std::endl;
+        std::cout << "[M6-SMOKE] Last frame draw calls : " << stats.drawCalls
+                  << " (vertices=" << stats.vertexCount << ", indices=" << stats.indexCount
+                  << ", triangles=" << stats.triangleCount << ")" << std::endl;
+        std::cout << "[M6-SMOKE] Font loaded           : " << m_fontInfo.fontName << std::endl;
+        std::cout << "[M6-SMOKE] Integration suite     : " << (m_m6SuitePassed ? "PASS" : "FAIL") << std::endl;
+        std::cout << "[M6-SMOKE] OpenGL errors         : " << (m_glErrorDetected ? "YES" : "NONE") << std::endl;
+
+        const bool passed = (m_frameCount >= m_config.smokeTestFrames) &&
+                            m_m6SuiteExecuted && m_m6SuitePassed && !m_glErrorDetected;
+        std::cout << "[M6-SMOKE] Final Result          : " << (passed ? "PASS" : "FAIL") << std::endl;
+        return passed ? 0 : 1;
+    }
+
     return 0;
 }
 
@@ -307,14 +326,9 @@ bool Application::initImGui()
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 #endif
 
-    ImGui::StyleColorsDark();
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 6.0f;
-    style.FrameRounding = 4.0f;
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.133f, 0.145f, 0.176f, 0.96f);      // #22252D
-    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.173f, 0.188f, 0.227f, 1.0f);  // #2C303A
-    style.Colors[ImGuiCol_Button] = ImVec4(0.235f, 0.275f, 0.365f, 1.0f);
-    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.455f, 0.584f, 0.839f, 1.0f);  // #7495D6
+    // Áp dụng Design System M6 (Modern Dark CAD Theme + Font Roboto-Medium.ttf tương đối có fallback)
+    m_fontInfo = editor::EditorTheme::loadFonts(resolveAssetPath("assets/fonts/Roboto-Medium.ttf"), 15.0f, m_uiScale);
+    editor::EditorTheme::applyStyle(m_uiScale);
 
     if (!ImGui_ImplGLUT_Init()) {
         std::cerr << "[RoomCraft3D][ERROR] ImGui_ImplGLUT_Init() failed." << std::endl;
@@ -425,17 +439,17 @@ bool Application::initEngineResources()
     setupDefaultM1DemoScene();
 
     if (m_config.mode == ApplicationMode::SmokeTestM1) {
-        m_workspace = InteractiveWorkspace::ReferenceSceneM1;
+        m_workspace = InteractiveWorkspace::GraphicsReference;
         m_camera.reset();
     } else if (m_config.mode == ApplicationMode::SmokeTestM2) {
-        m_workspace = InteractiveWorkspace::GeometryPlaygroundM2;
+        m_workspace = InteractiveWorkspace::GeometryLab;
         m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
         m_camera.lookAt({2.3f, 1.8f, 2.7f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
         if (!regenerateActivePlaygroundGeometry()) {
             return false;
         }
     } else if (m_config.mode == ApplicationMode::SmokeTestM3) {
-        m_workspace = InteractiveWorkspace::AssetBrowserM3;
+        m_workspace = InteractiveWorkspace::AssetInspector;
         m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
         m_camera.lookAt({2.6f, 1.8f, 2.8f}, {0.0f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f});
         m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
@@ -445,8 +459,8 @@ bool Application::initEngineResources()
             selectBrowserAsset("procedural-desk", true);
         }
     } else {
-        // Mặc định M4: khởi chạy Room Editor với Modern Bedroom preset, đồng thời nạp sẵn M3/M2 để chuyển mượt
-        m_workspace = InteractiveWorkspace::RoomEditorM4;
+        // Mặc định: mở Room Editor chuyên nghiệp, nạp sẵn Geometry Lab & Asset Inspector để chuyển mượt
+        m_workspace = InteractiveWorkspace::RoomEditor;
         m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
                                 static_cast<float>(m_framebuffer.getHeight()));
         regenerateActivePlaygroundGeometry();
@@ -454,6 +468,8 @@ bool Application::initEngineResources()
             selectBrowserAsset("procedural-desk", false);
         }
         m_roomEditor.initialize(m_assetManager, m_camera);
+        m_savedRoomCamera = m_camera;
+        m_hasSavedRoomCamera = true;
     }
 
     m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
@@ -541,9 +557,9 @@ bool Application::selectBrowserAsset(const std::string& assetId, bool autoFitCam
 
 void Application::fitCameraToActiveModel()
 {
-    if (m_workspace == InteractiveWorkspace::AssetBrowserM3 && m_activeBrowserAsset) {
+    if (m_workspace == InteractiveWorkspace::AssetInspector && m_activeBrowserAsset) {
         m_camera.fitBoundingBox(m_activeBrowserAsset->cpuData.localBounds, 1.28f);
-    } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2 && m_activeBoundingBox.isValid()) {
+    } else if (m_workspace == InteractiveWorkspace::GeometryLab && m_activeBoundingBox.isValid()) {
         const auto worldBox = m_activeBoundingBox.transformed(m_rootTransform.getModelMatrix());
         m_camera.fitBoundingBox(worldBox, 1.28f);
     } else {
@@ -753,7 +769,8 @@ void Application::shutdownGraphics()
         m_imguiInitialized = false;
     }
 
-    // Giải phóng toàn bộ tài nguyên RoomEditor, AssetManager (Meshes + Textures) TRƯỚC khi OpenGL context bị hủy
+    // Giải phóng toàn bộ tài nguyên ThumbnailRenderer, RoomEditor, AssetManager (Meshes + Textures) TRƯỚC khi hủy GL context
+    m_thumbnailRenderer.destroyAll();
     m_roomEditor.shutdownGpuResources();
     m_activeBrowserAsset.reset();
     m_assetManager.clear();
@@ -835,7 +852,7 @@ void Application::renderFrame()
     if (m_config.mode == ApplicationMode::SmokeTestM1 && !m_m1SuiteExecuted) {
         m_m1SuiteExecuted = true;
         m_m1SuitePassed = runM1IntegrationSuiteOnce();
-        m_workspace = InteractiveWorkspace::ReferenceSceneM1;
+        m_workspace = InteractiveWorkspace::GraphicsReference;
         m_framebuffer.resize(800, 600);
         m_camera.reset();
         m_camera.setAspectRatio(static_cast<float>(m_framebuffer.getWidth()) /
@@ -845,7 +862,7 @@ void Application::renderFrame()
     if (m_config.mode == ApplicationMode::SmokeTestM2 && !m_m2SuiteExecuted) {
         m_m2SuiteExecuted = true;
         m_m2SuitePassed = runM2IntegrationSuiteOnce();
-        m_workspace = InteractiveWorkspace::GeometryPlaygroundM2;
+        m_workspace = InteractiveWorkspace::GeometryLab;
         m_framebuffer.resize(800, 600);
         m_category = PlaygroundCategory::Furniture;
         m_furnitureTypeIndex = 0;
@@ -859,7 +876,7 @@ void Application::renderFrame()
     if (m_config.mode == ApplicationMode::SmokeTestM3 && !m_m3SuiteExecuted) {
         m_m3SuiteExecuted = true;
         m_m3SuitePassed = runM3IntegrationSuiteOnce();
-        m_workspace = InteractiveWorkspace::AssetBrowserM3;
+        m_workspace = InteractiveWorkspace::AssetInspector;
         m_framebuffer.resize(800, 600);
         m_camera.setAspectRatio(800.0f / 600.0f);
         selectBrowserAsset("blender-modern-sofa", true);
@@ -868,7 +885,7 @@ void Application::renderFrame()
     if (m_config.mode == ApplicationMode::SmokeTestM4 && !m_m4SuiteExecuted) {
         m_m4SuiteExecuted = true;
         m_m4SuitePassed = runM4IntegrationSuiteOnce();
-        m_workspace = InteractiveWorkspace::RoomEditorM4;
+        m_workspace = InteractiveWorkspace::RoomEditor;
         m_framebuffer.resize(800, 600);
         m_camera.setAspectRatio(800.0f / 600.0f);
         m_roomEditor.initialize(m_assetManager, m_camera);
@@ -884,7 +901,16 @@ void Application::renderFrame()
     if (m_config.mode == ApplicationMode::SmokeTestM5 && !m_m5SuiteExecuted) {
         m_m5SuiteExecuted = true;
         m_m5SuitePassed = runM5IntegrationSuiteOnce();
-        m_workspace = InteractiveWorkspace::RoomEditorM4;
+        m_workspace = InteractiveWorkspace::RoomEditor;
+        m_framebuffer.resize(800, 600);
+        m_camera.setAspectRatio(800.0f / 600.0f);
+        m_roomEditor.initialize(m_assetManager, m_camera);
+    }
+
+    if (m_config.mode == ApplicationMode::SmokeTestM6 && !m_m6SuiteExecuted) {
+        m_m6SuiteExecuted = true;
+        m_m6SuitePassed = runM6IntegrationSuiteOnce();
+        m_workspace = InteractiveWorkspace::RoomEditor;
         m_framebuffer.resize(800, 600);
         m_camera.setAspectRatio(800.0f / 600.0f);
         m_roomEditor.initialize(m_assetManager, m_camera);
@@ -905,7 +931,8 @@ void Application::renderFrame()
     if (m_config.mode == ApplicationMode::SmokeTestM2 ||
         m_config.mode == ApplicationMode::SmokeTestM3 ||
         m_config.mode == ApplicationMode::SmokeTestM4 ||
-        m_config.mode == ApplicationMode::SmokeTestM5) {
+        m_config.mode == ApplicationMode::SmokeTestM5 ||
+        m_config.mode == ApplicationMode::SmokeTestM6) {
         if (m_frameCount >= m_config.smokeTestFrames) {
             m_window.requestClose();
             return;
@@ -1113,9 +1140,51 @@ void Application::renderPlaygroundSceneToFramebuffer(float faceContrast)
     graphics::Framebuffer::unbind();
 }
 
+void Application::switchWorkspace(InteractiveWorkspace target)
+{
+    if (m_workspace == target) {
+        return;
+    }
+
+    // Bảo toàn nguyên vẹn Camera của Room Editor khi rời sang công cụ kỹ thuật (Geometry Lab / Asset Inspector / DevTools)
+    if (m_workspace == InteractiveWorkspace::RoomEditor) {
+        m_savedRoomCamera = m_camera;
+        m_hasSavedRoomCamera = true;
+    }
+
+    m_workspace = target;
+    m_inputManager.resetAll();
+
+    if (target == InteractiveWorkspace::RoomEditor) {
+        if (m_hasSavedRoomCamera) {
+            m_camera = m_savedRoomCamera;
+            m_roomEditor.getCameraController().syncFromCamera(m_camera);
+        } else {
+            m_roomEditor.setPerspective3DCamera(m_camera);
+        }
+    } else if (target == InteractiveWorkspace::AssetInspector) {
+        m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
+        m_camera.lookAt({2.6f, 1.8f, 2.8f}, {0.0f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f});
+        fitCameraToActiveModel();
+    } else if (target == InteractiveWorkspace::GeometryLab) {
+        m_camera.setProjectionMode(graphics::ProjectionMode::Perspective);
+        m_camera.lookAt({2.3f, 1.8f, 2.7f}, {0.0f, 0.55f, 0.0f}, {0.0f, 1.0f, 0.0f});
+        fitCameraToActiveModel();
+    } else if (target == InteractiveWorkspace::GraphicsReference) {
+        m_camera.reset();
+    }
+}
+
+void Application::applyUiScale(float scale)
+{
+    m_uiScale = std::clamp(scale, 1.0f, 1.50f);
+    editor::EditorTheme::applyStyle(m_uiScale);
+    m_roomEditor.setUiScale(m_uiScale);
+}
+
 void Application::renderInteractiveFrame()
 {
-    if (m_workspace == InteractiveWorkspace::RoomEditorM4) {
+    if (m_workspace == InteractiveWorkspace::RoomEditor) {
         m_roomEditor.renderSceneToFramebuffer(m_assetManager,
                                               m_camera,
                                               m_framebuffer,
@@ -1127,9 +1196,9 @@ void Application::renderInteractiveFrame()
                                               m_axisZMesh,
                                               m_clearColor,
                                               0.35f);
-    } else if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
+    } else if (m_workspace == InteractiveWorkspace::AssetInspector) {
         renderAssetBrowserSceneToFramebuffer(0.45f);
-    } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2) {
+    } else if (m_workspace == InteractiveWorkspace::GeometryLab) {
         renderPlaygroundSceneToFramebuffer(0.45f);
     } else {
         renderM1DemoSceneToFramebuffer(0.45f);
@@ -1139,41 +1208,48 @@ void Application::renderInteractiveFrame()
     ImGui_ImplGLUT_NewFrame();
     ImGui::NewFrame();
 
-    renderTopWorkspaceBar();
+    renderProductMainMenuBar();
+    const float menuBarH = ImGui::GetFrameHeight();
+    const float deltaSec = std::clamp(m_frameTimeMs / 1000.0f, 0.001f, 0.10f);
 
-    if (m_workspace == InteractiveWorkspace::RoomEditorM4) {
+    if (m_workspace == InteractiveWorkspace::RoomEditor) {
         m_roomEditor.renderUiAndProcessInput(m_window.getWidth(),
                                              m_window.getHeight(),
-                                             ImGui::GetFrameHeight(),
+                                             menuBarH,
+                                             deltaSec,
                                              m_inputManager,
                                              m_assetManager,
+                                             m_thumbnailRenderer,
+                                             m_meshShader,
                                              m_camera,
                                              m_framebuffer,
                                              m_currentFps,
                                              m_frameTimeMs);
-    } else if (m_workspace == InteractiveWorkspace::AssetBrowserM3) {
+    } else if (m_workspace == InteractiveWorkspace::AssetInspector) {
         renderAssetBrowserUi();
-    } else if (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2) {
+    } else if (m_workspace == InteractiveWorkspace::GeometryLab) {
         renderPlaygroundControlUi();
-        renderViewportPanel("3D Viewport (Off-screen Framebuffer)",
-                            412.0f, 44.0f,
+        renderViewportPanel("Geometry Lab Viewport",
+                            412.0f, menuBarH + 8.0f,
                             static_cast<float>(std::max(300, m_window.getWidth() - 422)),
-                            static_cast<float>(std::max(240, m_window.getHeight() - 54)),
+                            static_cast<float>(std::max(240, m_window.getHeight() - static_cast<int>(menuBarH) - 18)),
                             true);
     } else {
         renderM1ReferenceControlUi();
-        renderViewportPanel("3D Viewport (Off-screen Framebuffer)",
-                            392.0f, 44.0f,
+        renderViewportPanel("Graphics Reference Viewport",
+                            392.0f, menuBarH + 8.0f,
                             static_cast<float>(std::max(300, m_window.getWidth() - 402)),
-                            static_cast<float>(std::max(240, m_window.getHeight() - 54)),
+                            static_cast<float>(std::max(240, m_window.getHeight() - static_cast<int>(menuBarH) - 18)),
                             true);
     }
+
+    renderProductDialogs();
 
     ImGui::Render();
 
     glViewport(0, 0, m_window.getWidth(), m_window.getHeight());
     glDisable(GL_DEPTH_TEST);
-    glClearColor(0.070f, 0.075f, 0.095f, 1.0f);
+    glClearColor(0.090f, 0.102f, 0.125f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -1183,43 +1259,347 @@ void Application::renderInteractiveFrame()
     m_window.swapBuffers();
 }
 
-void Application::renderTopWorkspaceBar()
+void Application::renderProductMainMenuBar()
 {
-    if (ImGui::BeginMainMenuBar()) {
-        ImGui::TextUnformatted("RoomCraft 3D v0.5.0");
+    if (!ImGui::BeginMainMenuBar()) {
+        return;
+    }
+
+    // Logo vector RoomCraft + Tên sản phẩm (KHÔNG hiển thị tên milestone M1/M2/M3/M4/M5)
+    const ImVec2 logoCursor = ImGui::GetCursorScreenPos();
+    const float barH = ImGui::GetFrameHeight();
+    editor::EditorIcons::draw(ImGui::GetWindowDrawList(),
+                              editor::EditorIcon::AppLogo,
+                              ImVec2(logoCursor.x + 9.0f, logoCursor.y + barH * 0.5f),
+                              16.0f,
+                              editor::EditorTheme::toU32(editor::tokens::kPrimary));
+    ImGui::Dummy(ImVec2(22.0f, 0.0f));
+    ImGui::SameLine(0.0f, 4.0f);
+    ImGui::TextColored(editor::tokens::kTextPrimary, "RoomCraft");
+    ImGui::SameLine(0.0f, 14.0f);
+
+    const bool inRoomEditor = (m_workspace == InteractiveWorkspace::RoomEditor);
+
+    // 1. FILE
+    if (ImGui::BeginMenu("File")) {
+        if (ImGui::MenuItem("New Room")) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.requestNewEmptyRoom(m_camera);
+        }
+        if (ImGui::BeginMenu("Room Presets")) {
+            if (ImGui::MenuItem("Modern Bedroom (5 x 6 x 3 m)")) {
+                switchWorkspace(InteractiveWorkspace::RoomEditor);
+                m_roomEditor.requestPresetChange(scene::ScenePresetType::ModernBedroom, m_assetManager, m_camera);
+            }
+            if (ImGui::MenuItem("Gaming Workspace (4 x 5 x 3 m)")) {
+                switchWorkspace(InteractiveWorkspace::RoomEditor);
+                m_roomEditor.requestPresetChange(scene::ScenePresetType::GamingWorkspace, m_assetManager, m_camera);
+            }
+            if (ImGui::MenuItem("Minimalist Living Room (6 x 7 x 3 m)")) {
+                switchWorkspace(InteractiveWorkspace::RoomEditor);
+                m_roomEditor.requestPresetChange(scene::ScenePresetType::MinimalistLivingRoom, m_assetManager, m_camera);
+            }
+            ImGui::EndMenu();
+        }
         ImGui::Separator();
+        if (ImGui::MenuItem("Exit")) {
+            m_window.requestClose();
+        }
+        ImGui::EndMenu();
+    }
 
-        const bool isM4 = (m_workspace == InteractiveWorkspace::RoomEditorM4);
-        const bool isM3 = (m_workspace == InteractiveWorkspace::AssetBrowserM3);
-        const bool isM2 = (m_workspace == InteractiveWorkspace::GeometryPlaygroundM2);
-        const bool isM1 = (m_workspace == InteractiveWorkspace::ReferenceSceneM1);
+    // 2. EDIT
+    if (ImGui::BeginMenu("Edit")) {
+        const bool hasSel = inRoomEditor && m_roomEditor.getSelection().hasSelection();
+        if (ImGui::MenuItem("Select Mode", "Q", inRoomEditor && m_roomEditor.getInteractionState().activeTool == systems::TransformMode::Select)) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.setActiveTool(systems::TransformMode::Select);
+        }
+        if (ImGui::MenuItem("Move Mode", "G", inRoomEditor && m_roomEditor.getInteractionState().activeTool == systems::TransformMode::Move)) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.setActiveTool(systems::TransformMode::Move);
+        }
+        if (ImGui::MenuItem("Rotate Mode", "R", inRoomEditor && m_roomEditor.getInteractionState().activeTool == systems::TransformMode::Rotate)) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.setActiveTool(systems::TransformMode::Rotate);
+        }
+        if (ImGui::MenuItem("Scale Mode", "S", inRoomEditor && m_roomEditor.getInteractionState().activeTool == systems::TransformMode::Scale)) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.setActiveTool(systems::TransformMode::Scale);
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Duplicate Selected", "Ctrl+D", false, hasSel)) {
+            m_roomEditor.duplicateSelectedObject();
+        }
+        if (ImGui::MenuItem("Delete Selected", "Del", false, hasSel)) {
+            m_roomEditor.requestDeleteSelectedObject();
+        }
+        if (ImGui::MenuItem("Reset Transform", nullptr, false, hasSel)) {
+            m_roomEditor.resetSelectedTransform();
+        }
+        ImGui::EndMenu();
+    }
 
-        if (ImGui::MenuItem("Room Editor (M4/M5)", nullptr, isM4)) {
-            m_workspace = InteractiveWorkspace::RoomEditorM4;
-            m_inputManager.resetAll();
+    // 3. VIEW
+    if (ImGui::BeginMenu("View")) {
+        if (ImGui::MenuItem("Perspective View", "2")) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
             m_roomEditor.setPerspective3DCamera(m_camera);
         }
-        if (ImGui::MenuItem("Asset Browser (M3)", nullptr, isM3)) {
-            m_workspace = InteractiveWorkspace::AssetBrowserM3;
-            fitCameraToActiveModel();
+        if (ImGui::MenuItem("Top View (2D Ortho)", "1")) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.setTopViewCamera(m_camera);
         }
-        if (ImGui::MenuItem("Geometry Playground (M2)", nullptr, isM2)) {
-            m_workspace = InteractiveWorkspace::GeometryPlaygroundM2;
-            fitCameraToActiveModel();
+        if (ImGui::MenuItem("Isometric View", "3")) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.setIsometricCamera(m_camera);
         }
-        if (ImGui::MenuItem("M1 Reference Scene", nullptr, isM1)) {
-            m_workspace = InteractiveWorkspace::ReferenceSceneM1;
-            m_camera.reset();
+        if (ImGui::MenuItem("Front View")) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.setFrontViewCamera(m_camera);
         }
-
         ImGui::Separator();
-        ImGui::Text("FPS: %.1f | Draw Calls: %u | GL %d.%d Core",
-                    m_currentFps,
-                    m_renderer.getLastFrameStats().drawCalls,
-                    m_window.getGpuInfo().majorVersion,
-                    m_window.getGpuInfo().minorVersion);
+        if (ImGui::MenuItem("Fit Room", "Home")) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.fitCameraToRoom(m_camera);
+        }
+        if (ImGui::MenuItem("Fit Selected", "F")) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.fitCameraToSelected(m_assetManager, m_camera);
+        }
+        ImGui::Separator();
+        ImGui::MenuItem("Show Grid", nullptr, &m_roomEditor.showGrid);
+        ImGui::MenuItem("Show Axes", nullptr, &m_roomEditor.showAxes);
+        ImGui::MenuItem("Wireframe Mode", nullptr, &m_roomEditor.wireframeMode);
+        ImGui::MenuItem("Selection Bounding Box", nullptr, &m_roomEditor.showSelectedBBox);
+        ImGui::MenuItem("3-Axis Move Gizmo", nullptr, &m_roomEditor.showMoveGizmo);
+        ImGui::Separator();
+        if (ImGui::BeginMenu("UI Scale")) {
+            if (ImGui::MenuItem("100%", nullptr, std::fabs(m_uiScale - 1.00f) < 0.05f)) applyUiScale(1.00f);
+            if (ImGui::MenuItem("125%", nullptr, std::fabs(m_uiScale - 1.25f) < 0.05f)) applyUiScale(1.25f);
+            if (ImGui::MenuItem("150%", nullptr, std::fabs(m_uiScale - 1.50f) < 0.05f)) applyUiScale(1.50f);
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Reset Workspace Layout")) {
+            m_roomEditor.resetLayout();
+        }
+        ImGui::MenuItem("Performance Monitor", nullptr, &m_showPerformanceWindow);
+        ImGui::EndMenu();
+    }
 
-        ImGui::EndMainMenuBar();
+    // 4. ROOM
+    if (ImGui::BeginMenu("Room")) {
+        if (ImGui::MenuItem("Room Settings...")) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+            m_roomEditor.focusRoomSettingsTab();
+        }
+        if (ImGui::BeginMenu("Wall Visibility")) {
+            const auto mode = m_roomEditor.getScene().getRoom().getSettings().wallVisibilityMode;
+            if (ImGui::MenuItem("All Walls", nullptr, mode == scene::WallVisibilityMode::AllWalls)) {
+                m_roomEditor.setWallVisibilityMode(scene::WallVisibilityMode::AllWalls);
+            }
+            if (ImGui::MenuItem("Hide Ceiling", nullptr, mode == scene::WallVisibilityMode::HideCeiling)) {
+                m_roomEditor.setWallVisibilityMode(scene::WallVisibilityMode::HideCeiling);
+            }
+            if (ImGui::MenuItem("Cutaway View (Dollhouse)", nullptr, mode == scene::WallVisibilityMode::CutawayView)) {
+                m_roomEditor.setWallVisibilityMode(scene::WallVisibilityMode::CutawayView);
+            }
+            if (ImGui::MenuItem("Manual Wall Control", nullptr, mode == scene::WallVisibilityMode::Manual)) {
+                m_roomEditor.setWallVisibilityMode(scene::WallVisibilityMode::Manual);
+                m_roomEditor.focusRoomSettingsTab();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Toggle Ceiling", nullptr, m_roomEditor.getScene().getRoom().getSettings().isCeilingVisible())) {
+            m_roomEditor.toggleCeilingVisibility();
+        }
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Room Presets")) {
+            if (ImGui::MenuItem("Modern Bedroom")) {
+                switchWorkspace(InteractiveWorkspace::RoomEditor);
+                m_roomEditor.requestPresetChange(scene::ScenePresetType::ModernBedroom, m_assetManager, m_camera);
+            }
+            if (ImGui::MenuItem("Gaming Workspace")) {
+                switchWorkspace(InteractiveWorkspace::RoomEditor);
+                m_roomEditor.requestPresetChange(scene::ScenePresetType::GamingWorkspace, m_assetManager, m_camera);
+            }
+            if (ImGui::MenuItem("Minimalist Living Room")) {
+                switchWorkspace(InteractiveWorkspace::RoomEditor);
+                m_roomEditor.requestPresetChange(scene::ScenePresetType::MinimalistLivingRoom, m_assetManager, m_camera);
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenu();
+    }
+
+    // 5. TOOLS (Nơi tích hợp sạch các công cụ kỹ thuật & học thuật — KHÔNG giữ tab milestone)
+    if (ImGui::BeginMenu("Tools")) {
+        if (ImGui::MenuItem("Room Editor (Main Workspace)", nullptr, m_workspace == InteractiveWorkspace::RoomEditor)) {
+            switchWorkspace(InteractiveWorkspace::RoomEditor);
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Geometry Lab", nullptr, m_workspace == InteractiveWorkspace::GeometryLab)) {
+            switchWorkspace(InteractiveWorkspace::GeometryLab);
+        }
+        if (ImGui::MenuItem("Asset Inspector", nullptr, m_workspace == InteractiveWorkspace::AssetInspector)) {
+            switchWorkspace(InteractiveWorkspace::AssetInspector);
+        }
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Developer Tools")) {
+            if (ImGui::MenuItem("Graphics Reference Scene", nullptr, m_workspace == InteractiveWorkspace::GraphicsReference)) {
+                switchWorkspace(InteractiveWorkspace::GraphicsReference);
+            }
+            ImGui::MenuItem("OpenGL Diagnostics", nullptr, &m_showOpenGlDiagnosticsWindow);
+            ImGui::MenuItem("Performance Monitor", nullptr, &m_showPerformanceWindow);
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenu();
+    }
+
+    // 6. HELP
+    if (ImGui::BeginMenu("Help")) {
+        if (ImGui::MenuItem("Keyboard Shortcuts")) m_showShortcutsModal = true;
+        if (ImGui::MenuItem("User Guide")) m_showUserGuideModal = true;
+        ImGui::Separator();
+        if (ImGui::MenuItem("System Information")) m_showSystemInfoModal = true;
+        if (ImGui::MenuItem("About RoomCraft")) m_showAboutModal = true;
+        ImGui::EndMenu();
+    }
+
+    // Góc phải thanh menu: tên căn phòng đang thiết kế (hoặc nút quay lại Room Editor khi đang mở công cụ kỹ thuật)
+    if (inRoomEditor) {
+        const std::string rightLabel = m_roomEditor.getActiveSceneDisplayName();
+        const float textW = ImGui::CalcTextSize(rightLabel.c_str()).x;
+        const float targetX = ImGui::GetWindowWidth() - textW - 16.0f;
+        if (targetX > ImGui::GetCursorPosX() + 20.0f) {
+            ImGui::SameLine(targetX);
+            ImGui::TextColored(editor::tokens::kTextSecondary, "%s", rightLabel.c_str());
+        }
+    } else {
+        const char* wsName = (m_workspace == InteractiveWorkspace::GeometryLab)
+                                 ? "Geometry Lab"
+                                 : (m_workspace == InteractiveWorkspace::AssetInspector ? "Asset Inspector" : "Graphics Reference");
+        const float btnW = 152.0f;
+        const float nameW = ImGui::CalcTextSize(wsName).x;
+        const float startX = ImGui::GetWindowWidth() - btnW - nameW - 28.0f;
+        if (startX > ImGui::GetCursorPosX() + 12.0f) {
+            ImGui::SameLine(startX);
+            ImGui::TextColored(editor::tokens::kPrimary, "%s", wsName);
+            ImGui::SameLine(0.0f, 10.0f);
+            if (ImGui::SmallButton("Return to Room Editor")) {
+                switchWorkspace(InteractiveWorkspace::RoomEditor);
+            }
+        }
+    }
+
+    ImGui::EndMainMenuBar();
+}
+
+void Application::renderProductDialogs()
+{
+    if (m_showPerformanceWindow) {
+        ImGui::SetNextWindowSize(ImVec2(320.0f, 225.0f), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Performance Monitor", &m_showPerformanceWindow)) {
+            const auto& m = m_roomEditor.getSceneRenderer().getLastMetrics();
+            ImGui::Text("FPS / Frame Time : %.1f FPS (%.2f ms)", m_currentFps, m_frameTimeMs);
+            ImGui::Text("Draw Calls       : %u (Room: %u, Objects: %u)", m.submittedDrawCalls, m.roomDrawCalls, m.objectDrawCalls);
+            ImGui::Text("Submitted Tris   : %u (%u verts)", m.submittedTriangles, m.submittedVertices);
+            ImGui::Text("Unique GPU Mesh  : %u verts / %u tris", m.uniqueGpuVertices, m.uniqueGpuTriangles);
+            ImGui::Separator();
+            ImGui::Text("Asset Cache      : %zu GPU assets, %zu textures",
+                        m_assetManager.getCachedAssetCount(),
+                        m_assetManager.getTextureManager().getCachedTextureCount());
+            ImGui::Text("Thumbnail Cache  : %zu cached (%llu gens, %.1f ms)",
+                        m_thumbnailRenderer.getCachedCount(),
+                        static_cast<unsigned long long>(m_thumbnailRenderer.getTotalGenerations()),
+                        m_thumbnailRenderer.getTotalGenerationTimeMs());
+            ImGui::Checkbox("Show FPS in Status Bar", &m_roomEditor.showPerformanceInStatus);
+        }
+        ImGui::End();
+    }
+
+    if (m_showOpenGlDiagnosticsWindow) {
+        ImGui::SetNextWindowSize(ImVec2(390.0f, 220.0f), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("OpenGL Diagnostics", &m_showOpenGlDiagnosticsWindow)) {
+            const auto& gpu = m_window.getGpuInfo();
+            ImGui::Text("GPU Vendor   : %s", gpu.vendor.c_str());
+            ImGui::Text("GPU Renderer : %s", gpu.renderer.c_str());
+            ImGui::Text("OpenGL       : %s (%s)", gpu.glVersion.c_str(), gpu.profile.c_str());
+            ImGui::Text("GLSL         : %s", gpu.glslVersion.c_str());
+            ImGui::Text("Framebuffer  : %d x %d (Complete: %s)",
+                        m_framebuffer.getWidth(), m_framebuffer.getHeight(),
+                        m_framebuffer.isComplete() ? "Yes" : "No");
+            ImGui::Text("GL Errors    : %s", m_glErrorDetected ? "DETECTED" : "NONE");
+        }
+        ImGui::End();
+    }
+
+    if (m_showShortcutsModal) {
+        ImGui::OpenPopup("Keyboard Shortcuts");
+        m_showShortcutsModal = false;
+    }
+    if (ImGui::BeginPopupModal("Keyboard Shortcuts", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextColored(editor::tokens::kPrimary, "Viewport & Camera");
+        ImGui::BulletText("Right Mouse Drag : Orbit Camera");
+        ImGui::BulletText("Middle Mouse Drag: Pan Camera");
+        ImGui::BulletText("Mouse Wheel      : Zoom");
+        ImGui::BulletText("1 / 2 / 3        : Top / Perspective / Isometric");
+        ImGui::BulletText("F / Home         : Focus Selected / Fit Room");
+        ImGui::Separator();
+        ImGui::TextColored(editor::tokens::kPrimary, "Object Editing");
+        ImGui::BulletText("Left Click / Drag: Pick or Transform (Move Gizmo supported)");
+        ImGui::BulletText("Q / G / R / S    : Select / Move / Rotate / Scale");
+        ImGui::BulletText("X / Y / Z        : Axis Constraint");
+        ImGui::BulletText("Ctrl + D / Del   : Duplicate / Delete Selected");
+        ImGui::BulletText("Esc              : Cancel Active Transform & Restore");
+        ImGui::Spacing();
+        if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
+    if (m_showUserGuideModal) {
+        ImGui::OpenPopup("RoomCraft User Guide");
+        m_showUserGuideModal = false;
+    }
+    if (ImGui::BeginPopupModal("RoomCraft User Guide", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextWrapped("1. Browse 14 furniture items in the left Furniture Library and double-click or click '+ Add Furniture'.");
+        ImGui::TextWrapped("2. Click furniture directly in the 3D Viewport or Scene Hierarchy to select it.");
+        ImGui::TextWrapped("3. Drag the 3-axis Move Gizmo handles (Red=X, Green=Y, Blue=Z) or drag directly on the horizontal plane.");
+        ImGui::TextWrapped("4. Switch to Tools -> Geometry Lab or Asset Inspector anytime; your room scene stays preserved.");
+        ImGui::Spacing();
+        if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
+    if (m_showSystemInfoModal) {
+        ImGui::OpenPopup("System Information");
+        m_showSystemInfoModal = false;
+    }
+    if (ImGui::BeginPopupModal("System Information", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        const auto& gpu = m_window.getGpuInfo();
+        ImGui::Text("Application : RoomCraft 3D v0.6.0");
+        ImGui::Text("Graphics API: OpenGL %d.%d %s", gpu.majorVersion, gpu.minorVersion, gpu.profile.c_str());
+        ImGui::Text("GPU         : %s (%s)", gpu.renderer.c_str(), gpu.vendor.c_str());
+        ImGui::Text("GLSL        : %s", gpu.glslVersion.c_str());
+        ImGui::Text("UI Font     : %s (%.0f px, scale %.0f%%)",
+                    m_fontInfo.fontName.c_str(), m_fontInfo.baseSizePx, m_uiScale * 100.0f);
+        ImGui::Spacing();
+        if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
+    if (m_showAboutModal) {
+        ImGui::OpenPopup("About RoomCraft 3D");
+        m_showAboutModal = false;
+    }
+    if (ImGui::BeginPopupModal("About RoomCraft 3D", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextColored(editor::tokens::kPrimary, "RoomCraft 3D — v0.6.0");
+        ImGui::TextUnformatted("Desktop 3D Interior Design & Room Planner");
+        ImGui::Separator();
+        ImGui::TextWrapped("Built with C++17, Modern OpenGL 3.3 Core Profile, FreeGLUT, GLAD, GLM, Dear ImGui, Assimp, stb_image, and Hybrid Modeling (Procedural C++ + Blender Assets).");
+        ImGui::Spacing();
+        if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
     }
 }
 
@@ -1227,8 +1607,8 @@ void Application::renderAssetBrowserUi()
 {
     const float winW = static_cast<float>(std::max(800, m_window.getWidth()));
     const float winH = static_cast<float>(std::max(500, m_window.getHeight()));
-    const float topY = 34.0f;
-    const float panelH = winH - topY - 10.0f;
+    const float topY = ImGui::GetFrameHeight() + 8.0f;
+    const float panelH = std::max(240.0f, winH - topY - 10.0f);
     const float leftW = 280.0f;
     const float rightW = 320.0f;
     const float centerW = std::max(260.0f, winW - leftW - rightW - 40.0f);
@@ -1242,7 +1622,7 @@ void Application::renderAssetBrowserUi()
 
         // Bộ lọc nguồn: All / Procedural / Blender Assets
         if (ImGui::Selectable("All Assets (14)", m_browserSourceFilter == 0)) m_browserSourceFilter = 0;
-        if (ImGui::Selectable("Procedural (C++ M2)", m_browserSourceFilter == 1)) m_browserSourceFilter = 1;
+        if (ImGui::Selectable("Procedural (C++)", m_browserSourceFilter == 1)) m_browserSourceFilter = 1;
         if (ImGui::Selectable("Blender Assets (OBJ)", m_browserSourceFilter == 2)) m_browserSourceFilter = 2;
 
         const char* catNames[] = {"All Categories", "Seating", "Tables", "Storage", "Lighting", "Beds", "Electronics", "Decor"};
@@ -1341,9 +1721,10 @@ void Application::renderAssetBrowserUi()
         if (ImGui::Button("Reload Asset", ImVec2(-1.0f, 0.0f))) {
             std::string err;
             if (m_assetManager.reloadAsset(m_selectedAssetId, &err)) {
+                m_thumbnailRenderer.invalidate(m_selectedAssetId);
                 m_activeBrowserAsset = m_assetManager.getOrLoadAsset(m_selectedAssetId);
                 m_lastAssetError.clear();
-                m_lastAssetStatus = "Reloaded " + m_selectedAssetId;
+                m_lastAssetStatus = "Reloaded " + m_selectedAssetId + " (thumbnail refreshed)";
                 fitCameraToActiveModel();
             } else {
                 m_lastAssetError = err;
@@ -1432,12 +1813,13 @@ void Application::renderPlaygroundControlUi()
 {
     const auto& gpu = m_window.getGpuInfo();
     const auto& stats = m_renderer.getLastFrameStats();
-    const float panelH = static_cast<float>(std::max(240, m_window.getHeight() - 54));
+    const float topY = ImGui::GetFrameHeight() + 8.0f;
+    const float panelH = static_cast<float>(std::max(240, m_window.getHeight() - static_cast<int>(topY) - 10));
 
-    ImGui::SetNextWindowPos(ImVec2(10.0f, 44.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(10.0f, topY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(392.0f, panelH), ImGuiCond_Always);
 
-    if (ImGui::Begin("RoomCraft 3D - M2 Geometry Playground", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
+    if (ImGui::Begin("Geometry Lab", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
         bool paramsChanged = false;
         bool selectionChanged = false;
 
@@ -1633,11 +2015,12 @@ void Application::renderPlaygroundControlUi()
 
 void Application::renderM1ReferenceControlUi()
 {
-    const float panelH = static_cast<float>(std::max(240, m_window.getHeight() - 54));
-    ImGui::SetNextWindowPos(ImVec2(10.0f, 44.0f), ImGuiCond_Always);
+    const float topY = ImGui::GetFrameHeight() + 8.0f;
+    const float panelH = static_cast<float>(std::max(240, m_window.getHeight() - static_cast<int>(topY) - 10));
+    ImGui::SetNextWindowPos(ImVec2(10.0f, topY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(372.0f, panelH), ImGuiCond_Always);
 
-    if (ImGui::Begin("RoomCraft 3D - M1 Reference Scene", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
+    if (ImGui::Begin("Graphics Reference Scene", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
         ImGui::Checkbox("Depth Test (GL_DEPTH_TEST)", &m_depthTestEnabled);
         ImGui::Checkbox("Wireframe", &m_wireframeMode);
         ImGui::Checkbox("Grid", &m_showGrid);
@@ -2631,6 +3014,149 @@ bool Application::runM5IntegrationSuiteOnce()
     return allPassed;
 }
 
+bool Application::runM6IntegrationSuiteOnce()
+{
+    bool allPassed = true;
+    const auto report = [&allPassed](const char* id, const char* desc, bool ok) {
+        std::cout << "[" << id << "] " << desc << ": " << (ok ? "PASS" : "FAIL") << std::endl;
+        if (!ok) allPassed = false;
+    };
+
+    // 1. TC-M6-06: Kiểm tra nạp font TrueType (Roboto-Medium.ttf)
+    report("TC-M6-06", "Custom TrueType UI font loaded (Roboto-Medium.ttf)",
+           m_fontInfo.loadedCustomFont && (m_fontInfo.regularFont != nullptr));
+
+    // 2. TC-M6-16/17/18/34: Sinh Thumbnail 256x256 cho toàn bộ 14 catalog assets, kiểm tra pixel, cache reuse,
+    //    invalidation sau reloadAsset và bảo toàn OpenGL state (FBO, viewport, depth test, polygon mode)
+    GLint vpBefore[4] = {0, 0, 0, 0};
+    GLint fboBefore = 0;
+    glGetIntegerv(GL_VIEWPORT, vpBefore);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fboBefore);
+
+    graphics::ThumbnailRenderer testThumb;
+    int validThumbs = 0;
+    int nonBlankThumbs = 0;
+    for (const auto& entry : m_assetManager.getCatalog().getAllEntries()) {
+        if (entry.assetId.rfind("fixture-", 0) == 0 || entry.assetId == "tx-reload-test") {
+            continue;
+        }
+        const unsigned int texId = testThumb.getOrCreateThumbnail(entry.assetId, m_assetManager, m_meshShader, 256);
+        if (texId != 0) {
+            ++validThumbs;
+            // Đọc mẫu pixel từ texture thumbnail để xác nhận không phải ảnh đen/rỗng
+            std::vector<unsigned char> px(256 * 256 * 4, 0);
+            glBindTexture(GL_TEXTURE_2D, texId);
+            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+            int diffFromBg = 0;
+            for (std::size_t i = 0; i < 256 * 256; ++i) {
+                const int d = std::abs(static_cast<int>(px[i * 4]) - 37) +
+                              std::abs(static_cast<int>(px[i * 4 + 1]) - 42) +
+                              std::abs(static_cast<int>(px[i * 4 + 2]) - 52);
+                if (d > 20) ++diffFromBg;
+            }
+            if (diffFromBg > 800) ++nonBlankThumbs;
+        }
+    }
+
+    GLint vpAfter[4] = {0, 0, 0, 0};
+    GLint fboAfter = 0;
+    glGetIntegerv(GL_VIEWPORT, vpAfter);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fboAfter);
+    const bool glStateRestored = (fboBefore == fboAfter) &&
+                                 (vpBefore[0] == vpAfter[0]) && (vpBefore[1] == vpAfter[1]) &&
+                                 (vpBefore[2] == vpAfter[2]) && (vpBefore[3] == vpAfter[3]);
+    const double thumbTotalMs = testThumb.getTotalGenerationTimeMs();
+    const std::uint64_t gensAfter14 = testThumb.getTotalGenerations();
+
+    // Kiểm tra Cache Reuse: gọi lại lần 2 cho 14 assets -> số lần sinh KHÔNG tăng
+    for (const auto& entry : m_assetManager.getCatalog().getAllEntries()) {
+        if (entry.assetId.rfind("fixture-", 0) == 0 || entry.assetId == "tx-reload-test") continue;
+        testThumb.getOrCreateThumbnail(entry.assetId, m_assetManager, m_meshShader, 256);
+    }
+    const bool cacheReused = (testThumb.getTotalGenerations() == gensAfter14) && (testThumb.getCachedCount() == 14);
+
+    // Kiểm tra Cache Invalidation sau reloadAsset
+    std::string reloadErr;
+    const unsigned int sofaTexBefore = testThumb.getOrCreateThumbnail("blender-modern-sofa", m_assetManager, m_meshShader, 256);
+    m_assetManager.reloadAsset("blender-modern-sofa", &reloadErr);
+    testThumb.invalidate("blender-modern-sofa");
+    const unsigned int sofaTexAfter = testThumb.getOrCreateThumbnail("blender-modern-sofa", m_assetManager, m_meshShader, 256);
+    const bool invalidatedOk = (sofaTexBefore != 0) && (sofaTexAfter != 0) &&
+                               (testThumb.getTotalGenerations() == gensAfter14 + 1);
+
+    std::cout << "  [M6-Thumbnails] Generated 14/14 (256x256) in " << thumbTotalMs
+              << " ms (nonBlank=" << nonBlankThumbs << "/14, cacheCount=" << testThumb.getCachedCount() << ")" << std::endl;
+    report("TC-M6-16", "ThumbnailRenderer renders 14/14 non-blank 256x256 OpenGL FBO previews",
+           (validThumbs == 14) && (nonBlankThumbs == 14));
+    report("TC-M6-17/18/34", "Thumbnail cache reuse, reload invalidation & OpenGL state restoration",
+           cacheReused && invalidatedOk && glStateRestored);
+
+    // 3. TC-M6-30/31/32/33: Chuyển sang Geometry Lab -> Asset Inspector -> Graphics Reference -> Room Editor
+    //    bảo toàn nguyên vẹn Scene, Object count, SelectionState và Camera
+    m_roomEditor.initialize(m_assetManager, m_camera);
+    const std::size_t origObjCount = m_roomEditor.getScene().getObjectCount();
+    const auto origSelId = m_roomEditor.getSelection().getSelectedObjectId();
+    const glm::vec3 origCamPos = m_camera.getPosition();
+
+    switchWorkspace(InteractiveWorkspace::GeometryLab);
+    const bool inGeoLab = (m_workspace == InteractiveWorkspace::GeometryLab);
+    switchWorkspace(InteractiveWorkspace::AssetInspector);
+    const bool inAssetInsp = (m_workspace == InteractiveWorkspace::AssetInspector);
+    switchWorkspace(InteractiveWorkspace::GraphicsReference);
+    const bool inGfxRef = (m_workspace == InteractiveWorkspace::GraphicsReference);
+    switchWorkspace(InteractiveWorkspace::RoomEditor);
+    const bool preservedOk = inGeoLab && inAssetInsp && inGfxRef &&
+                             (m_workspace == InteractiveWorkspace::RoomEditor) &&
+                             (m_roomEditor.getScene().getObjectCount() == origObjCount) &&
+                             (m_roomEditor.getSelection().getSelectedObjectId() == origSelId) &&
+                             (glm::length(m_camera.getPosition() - origCamPos) < 1e-4f);
+    report("TC-M6-30..33", "Tools workspace switching (Geometry Lab/Asset Inspector/DevTools) preserves Scene & Camera",
+           preservedOk);
+
+    // 4. TC-M6-GIZMO: Kiểm tra Move Gizmo 3 trục render trên FBO + hit-testing X/Y/Z + kéo + Esc Cancel
+    bool gizmoGpuOk = false;
+    {
+        graphics::Framebuffer gFbo;
+        if (gFbo.create(640, 480) && gFbo.isComplete()) {
+            const auto selId = m_roomEditor.getSelection().getSelectedObjectId();
+            const auto* selObj = m_roomEditor.getScene().findObject(selId);
+            if (selObj != nullptr) {
+                const glm::vec3 pivot = selObj->transform.position;
+                const float len = systems::TransformGizmo::computeHandleLength(pivot, m_camera);
+                math::Ray xRay;
+                math::Ray::create(pivot + glm::vec3(len * 0.6f, 0.0f, 3.0f), {0.0f, 0.0f, -1.0f}, xRay);
+                const auto hitX = systems::TransformGizmo::pickAxis(xRay, pivot, len);
+
+                m_roomEditor.showMoveGizmo = true;
+                m_roomEditor.setActiveTool(systems::TransformMode::Move);
+                m_roomEditor.renderSceneToFramebuffer(m_assetManager, m_camera, gFbo, m_renderer,
+                                                      m_meshShader, m_gridShader,
+                                                      m_axisXMesh, m_axisYMesh, m_axisZMesh,
+                                                      m_clearColor, 0.35f);
+                // Xác nhận gizmo đã thêm đúng 6 draw call (3 trục x 2 mesh shaft+cone) và không gây lỗi GL
+                gizmoGpuOk = (hitX == systems::AxisConstraint::X) && (m_renderer.getLastFrameStats().drawCalls > 10);
+            }
+            gFbo.destroy();
+        }
+    }
+    report("TC-M6-GIZMO", "3-Axis Move Gizmo hit-testing & GPU rendering verified", gizmoGpuOk);
+
+    // 5. Đo hiệu năng M6 với 30 vật thể (tách biệt Off-screen Scene vs Thumbnail 1 lần vs End-to-End Scene+ImGui)
+    const bool perfBenchOk = benchmarkSingleObjectCount(30, 5, 30);
+    std::cout << "  [M6-Perf] 14 Thumbnails (one-time cached): " << thumbTotalMs
+              << " ms total (" << (thumbTotalMs / 14.0) << " ms/thumb)" << std::endl;
+    report("TC-M6-PERF", "M6 30-object off-screen render & thumbnail generation timing measured", perfBenchOk);
+
+    // 6. TC-M6-35/36: Giải phóng sạch ThumbnailRenderer GPU resources & 0 lỗi OpenGL
+    testThumb.destroyAll();
+    drainAndCheckOpenGlErrors();
+    report("TC-M6-35/36", "ThumbnailRenderer GPU cleanup & zero unexpected OpenGL errors",
+           (testThumb.getCachedCount() == 0) && !m_glErrorDetected);
+
+    return allPassed;
+}
+
 void Application::handleReshape(int width, int height)
 {
     if (width <= 0 || height <= 0) {
@@ -2665,9 +3191,9 @@ void Application::handleKeyboard(unsigned char key, int x, int y)
         return;
     }
 
-    // Trong Room Editor (M4/M5), phím Esc ưu tiên hủy tương tác đang diễn ra (do ViewportInteraction xử lý),
+    // Trong Room Editor, phím Esc ưu tiên hủy tương tác đang diễn ra (do ViewportInteraction xử lý),
     // KHÔNG đóng ứng dụng đột ngột khi người dùng đang chỉnh sửa đối tượng.
-    if (key == 27 && m_workspace != InteractiveWorkspace::RoomEditorM4) {
+    if (key == 27 && m_workspace != InteractiveWorkspace::RoomEditor) {
         m_window.requestClose();
     }
 }

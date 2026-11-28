@@ -29,18 +29,22 @@ int main(int argc, char** argv)
             config.title = "RoomCraft 3D - M4 Performance Benchmark (10/30/100 Objects)";
         } else if (arg == "--m5-smoke-test") {
             config.mode = roomcraft::core::ApplicationMode::SmokeTestM5;
-            config.title = "RoomCraft 3D - M5 Interactive Camera & Picking GPU Smoke Test";
+            config.title = "RoomCraft 3D - M5 Regression Smoke Test";
+        } else if (arg == "--m6-smoke-test") {
+            config.mode = roomcraft::core::ApplicationMode::SmokeTestM6;
+            config.title = "RoomCraft 3D - M6 Professional UI/UX, Thumbnails & Gizmo Smoke Test";
         } else if (arg == "--help" || arg == "-h") {
-            std::cout << "RoomCraft 3D (M5 Interactive Camera, Object Picking & Transformation)\n"
+            std::cout << "RoomCraft 3D v0.6.0 — 3D Interior Design Studio\n"
                       << "Usage: RoomCraft3D [option]\n"
-                      << "  (no option)      Run interactive Room Editor (M4/M5), Asset Browser (M3) & Geometry Playground (M2)\n"
+                      << "  (no option)      Launch RoomCraft 3D Interactive Editor\n"
                       << "  --smoke-test     Run M0 regression smoke test\n"
                       << "  --m1-smoke-test  Run M1 regression GPU integration smoke test\n"
                       << "  --m2-smoke-test  Run M2 regression GPU integration smoke test\n"
                       << "  --m3-smoke-test  Run M3 regression GPU integration smoke test\n"
                       << "  --m4-smoke-test  Run M4 regression GPU integration smoke test\n"
-                      << "  --m4-benchmark   Run M4 10/30/100 furniture object GPU performance benchmark at 1280x720\n"
-                      << "  --m5-smoke-test  Run M5 Interactive Camera, Picking & Transform GPU smoke test\n";
+                      << "  --m4-benchmark   Run M4 10/30/100 furniture object GPU performance benchmark\n"
+                      << "  --m5-smoke-test  Run M5 regression GPU integration smoke test\n"
+                      << "  --m6-smoke-test  Run M6 UI/UX, Thumbnails, Move Gizmo & Performance smoke test\n";
             return 0;
         }
     }

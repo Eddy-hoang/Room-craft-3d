@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RoomCraft3D
-    VERSION 0.5.0
+    VERSION 0.6.0
     DESCRIPTION "RoomCraft 3D - Desktop 3D Interior Design and Room Planner"
     LANGUAGES C CXX
 )
@@ -280,7 +280,7 @@ target_link_libraries(roomcraft_assets PUBLIC
 
 # ==============================================================================
 # 4. roomcraft_scene (CPU-only, KHÔNG phụ thuộc OpenGL/FreeGLUT/ImGui):
-#    Scene/Room/Presets + M5 CameraController, PickingSystem, TransformController, InputManager, ViewportInteraction
+#    Scene/Room/Presets + M5 CameraController/Picking/Transform + M6 TransformGizmo/EditorLayout
 # ==============================================================================
 add_library(roomcraft_scene STATIC
     src/scene/Room.cpp
@@ -290,7 +290,9 @@ add_library(roomcraft_scene STATIC
     src/systems/CameraController.cpp
     src/systems/PickingSystem.cpp
     src/systems/TransformController.cpp
+    src/systems/TransformGizmo.cpp
     src/core/InputManager.cpp
+    src/editor/EditorLayout.cpp
     src/editor/ViewportInteraction.cpp
 )
 target_include_directories(roomcraft_scene PUBLIC
@@ -301,7 +303,7 @@ target_link_libraries(roomcraft_scene PUBLIC
 )
 
 # ==============================================================================
-# 5. roomcraft_engine (GPU + Window + ImGui): Core Engine, SceneRenderer, RoomEditor, App
+# 5. roomcraft_engine (GPU + Window + ImGui): Core Engine, Thumbnails, Design System, RoomEditor, App
 # ==============================================================================
 add_library(roomcraft_engine STATIC
     src/core/Window.cpp
@@ -312,8 +314,11 @@ add_library(roomcraft_engine STATIC
     src/graphics/Renderer.cpp
     src/graphics/Texture.cpp
     src/graphics/TextureManager.cpp
+    src/graphics/ThumbnailRenderer.cpp
     src/graphics/SceneRenderer.cpp
     src/assets/AssetManager.cpp
+    src/editor/EditorTheme.cpp
+    src/editor/EditorIcons.cpp
     src/editor/RoomEditor.cpp
 )
 target_include_directories(roomcraft_engine PUBLIC
@@ -429,18 +434,26 @@ add_executable(RoomCraft3D_InteractionUnitTests
 )
 target_link_libraries(RoomCraft3D_InteractionUnitTests PRIVATE roomcraft_scene)
 
+# 6. M6 Editor Layout, Notifications & Move Gizmo Unit Tests (CPU-only, không cần OpenGL context)
+add_executable(RoomCraft3D_EditorUiUnitTests
+    tests/unit/EditorUiTests.cpp
+)
+target_link_libraries(RoomCraft3D_EditorUiUnitTests PRIVATE roomcraft_scene)
+
 if(MSVC)
     target_compile_options(RoomCraft3D_UnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_GeometryUnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_AssetUnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_SceneUnitTests PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(RoomCraft3D_InteractionUnitTests PRIVATE /W4 /permissive- /utf-8)
+    target_compile_options(RoomCraft3D_EditorUiUnitTests PRIVATE /W4 /permissive- /utf-8)
 else()
     target_compile_options(RoomCraft3D_UnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_GeometryUnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_AssetUnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_SceneUnitTests PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(RoomCraft3D_InteractionUnitTests PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(RoomCraft3D_EditorUiUnitTests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 if(MINGW)
@@ -449,6 +462,7 @@ if(MINGW)
     target_link_options(RoomCraft3D_AssetUnitTests PRIVATE -static)
     target_link_options(RoomCraft3D_SceneUnitTests PRIVATE -static)
     target_link_options(RoomCraft3D_InteractionUnitTests PRIVATE -static)
+    target_link_options(RoomCraft3D_EditorUiUnitTests PRIVATE -static)
 endif()
 
 add_test(NAME M0_SmokeTest             COMMAND $<TARGET_FILE:RoomCraft3D> --smoke-test)
@@ -462,3 +476,5 @@ add_test(NAME M4_SceneUnitTests        COMMAND $<TARGET_FILE:RoomCraft3D_SceneUn
 add_test(NAME M4_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m4-smoke-test)
 add_test(NAME M5_InteractionUnitTests  COMMAND $<TARGET_FILE:RoomCraft3D_InteractionUnitTests>)
 add_test(NAME M5_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m5-smoke-test)
+add_test(NAME M6_EditorUiUnitTests     COMMAND $<TARGET_FILE:RoomCraft3D_EditorUiUnitTests>)
+add_test(NAME M6_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m6-smoke-test)

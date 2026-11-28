@@ -2,58 +2,66 @@
 
 ## 1. Chiến lược kiểm thử
 
-Dự án áp dụng mô hình kiểm thử 3 tầng với **11 bộ kiểm thử CTest**:
-1. **Unit Testing thuần CPU** (`M1_UnitTests`, `M2_GeometryUnitTests`, `M3_AssetUnitTests`, `M4_SceneUnitTests`, `M5_InteractionUnitTests`): Kiểm thử độc lập toán học, sinh hình học, Assimp import, quản lý cảnh, tọa độ cầu camera, Ray Casting, Slab Method, Möller–Trumbore, Wall Occlusion, InputManager và TransformController không cần OpenGL context.
-2. **GPU Integration & Runtime Smoke Testing** (`M0_SmokeTest`..`M5_IntegrationSmokeTest` + `--m4-benchmark`): Chạy trên ngữ cảnh OpenGL 3.3 Core thật.
-3. **Manual GUI Testing**: Người dùng chạy trực tiếp `RoomCraft3D.exe` và xác nhận checklist trực quan.
+Dự án áp dụng mô hình kiểm thử 3 tầng với **13 bộ kiểm thử CTest**:
+1. **Unit Testing thuần CPU (`6` suites)**:
+   - `M1_UnitTests`, `M2_GeometryUnitTests`, `M3_AssetUnitTests`, `M4_SceneUnitTests`, `M5_InteractionUnitTests`, `M6_EditorUiUnitTests`.
+   - Kiểm thử độc lập toán học, sinh hình học, Assimp import, quản lý cảnh, camera/picking/transform, bố cục đáp ứng `EditorLayout`, `NotificationSystem` và toán học 3-Axis Move Gizmo không cần OpenGL context.
+2. **GPU Integration & Runtime Smoke Testing (`7` suites + `--m4-benchmark`)**:
+   - `M0_SmokeTest`, `M1_IntegrationSmokeTest`, `M2_IntegrationSmokeTest`, `M3_IntegrationSmokeTest`, `M4_IntegrationSmokeTest`, `M5_IntegrationSmokeTest`, `M6_IntegrationSmokeTest`.
+   - Chạy trên ngữ cảnh OpenGL 3.3 Core thật.
+3. **Manual & Visual GUI Testing**:
+   - Người dùng chạy trực tiếp `RoomCraft3D.exe`, kiểm tra trực quan bố cục, typography, thumbnail, kéo Move Gizmo, resize cửa sổ, DPI scale và xác nhận checklist.
 
-## 2. Regression M0–M4 (`9/9` CTest)
+---
 
-Toàn bộ 9 bộ kiểm thử từ M0 đến M4 (`TC-M0-01`..`TC-M4-29`) phải tiếp tục đạt `PASS`.
+## 2. Regression M0–M5 (`11/11` CTest)
 
-## 3. Danh mục Test Case — Milestone M5 (Camera, Object Picking & Interactive Transformation)
+Toàn bộ 11 bộ kiểm thử từ M0 đến M5 (`TC-M0-01`..`TC-M5-39`, `TC-M5-TRI`, `TC-M5-OCC`) phải tiếp tục đạt `PASS` không có suy thoái (đặc biệt giữ nguyên chọn vật thể, highlight cyan `TC-M5-38`, Ray–Triangle và Wall Occlusion).
 
-| Test ID | Hạng mục | Kịch bản kiểm thử | Kết quả mong đợi |
-|---|---|---|---|
-| **TC-M5-01** | Regression M0–M4 | Chạy lại 9 bộ CTest từ M0 đến M4 | 9/9 PASS |
-| **TC-M5-02** | Mouse Coord Conversion | Chuyển `(screenX, screenY)` sang tọa độ cục bộ viewport | Chính xác theo `rectMin` |
-| **TC-M5-03** | Viewport-local → NDC | Ánh xạ tâm, góc trên-trái, góc dưới-phải sang OpenGL NDC `[-1, 1]` | Lật trục Y đúng (`top=+1`, `bottom=-1`) |
-| **TC-M5-04** | Framebuffer / DPI Scaling | Display `800×600`, FBO `1600×1200` (2× DPI) | Tâm quy đổi đúng `(800, 600)` |
-| **TC-M5-05** | Perspective Ray Gen | Phát tia từ tâm & cạnh phải viewport ở Perspective | Tâm đi thẳng `-Z`, cạnh phải hướng `+X` |
-| **TC-M5-06** | Orthographic Ray Gen | Phát 2 tia ở 2 vị trí chuột khác nhau trong Top Ortho | Hướng tia song song (`dot=1`), gốc tia khác nhau theo chuột |
-| **TC-M5-07** | Invalid Viewport / Matrix | Viewport 0×0, chuột ngoài vùng, ma trận suy biến, vector 0/NaN | Từ chối an toàn, trả `false` |
-| **TC-M5-08** | Ray Normalization | Kiểm tra độ dài vector hướng sau `Ray::create` & `screenToWorldRay` | `|length(D) - 1| < 1e-3` |
-| **TC-M5-09** | Ray–AABB Hit | Tia từ `(0,1,5)` hướng `-Z` vào hộp `[-1,1]×[0,2]×[-1,1]` | Trúng chính xác tại `t = 4.0`, `z = 1.0` |
-| **TC-M5-10** | Ray–AABB Miss / Behind | Tia lệch ra ngoài & tia hướng ngược ra xa box | Không giao (`false`) |
-| **TC-M5-11** | Parallel Ray | Tia song song trục nằm trong slab & ngoài slab | Trong slab trúng `t = 4.0`; ngoài slab trượt không chia 0 |
-| **TC-M5-12** | Ray Inside Box | Gốc tia nằm tại tâm hộp `(0,1,0)` | Trúng với `startedInside = true`, `tHit = 0` |
-| **TC-M5-13** | Negative Direction & Invalid Box | Tia hướng `(-1, 0, -1)` & hộp bao chưa khởi tạo | Hướng âm trúng đúng; hộp lỗi bị từ chối |
-| **TC-M5-14** | Nearest Object Selection | Hai kệ sách thẳng hàng trước/sau dọc trục `-Z` | Chọn kệ gần hơn |
-| **TC-M5-15** | Hidden Object Exclusion | Ẩn kệ phía trước rồi bắn tia cùng hướng | Bỏ qua kệ ẩn, chọn trúng kệ phía sau |
-| **TC-M5-16** | Locked Object Policy | Khóa đối tượng rồi thử bắt đầu Rotate/Move/Delete | Cho chọn xem thông tin, chặn chỉnh sửa kèm cảnh báo |
-| **TC-M5-17** | Empty-space Clearing | Bắn tia vào vùng trống | Trả `hit = false`, `kInvalidObjectId` |
-| **TC-M5-18** | Rotated/Scaled Bounds | Bàn xoay `90° Y`, scale X `1.5×`, bắn tia vào phần kéo dài | Trúng đúng `ObjectId` |
-| **TC-M5-19** | Camera Orbit | Orbit `(60, 20)` quanh target | Giữ nguyên bán kính & target, đổi vị trí trên cầu |
-| **TC-M5-20** | Camera Pitch Limits | Orbit cực đại lên/xuống | Kẹp chặt trong `[-85°, +85°]`, không kỳ dị |
-| **TC-M5-21** | Camera Pan | Pan `(120, -60)` | `position` và `target` dịch chuyển cùng vector |
-| **TC-M5-22** | Perspective Zoom | Zoom vào/ra quá ngưỡng min/max | Kẹp trong `[0.5, 60.0] m`, clip planes hợp lệ |
-| **TC-M5-23** | Orthographic Zoom | Zoom vào/ra trong Top Ortho | Thay đổi `orthoHalfHeight`, không scale cảnh |
-| **TC-M5-24** | Camera Preset Sync | Chuyển Preset / Fit rồi Orbit nhẹ `1 px` | Không nhảy ngược về vị trí cũ |
-| **TC-M5-25** | Focus Selected | Gọi `fitBoundingBox` vào AABB đối tượng | Target chuyển tới tâm đối tượng |
-| **TC-M5-26** | Ray–Plane Intersection | Giao tiêu chuẩn, song song, gốc trên mặt phẳng, phía sau tia | Đúng tất cả 4 trường hợp |
-| **TC-M5-27** | Drag Preserves Y & Offset | Kéo vật ở `Y = 0.75 m` với con trỏ lệch tâm | Giữ nguyên `Y = 0.75 m` và `grabOffset` |
-| **TC-M5-28** | Grid Snapping | Kéo vật sang tọa độ âm `(-1.18, -0.77)` khi bật Snap `0.5 m` | Làm tròn đúng `(-1.0, 0.75, -1.0)` |
-| **TC-M5-29** | Rotation Interaction | Xoay `90°` & `180°` với angle snap `15°` | Đúng góc quay quanh trục `Y` |
-| **TC-M5-30** | Scaling Interaction | Kéo phóng to & kéo cực âm | Luôn dương, kẹp `[0.1, 10.0]` |
-| **TC-M5-31** | Cancel Transform | Hủy khi đang kéo / xoay / scale (`Esc`) | Khôi phục nguyên `initialTransform`, về `Idle` |
-| **TC-M5-32** | Delete Selected Safely | Nhấn `Delete` khi đang tương tác | Xóa object, xóa selection, đưa state về `Idle` |
-| **TC-M5-33** | Duplicate Selection | Nhấn `Ctrl + D` và giữ phím qua frame sau | Nhân bản đúng 1 lần (không auto-repeat), chọn bản mới |
-| **TC-M5-34** | Input Routing & GUI Capture | Nhấn `Delete`/`G` khi `uiWantsTextInput = true` | Không xóa object, không đổi tool |
-| **TC-M5-35** | Selection / Inspector Sync | Chọn từ Viewport / Hierarchy / Duplicate / Delete | Dùng chung `SelectionState`, đồng bộ cùng frame |
-| **TC-M5-36** | Viewport Resize & Picking | Resize FBO sang `960×540` ở Top Ortho và pick Computer Setup | Chọn trúng chính xác `ObjectId` |
-| **TC-M5-37** | Invalid Interaction Recovery | Xóa/khóa đối tượng trong lúc đang biến đổi | Tự hủy tương tác về `Idle` an toàn |
-| **TC-M5-38** | GPU Render & Highlight | Orbit camera & render Selected BBox cyan vào FBO | Xác nhận pixel cyan `> 20 px` |
-| **TC-M5-39** | OpenGL Errors & Shutdown | Quét `glGetError()` và đóng cửa sổ | `OpenGL errors: NONE`, thoát mã `0` |
-| **TC-M5-TRI** | Ray–Triangle Refinement (P1) | Bắn tia qua khoảng trống dưới gầm bàn | AABB trúng nhưng Ray–Triangle trượt sạch |
-| **TC-M5-OCC** | Wall Occlusion Policy | Bắn tia từ ngoài tường Nam ở `CutawayView` vs `AllWalls` | Tường ẩn cho chọn; tường hiện chặn chọn (`occludedByWall=true`) |
-| **TC-M5-MANUAL** | Interactive Editor GUI | Người dùng kiểm thử chuột/phím trực tiếp trên `RoomCraft3D.exe` | Xác nhận trực quan bởi người dùng |
+---
+
+## 3. Danh mục Test Case — Milestone M6 (Professional Editor UI/UX)
+
+Phân loại rõ theo tầng kiểm chứng: **[Auto-CPU]**, **[Auto-GPU]**, **[Manual-Visual]**.
+
+| Test ID | Loại | Hạng mục | Kịch bản kiểm thử | Kết quả mong đợi |
+|---|---|---|---|---|
+| **TC-M6-01** | Auto-All | Regression M0–M5 | Chạy lại toàn bộ `11/11` CTest từ M0 đến M5 | `11/11 PASS` |
+| **TC-M6-02** | Manual-Visual | Product Menu Bar | Mở `RoomCraft3D.exe`, kiểm tra thanh trên cùng | Chỉ có `RoomCraft \| File \| Edit \| View \| Room \| Tools \| Help`, không có tab milestone `M1..M5` |
+| **TC-M6-03** | Manual-Visual | No Fake Menu Items | Duyệt tất cả menu con của `File / Edit / View / Room / Tools / Help` | Mọi mục menu đều thực thi được; không có `Save`/`Open`/`Undo`/`Redo` giả |
+| **TC-M6-04** | Manual-Visual | Modern Dark CAD Theme | Quan sát độ tương phản nền Viewport, Panel, Elevated card, nút Primary/Danger | Đúng bảng màu `EditorTheme`, phân cấp thị giác rõ, dễ đọc |
+| **TC-M6-05** | Manual-Visual | Axis Color Coding | Quan sát ô `Position / Rotation / Scale` và Move Gizmo | Trục X Đỏ, Y Xanh lá, Z Xanh dương nhất quán |
+| **TC-M6-06** | Auto-GPU | TrueType Font Loading | Chạy `--m6-smoke-test` (kể cả từ CWD khác `C:\`) | Nạp thành công `assets/fonts/Roboto-Medium.ttf` (`15 px`), có fallback an toàn |
+| **TC-M6-07** | Manual-Visual | Vector Icons Sharpness | Quan sát toolbar, nút `Eye/Lock`, `Grid/List`, logo ở 100%/125%/150% | Không có ký tự tofu vỡ; nét vector sắc nét ở mọi mức scale |
+| **TC-M6-08** | Auto-CPU | Layout 1280×720 | Tính `EditorLayout::compute(1280, 720, ...)` | Không chồng lấn panel; Viewport là vùng diện tích lớn nhất |
+| **TC-M6-09** | Auto-CPU | Layout 1366×768 & 1600×900 | Tính `EditorLayout::compute` ở các độ phân giải laptop phổ biến | Không chồng lấn; Viewport ≥ 420 px và lớn nhất |
+| **TC-M6-10** | Auto-CPU | Layout 1920×1080 | Tính `EditorLayout::compute(1920, 1080, ...)` | Bố cục cân đối, tỷ lệ panel hợp lý, Viewport rộng nhất |
+| **TC-M6-11** | Auto-CPU | UI Scale 100/125/150% | Tính layout với `uiScale = 1.0 / 1.25 / 1.5` trên 1280×720 | Viewport vẫn khả dụng (`>= 420 px`), các vùng không giao cắt |
+| **TC-M6-12** | Auto-CPU | Interactive Splitters & Reset | Kéo `leftWidth`, `rightWidth`, `rightSplitRatio` quá giới hạn rồi gọi `reset()` | Kẹp an toàn vào min/max và khôi phục mặc định sạch sẽ |
+| **TC-M6-13** | Auto-CPU | Furniture Catalog 14 Items | Kiểm tra `FurnitureCatalog` trong `M6_EditorUiUnitTests` | Đủ 14 mẫu (`6 Procedural + 8 Blender`) |
+| **TC-M6-14** | Auto-CPU | Search Filter | Lọc bằng từ khóa `"chair"`, `"lamp"`, `"sofa"` | Trả chính xác tập con khớp tên/ID |
+| **TC-M6-15** | Auto-CPU | Source & Category Filter | Lọc `Procedural` / `Imported` kết hợp danh mục `Seating` / `Lighting` | Trả đúng danh sách mẫu theo cả 2 điều kiện |
+| **TC-M6-16** | Auto-GPU | 14/14 GPU FBO Thumbnails | `ThumbnailRenderer` render cả 14 mẫu ra FBO `256×256` | `14/14` ảnh khác màu nền (`nonBlank = 14/14`), `cacheCount = 14` |
+| **TC-M6-17** | Auto-GPU | Thumbnail Cache Reuse | Gọi lại `getOrRenderThumbnail()` cho asset đã cache | Không tăng bộ đếm `totalGenerations`, trả đúng cùng `GLuint` |
+| **TC-M6-18** | Auto-GPU | Reload Asset Invalidation | Gọi `invalidate(id)` sau `reloadAsset(id)` | Thumbnail cũ bị giải phóng và render mới đúng 1 lần |
+| **TC-M6-19** | Manual-Visual | Grid & List View Library | Chuyển đổi Grid 2 cột ↔ List View và double-click thêm đồ | Thêm đúng nội thất vào phòng, phát Toast thông báo |
+| **TC-M6-20** | Manual-Visual | Viewport Overlays | Kiểm tra pill góc trên-trái, `Solid/Wire` góc trên-phải, badge trạng thái | Không che chắn mô hình chính, chuyển `Solid/Wire` tức thì |
+| **TC-M6-21** | Manual-Visual | Hierarchy Eye / Lock Icons | Nhấn nút con mắt và ổ khóa trong Scene Hierarchy | Ẩn/hiện và khóa/mở khóa đồng bộ ngay với Inspector và Viewport |
+| **TC-M6-22** | Manual-Visual | Hierarchy Context Menu | Chuột phải lên 1 đối tượng trong Hierarchy | Mở menu `Focus / Duplicate / Hide / Lock / Reset Transform / Delete` hoạt động đúng |
+| **TC-M6-23** | Manual-Visual | Inspector Collapsible Sections | Mở/thu gọn `Object / Transform / Dimensions / Material / Geometry / Actions` | Bố cục gọn, nhập số `X/Y/Z` mượt, không bị khóa khi bật `Snap` |
+| **TC-M6-24** | Manual-Visual | Clean Status Bar | Quan sát dòng trạng thái đáy cửa sổ và mở `View -> Performance Monitor` | Status Bar gọn (`Room | Objects | Grid | Mode | Scene ready`); FPS nằm trong Performance Monitor |
+| **TC-M6-25** | Auto-CPU | NotificationSystem Lifecycle | Đẩy >4 thông báo, kiểm tra giới hạn hàng đợi, hết hạn TTL (`3.0s`) và `clear()` | Giới hạn đúng 4 mục, tự xóa đúng sau TTL |
+| **TC-M6-26** | Manual-Visual | Confirmation Modals | Nhấn `New Room` / đổi Preset khi đã chỉnh sửa và nhấn `Delete` trên Inspector | Hiện hộp thoại xác nhận; `Cancel` giữ nguyên, `Confirm` mới thực thi |
+| **TC-M6-27** | Auto-CPU | Picking & Gizmo after Resize | Đổi kích thước Viewport + 2× DPI rồi thử hit-test Move Gizmo | Tia chuột & hit-test trục X/Y/Z vẫn khớp chính xác |
+| **TC-M6-28** | Auto-CPU | Gizmo Axis Drag, Esc & Locked | Kéo trục X trên Move Gizmo → `Esc` hủy → khóa object → thử kéo lại | Trục X di chuyển chỉ theo X; `Esc` khôi phục; `Locked` chặn kéo |
+| **TC-M6-29** | Manual-Visual | Keyboard Shortcuts & Text Guard | Gõ chữ `"g"`, `"r"`, `"Delete"` trong ô tìm kiếm Library & Rename | Không kích hoạt tool hay xóa vật thể |
+| **TC-M6-30** | Auto-GPU | Tools -> Geometry Lab Switch | Chuyển từ `RoomEditor` sang `GeometryLab` rồi quay lại | Cảnh phòng, danh sách vật thể, selection và camera giữ nguyên 100% |
+| **TC-M6-31** | Auto-GPU | Tools -> Asset Inspector Switch | Chuyển sang `AssetInspector` rồi quay lại `RoomEditor` | Cảnh phòng và camera được bảo toàn nguyên vẹn |
+| **TC-M6-32** | Auto-GPU | Tools -> Developer Tools Switch | Chuyển sang `GraphicsReference` rồi quay lại `RoomEditor` | Cảnh phòng và camera được bảo toàn nguyên vẹn |
+| **TC-M6-33** | Manual-Visual | Help & System Dialogs | Mở `Keyboard Shortcuts`, `User Guide`, `System Information`, `About`, `OpenGL Diagnostics` | Hiển thị chính xác thông số GPU/OpenGL/Font, đóng mượt bằng `Close` |
+| **TC-M6-34** | Auto-GPU | OpenGL State Restoration | Kiểm tra FBO binding, viewport, depth test, polygon mode sau khi vẽ Thumbnail & Gizmo | Toàn bộ trạng thái OpenGL khôi phục nguyên bản |
+| **TC-M6-35** | Auto-GPU | GPU Cleanup on Shutdown | Gọi `ThumbnailRenderer::destroyAll()` & đóng ứng dụng | Giải phóng sạch FBO/Texture trước khi hủy GL context, không rò rỉ |
+| **TC-M6-36** | Auto-GPU | Zero GL Errors & Cross-CWD | Chạy `--m6-smoke-test` ngoài PATH WinLibs và từ `C:\` | `OpenGL errors: NONE`, thoát mã `0`, `ntldd` chỉ link 7 DLL Windows |
+| **TC-M6-GIZMO** | Auto-CPU + GPU | 3-Axis Move Gizmo (P1) | Hit-test 3 trục X/Y/Z ưu tiên trước vật phía sau + render vào FBO | Trúng đúng trục X/Y/Z, vẽ nổi bật trên FBO không gây lỗi OpenGL |
+| **TC-M6-PERF** | Auto-GPU | M6 30-Object & Thumbnail Perf | Đo 30 vật thể off-screen `1280×720` + thời gian sinh 14 thumbnail | Không suy giảm hiệu năng; thumbnail chỉ sinh 1 lần (`< 5 ms` tổng) |
+| **TC-M6-MANUAL** | Manual-Visual | End-to-End Visual & UX Review | Người dùng chạy trực tiếp `RoomCraft3D.exe` và xác nhận checklist thị giác + chụp ảnh | Chờ người dùng trực tiếp xác nhận |

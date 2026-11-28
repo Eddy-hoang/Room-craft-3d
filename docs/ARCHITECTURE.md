@@ -1,12 +1,12 @@
 # Kiến trúc phần mềm — RoomCraft 3D (Architecture)
 
-## 1. Kiến trúc tổng thể theo tầng (Milestone M0–M5)
+## 1. Kiến trúc tổng thể theo tầng (Milestone M0–M6)
 
 ```mermaid
 flowchart TD
-    UI["Presentation Layer\n(Dear ImGui: M4/M5 Interactive Room Editor · M3 Asset Browser · M2 Geometry Playground · M1 Reference Scene)"] --> APP["Application Layer\n(Application + Window + RoomEditor)"]
-    APP --> GFX["Core Graphics & Runtime Layer (roomcraft_engine)\n(Renderer, SceneRenderer, Shader, Mesh, TextureManager, AssetManager, Framebuffer)"]
-    GFX --> SCENE["Scene & Interaction Layer (roomcraft_scene - CPU only)\n(Scene, Room, SceneObject, SelectionState, PlacementSystem, CameraController, PickingSystem, TransformController, InputManager, ViewportInteraction)"]
+    UI["Presentation Layer (Dear ImGui)\nProduct Menu Bar · RoomEditor (Toolbar, Thumbnail Library, Viewport, Hierarchy, Inspector, Status Bar, Toasts, Modals) · Tools (Geometry Lab, Asset Inspector, DevTools)"] --> APP["Application Layer\n(Application + Window + EditorTheme + EditorIcons + RoomEditor)"]
+    APP --> GFX["Core Graphics & Runtime Layer (roomcraft_engine)\n(Renderer, SceneRenderer + Move Gizmo, ThumbnailRenderer, Shader, Mesh, TextureManager, AssetManager, Framebuffer)"]
+    GFX --> SCENE["Scene, Interaction & UI-Logic Layer (roomcraft_scene - CPU only)\n(Scene, Room, SceneObject, SelectionState, PlacementSystem, CameraController, PickingSystem, TransformController, TransformGizmo, InputManager, ViewportInteraction, EditorLayout, NotificationSystem)"]
     SCENE --> ASSETS["Asset Pipeline Layer (roomcraft_assets - CPU only)\n(AssetData, ModelLoader [Assimp], AssetNormalizer, FurnitureCatalog)"]
     ASSETS --> GEO["Procedural Geometry Engine (roomcraft_geometry - CPU only)\n(MeshData, PrimitiveGenerator, BezierCurve/Surface, RevolutionSurface, FurnitureGenerator)"]
     GEO --> MATH["Math & Intersection Layer (roomcraft_math - CPU only)\n(Transform, Camera + Auto-Fit, BoundingBox, Ray, Plane, Slab/Plane/Triangle Intersection, Vertex)"]
@@ -29,16 +29,19 @@ flowchart TD
 4. **`roomcraft_scene` (CPU-only, phụ thuộc `roomcraft_assets`, KHÔNG phụ thuộc OpenGL/FreeGLUT/ImGui)**:
    - Quản lý cảnh M4: `ObjectId`, `SceneObject`, `RoomSettings`, `Room`, `Scene`, `SelectionState`, `PlacementSystem`, `ScenePresets`.
    - Tương tác M5: `InputManager`, `InteractionState`, `CameraController`, `PickingSystem`, `TransformController`, `ViewportInteraction`.
-   - Kiểm thử bởi `RoomCraft3D_SceneUnitTests` (`M4_SceneUnitTests`) và `RoomCraft3D_InteractionUnitTests` (`M5_InteractionUnitTests`).
+   - Logic UI & Gizmo M6: `EditorLayout`, `NotificationSystem`, `TransformGizmo`.
+   - Kiểm thử bởi `RoomCraft3D_SceneUnitTests` (`M4_SceneUnitTests`), `RoomCraft3D_InteractionUnitTests` (`M5_InteractionUnitTests`) và `RoomCraft3D_EditorUiUnitTests` (`M6_EditorUiUnitTests`).
 5. **`roomcraft_engine` (GPU + Window + ImGui, phụ thuộc `roomcraft_scene`, `stb_image`, `GLAD`, `FreeGLUT`, `ImGui`, `OpenGL`)**:
-   - `Window`, `Shader`, `Mesh`, `Material`, `Texture`, `TextureManager`, `AssetManager`, `Framebuffer`, `Renderer`, `SceneRenderer`, `RoomEditor`, `Application`.
-6. **`RoomCraft3D`**: Executable chính hỗ trợ 8 chế độ chạy:
-   - Mặc định: **M4/M5 Interactive Room Editor** (chuyển đổi trực tiếp qua M3/M2/M1 trên thanh menu).
-   - `--smoke-test`, `--m1-smoke-test`, `--m2-smoke-test`, `--m3-smoke-test`, `--m4-smoke-test`, `--m4-benchmark`, `--m5-smoke-test`.
+   - Graphics & Assets GPU: `Window`, `Shader`, `Mesh`, `Material`, `Texture`, `TextureManager`, `AssetManager`, `Framebuffer`, `ThumbnailRenderer`, `Renderer`, `SceneRenderer`.
+   - Giao diện sản phẩm: `EditorTheme`, `EditorIcons`, `RoomEditor`, `Application`.
+6. **`RoomCraft3D`**: Executable chính hỗ trợ 9 chế độ chạy:
+   - Mặc định: **RoomCraft 3D — Interactive Room Editor** (menu sản phẩm `Tools` truy cập `Geometry Lab`, `Asset Inspector` và `Developer Tools` mà không mất trạng thái phòng).
+   - `--smoke-test`, `--m1-smoke-test`, `--m2-smoke-test`, `--m3-smoke-test`, `--m4-smoke-test`, `--m4-benchmark`, `--m5-smoke-test`, `--m6-smoke-test`.
 
-## 3. Luồng Định tuyến Đầu vào (FreeGLUT → ImGui + InputManager → ViewportInteraction)
+## 3. Luồng Định tuyến Đầu vào & Workspace Router
 
-- FreeGLUT callbacks trong `Application` luôn chuyển tiếp đầy đủ mọi sự kiện chuột/bàn phím tới `ImGui_ImplGLUT_*` đồng thời cập nhật `InputManager` (phân biệt `Pressed` 1-frame với `Held`).
-- `RoomEditor::renderViewportPanel()` đo chính xác `ImGui::GetItemRectMin()` / `Max()` và `IsItemHovered()`, đóng gói vào `ViewportInputContext` rồi gọi `ViewportInteraction::processInput()` trong cùng khung hình để Inspector, Hierarchy và Viewport luôn đồng bộ tức thì.
+- FreeGLUT callbacks trong `Application` chuyển tiếp đầy đủ mọi sự kiện chuột/bàn phím tới `ImGui_ImplGLUT_*` đồng thời cập nhật `InputManager` (phân biệt `Pressed` 1-frame với `Held`).
+- `RoomEditor::renderViewportPanel()` đo `ImGui::GetItemRectMin()` / `Max()` và `IsItemHovered()`, gọi `ViewportInteraction::processInput()` với ưu tiên **3-Axis Move Gizmo → Picking → Transform** trong cùng khung hình để Viewport, Hierarchy và Inspector đồng bộ tức thì.
+- `Application::switchWorkspace()` lưu trữ riêng `m_roomCameraState` trước khi chuyển sang các công cụ trong menu `Tools` và khôi phục trọn vẹn khi quay về `Room Editor`.
 
-Xem thêm chi tiết tại [`docs/CAMERA_SYSTEM.md`](CAMERA_SYSTEM.md), [`docs/OBJECT_PICKING.md`](OBJECT_PICKING.md) và [`docs/INTERACTION_GUIDE.md`](INTERACTION_GUIDE.md).
+Xem thêm chi tiết tại [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md), [`docs/UI_ARCHITECTURE.md`](UI_ARCHITECTURE.md), [`docs/CAMERA_SYSTEM.md`](CAMERA_SYSTEM.md), [`docs/OBJECT_PICKING.md`](OBJECT_PICKING.md) và [`docs/INTERACTION_GUIDE.md`](INTERACTION_GUIDE.md).

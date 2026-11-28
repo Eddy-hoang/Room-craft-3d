@@ -1,5 +1,10 @@
 #include "roomcraft/graphics/SceneRenderer.hpp"
 
+#include "roomcraft/geometry/PrimitiveGenerator.hpp"
+#include "roomcraft/systems/TransformGizmo.hpp"
+
+#include <glad/glad.h>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 
 #include <unordered_set>
@@ -189,7 +194,14 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
                            gridShader,
                            selectedObjectMatrix,
                            camera,
-                           glm::vec4(0.20f, 0.88f, 1.00f, 1.0f));
+                           glm::vec4(0.20f, 0.88f, 1.00f, 1.0f)); // Cyan selection bounding box highlight
+    }
+
+    // 4. Vẽ Move Gizmo 3 trục (X Đỏ, Y Xanh lá, Z Xanh dương) tại tâm đối tượng đang chọn
+    if (options.showMoveGizmo && selection.hasSelection()) {
+        if (const auto* selObj = scene.findObject(selection.getSelectedObjectId())) {
+            renderMoveGizmo(selObj->transform.position, selObj->locked, camera, renderer, meshShader, options);
+        }
     }
 
     renderer.endFrame();
@@ -204,6 +216,64 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
     return metrics;
 }
 
+bool SceneRenderer::ensureGizmoMeshes()
+{
+    if (m_gizmoShaftMesh.isValid() && m_gizmoConeMesh.isValid()) {
+        return true;
+    }
+    geometry::MeshData shaftData;
+    geometry::MeshData coneData;
+    if (!geometry::PrimitiveGenerator::createCylinder(0.024f, 0.85f, 12, true, shaftData) ||
+        !geometry::PrimitiveGenerator::createCone(0.068f, 0.24f, 12, true, coneData)) {
+        return false;
+    }
+    return uploadMeshData(shaftData, m_gizmoShaftMesh) && uploadMeshData(coneData, m_gizmoConeMesh);
+}
+
+void SceneRenderer::renderMoveGizmo(const glm::vec3& origin,
+                                    bool locked,
+                                    const Camera& camera,
+                                    Renderer& renderer,
+                                    Shader& meshShader,
+                                    const SceneRenderOptions& options)
+{
+    if (!ensureGizmoMeshes()) {
+        return;
+    }
+
+    const float len = systems::TransformGizmo::computeHandleLength(origin, camera);
+    const GLboolean prevDepth = glIsEnabled(GL_DEPTH_TEST);
+    glDisable(GL_DEPTH_TEST);
+
+    auto drawAxis = [&](systems::AxisConstraint axis, const glm::mat4& rotMat, glm::vec4 baseColor) {
+        if (locked) {
+            baseColor = glm::vec4(0.55f, 0.58f, 0.64f, 1.0f);
+        } else if (options.activeGizmoAxis == axis || options.hoveredGizmoAxis == axis) {
+            baseColor = glm::vec4(0.98f, 0.84f, 0.34f, 1.0f); // Highlight vàng sáng khi hover / kéo trục
+        }
+        const glm::mat4 base = glm::translate(glm::mat4(1.0f), origin) * rotMat *
+                               glm::scale(glm::mat4(1.0f), glm::vec3(len));
+        const glm::mat4 tip = glm::translate(glm::mat4(1.0f), origin) * rotMat *
+                              glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.85f * len, 0.0f)) *
+                              glm::scale(glm::mat4(1.0f), glm::vec3(len));
+        renderer.drawMeshWithMatrix(m_gizmoShaftMesh, meshShader, base, camera, baseColor, 0.20f);
+        renderer.drawMeshWithMatrix(m_gizmoConeMesh, meshShader, tip, camera, baseColor, 0.20f);
+    };
+
+    // Mặc định Cylinder/Cone hướng +Y; xoay sang +X (-90° quanh Z) và +Z (+90° quanh X)
+    const glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    const glm::mat4 rotY(1.0f);
+    const glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+    drawAxis(systems::AxisConstraint::X, rotX, glm::vec4(0.89f, 0.36f, 0.36f, 1.0f));
+    drawAxis(systems::AxisConstraint::Y, rotY, glm::vec4(0.37f, 0.79f, 0.48f, 1.0f));
+    drawAxis(systems::AxisConstraint::Z, rotZ, glm::vec4(0.36f, 0.61f, 0.92f, 1.0f));
+
+    if (prevDepth) {
+        glEnable(GL_DEPTH_TEST);
+    }
+}
+
 void SceneRenderer::destroyGpuResources()
 {
     m_floorMesh.destroy();
@@ -213,6 +283,8 @@ void SceneRenderer::destroyGpuResources()
     m_westWallMesh.destroy();
     m_ceilingMesh.destroy();
     m_roomGridMesh.destroy();
+    m_gizmoShaftMesh.destroy();
+    m_gizmoConeMesh.destroy();
     m_uploadedRoomRevision = 0;
 }
 

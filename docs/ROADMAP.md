@@ -10,7 +10,7 @@ Dự án được chia thành 10 milestone trong khoảng thời gian dự kiế
 | **M3** | Blender Asset Pipeline | Tuần 3–4 | `v0.3.0` | VERIFIED (Auto 27/27 PASS; Manual GUI pending) |
 | **M4** | Scene Management & Room Editor | Tuần 4–5 | `v0.4.0` | VERIFIED (Auto 29/29 PASS; Manual GUI pending) |
 | **M5** | Camera, Transformation & Object Picking | Tuần 4–5 | `v0.5.0` | VERIFIED (Auto 39/39 PASS; Manual GUI pending) |
-| **M6** | Professional Editor UI/UX | Tuần 5–6 | `v0.6.0` | TODO |
+| **M6** | Professional Editor UI/UX | Tuần 5–6 | `v0.6.0` | VERIFIED (Auto 13/13 CTest PASS; Manual & Visual GUI pending) |
 | **M7** | Lighting, Materials & Visual Quality | Tuần 6–7 | `v0.7.0` | TODO |
 | **M8** | Collision Detection & Project Persistence | Tuần 7 | `v0.8.0` | TODO |
 | **M9** | Testing, Optimization & Release | Tuần 8 | `v1.0.0` | TODO |

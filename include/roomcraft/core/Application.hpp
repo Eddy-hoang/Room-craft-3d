@@ -3,6 +3,7 @@
 #include "roomcraft/assets/AssetManager.hpp"
 #include "roomcraft/core/InputManager.hpp"
 #include "roomcraft/core/Window.hpp"
+#include "roomcraft/editor/EditorTheme.hpp"
 #include "roomcraft/editor/RoomEditor.hpp"
 #include "roomcraft/geometry/BezierCurve.hpp"
 #include "roomcraft/geometry/BezierSurface.hpp"
@@ -13,6 +14,7 @@
 #include "roomcraft/graphics/Mesh.hpp"
 #include "roomcraft/graphics/Renderer.hpp"
 #include "roomcraft/graphics/Shader.hpp"
+#include "roomcraft/graphics/ThumbnailRenderer.hpp"
 #include "roomcraft/math/BoundingBox.hpp"
 #include "roomcraft/scene/Transform.hpp"
 
@@ -28,27 +30,28 @@
 
 namespace roomcraft::core {
 
-// Chế độ chạy của ứng dụng RoomCraft 3D tại Milestone M5
+// Chế độ chạy của ứng dụng RoomCraft 3D tại Milestone M6
 enum class ApplicationMode {
-    InteractiveApp, // Giao diện tương tác (mặc định mở Room Editor M4/M5, có thể chuyển sang M3/M2/M1)
+    InteractiveApp, // Giao diện sản phẩm RoomCraft 3D (mặc định mở Room Editor; Geometry Lab/Asset Inspector/DevTools trong menu Tools)
     SmokeTestM0,    // Regression smoke test M0
     SmokeTestM1,    // Regression GPU integration smoke test M1
     SmokeTestM2,    // Regression GPU integration smoke test M2
     SmokeTestM3,    // Regression GPU integration smoke test M3
     SmokeTestM4,    // Regression GPU integration smoke test M4
-    BenchmarkM4,    // Chế độ đo hiệu năng thực tế 10 / 30 / 100 vật thể tại 1280x720
-    SmokeTestM5     // GPU integration & runtime smoke test M5 (Ray Casting, Picking, Drag, Cancel, Camera)
+    BenchmarkM4,    // Đo hiệu năng 10 / 30 / 100 vật thể tại 1280x720
+    SmokeTestM5,    // Regression GPU integration smoke test M5
+    SmokeTestM6     // GPU integration & UI/Thumbnail/Gizmo/Workspace smoke test M6
 };
 
-// Không gian làm việc đang chọn trong chế độ tương tác
+// Không gian làm việc hiện hành trong ứng dụng sản phẩm (loại bỏ hoàn toàn tên milestone trên UI)
 enum class InteractiveWorkspace {
-    RoomEditorM4 = 0,
-    AssetBrowserM3 = 1,
-    GeometryPlaygroundM2 = 2,
-    ReferenceSceneM1 = 3
+    RoomEditor = 0,          // Không gian thiết kế phòng mặc định
+    AssetInspector = 1,      // Tools -> Asset Inspector
+    GeometryLab = 2,         // Tools -> Geometry Lab
+    GraphicsReference = 3    // Tools -> Developer Tools -> Graphics Reference Scene
 };
 
-// Nhóm đối tượng trong Geometry Playground (M2)
+// Nhóm đối tượng trong Geometry Lab
 enum class PlaygroundCategory {
     Primitives = 0,
     Parametric = 1,
@@ -58,7 +61,7 @@ enum class PlaygroundCategory {
 struct ApplicationConfig {
     int width = 1280;
     int height = 720;
-    std::string title = "RoomCraft 3D - M5 Interactive Room Editor (OpenGL 3.3 Core)";
+    std::string title = "RoomCraft 3D — 3D Interior Design Studio";
     ApplicationMode mode = ApplicationMode::InteractiveApp;
     int smokeTestFrames = 10;
 };
@@ -125,8 +128,11 @@ private:
                                        const graphics::Camera& cam,
                                        float faceContrast);
 
-    // Giao diện Dear ImGui
-    void renderTopWorkspaceBar();
+    // Giao diện Dear ImGui (Product Menu Bar + Workspaces + Dialogs)
+    void switchWorkspace(InteractiveWorkspace target);
+    void applyUiScale(float scale);
+    void renderProductMainMenuBar();
+    void renderProductDialogs();
     void renderAssetBrowserUi();
     void renderPlaygroundControlUi();
     void renderM1ReferenceControlUi();
@@ -156,6 +162,7 @@ private:
     bool runM4BenchmarkSuiteOnce();
     bool benchmarkSingleObjectCount(std::size_t objectCount, int warmupFrames, int measuredFrames);
     bool runM5IntegrationSuiteOnce();
+    bool runM6IntegrationSuiteOnce();
 
     // Sự kiện cửa sổ
     void handleReshape(int width, int height);
@@ -171,8 +178,13 @@ private:
     InputManager m_inputManager;
     graphics::Renderer m_renderer;
     graphics::Camera m_camera;
+    graphics::Camera m_savedRoomCamera;
+    bool m_hasSavedRoomCamera = false;
     graphics::Framebuffer m_framebuffer;
+    graphics::ThumbnailRenderer m_thumbnailRenderer;
     assets::AssetManager m_assetManager;
+    editor::FontLoadInfo m_fontInfo;
+    float m_uiScale = 1.0f;
 
     // Tài nguyên đồ họa dùng chung
     graphics::Shader m_meshShader;
@@ -185,9 +197,15 @@ private:
     graphics::Mesh m_axisZMesh;
     std::vector<DemoCubeObject> m_demoCubes;
 
-    // Trạng thái Room Editor (M4) & Asset Browser (M3)
+    // Trạng thái Room Editor & Workspace hiện hành
     editor::RoomEditor m_roomEditor;
-    InteractiveWorkspace m_workspace = InteractiveWorkspace::RoomEditorM4;
+    InteractiveWorkspace m_workspace = InteractiveWorkspace::RoomEditor;
+    bool m_showPerformanceWindow = false;
+    bool m_showOpenGlDiagnosticsWindow = false;
+    bool m_showShortcutsModal = false;
+    bool m_showUserGuideModal = false;
+    bool m_showSystemInfoModal = false;
+    bool m_showAboutModal = false;
     int m_browserSourceFilter = 0;   // 0=All, 1=Procedural, 2=Blender
     int m_browserCategoryFilter = 0; // 0=All, 1..7=AssetCategory
     std::array<char, 128> m_browserSearchBuf{};
@@ -324,6 +342,9 @@ private:
 
     bool m_m5SuiteExecuted = false;
     bool m_m5SuitePassed = false;
+
+    bool m_m6SuiteExecuted = false;
+    bool m_m6SuitePassed = false;
 };
 
 } // namespace roomcraft::core

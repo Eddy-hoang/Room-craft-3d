@@ -4,6 +4,31 @@ Tất cả các thay đổi đáng chú ý của dự án được ghi nhận tr
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-28 (Milestone M6: Professional Editor UI/UX)
+### Added
+- **Hệ thống Thiết kế Giao diện, Typography & Vector Icons (`roomcraft_engine`)**:
+  - `editor::EditorTheme` (`EditorTheme.hpp/cpp`): bộ Design Tokens chuẩn Modern Dark CAD (`#171A20`, `#20242B`, `#292E38`, `#799CE3`, mã màu trục X/Y/Z, spacing 4–24 px), hỗ trợ `UI Scale 100% / 125% / 150%`.
+  - Bổ sung font TrueType **`assets/fonts/Roboto-Medium.ttf`** (Apache License 2.0, `15 px` + dải glyph tiếng Việt) kèm cơ chế fallback an toàn về font mặc định của Dear ImGui.
+  - `editor::EditorIcons` (`EditorIcons.hpp/cpp`): bộ 21+ biểu tượng vector tự vẽ qua `ImDrawList` (MIT), loại bỏ hoàn toàn rủi ro ô vuông Unicode vỡ và sắc nét ở mọi mức DPI.
+- **Bố cục Đáp ứng, Thông báo & 3-Axis Move Gizmo thuần CPU (`roomcraft_scene`)**:
+  - `editor::EditorLayout` (`EditorLayout.hpp/cpp`): tính toán bố cục không chồng lấn cho `1280×720..1920×1080` & `100..150%` UI scale, thanh kéo đổi kích thước dọc/ngang (`Splitters`) và `Reset Workspace Layout`.
+  - `editor::NotificationSystem` (`NotificationSystem.hpp`): hệ thống Toast không chặn thao tác (tối đa 4 mục góc dưới-phải Viewport, tự ẩn sau `3.0 s`).
+  - `systems::TransformGizmo` (`TransformGizmo.hpp/cpp`): **3-Axis Move Gizmo (P1)** với kích thước màn hình ổn định, hit-testing 3 trục X/Y/Z ưu tiên hơn chọn vật thể phía sau, tương thích đầy đủ với `TransformController`, khóa đối tượng `Locked` và hủy thao tác `Esc`.
+- **GPU Thumbnail Renderer & Giao diện Sản phẩm Thống nhất (`roomcraft_engine`)**:
+  - `graphics::ThumbnailRenderer` (`ThumbnailRenderer.hpp/cpp`): render ảnh xem trước FBO `256×256` thật trên GPU cho cả 14 mẫu nội thất (`~3.70 ms` tổng cho 14 mẫu), cache theo ID + asset token, tự động invalidate khi `Reload Asset` và bảo toàn toàn bộ trạng thái OpenGL.
+  - Thiết kế lại toàn diện `editor::RoomEditor` (`RoomEditor.hpp/cpp`): Main Toolbar có biểu tượng vector & `Room Presets` dropdown, Furniture Library hỗ trợ **Grid ảnh thu nhỏ 2 cột** & **List View** kèm `+ Add Furniture`, 3D Viewport có pill overlay gọn gàng, Scene Hierarchy có nút icon **Eye/Lock** & **Context Menu chuột phải**, Properties Inspector thu gọn theo nhóm với ô Transform X/Y/Z mã màu, Status Bar sạch và hộp thoại xác nhận `Confirm Replace Scene` / `Confirm Delete Object`.
+  - Thay thế hoàn toàn thanh tab milestone (`M1`–`M5`) trong `Application` bằng **Product Main Menu Bar** (`RoomCraft | File | Edit | View | Room | Tools | Help`), chuyển `Geometry Lab`, `Asset Inspector` và `Developer Tools` (`Graphics Reference Scene`, `OpenGL Diagnostics`, `Performance Monitor`) vào menu **`Tools`** đồng thời bảo toàn nguyên trạng `Scene`, `Camera` và `SelectionState` của `Room Editor`.
+  - Bổ sung hộp thoại `Performance Monitor`, `OpenGL Diagnostics`, `Keyboard Shortcuts`, `User Guide`, `System Information`, `About RoomCraft`.
+- **Kiểm thử & Tài liệu M6**:
+  - Bổ sung `RoomCraft3D_EditorUiUnitTests` (`M6_EditorUiUnitTests`) và `M6_IntegrationSmokeTest` (`--m6-smoke-test`) nâng tổng số lên **13 bộ CTest**.
+  - Tạo mới [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md), [`docs/UI_ARCHITECTURE.md`](docs/UI_ARCHITECTURE.md), [`docs/EDITOR_USER_GUIDE.md`](docs/EDITOR_USER_GUIDE.md) và cập nhật toàn bộ tài liệu dự án (kèm bảng ánh xạ 39 test case M5 trong `TEST_RESULTS.md`).
+
+### Verified
+- Build Debug thành công (`0` errors, `0` project warnings dưới `-Wall -Wextra -Wpedantic`); `RoomCraft3D.exe` chỉ link 7 DLL hệ thống Windows.
+- Toàn bộ **`13/13` CTest suites đạt `PASS` trong `2.90s`** (`M0`–`M6`); chạy độc lập ngoài PATH WinLibs từ thư mục làm việc khác (`C:\`) nạp đúng font/shader/14 mẫu và sinh `14/14` GPU FBO thumbnails trong `3.70 ms`, `OpenGL errors: NONE`.
+- Đo hiệu năng M6 30 vật thể off-screen `1280×720` (Debug, Intel UHD): `1.68 ms (595.3 FPS)` với `417` draw calls (không phát sinh draw call dư so với M4).
+- Kiểm thử tương tác GUI & kiểm tra thị giác thủ công (`TC-M6-MANUAL` và các manual test M0–M5) giữ trạng thái `NOT VERIFIED` chờ người dùng xác nhận.
+
 ## [0.5.0] - 2026-11-28 (Milestone M5: Camera, Object Picking & Interactive Transformation)
 ### Added
 - Mở rộng thư viện toán học thuần CPU **`roomcraft_math`**:

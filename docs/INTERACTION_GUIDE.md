@@ -1,6 +1,6 @@
-# Hướng dẫn Tương tác 3D & Máy trạng thái — RoomCraft 3D (Interaction Guide — M5)
+# Hướng dẫn Tương tác 3D & Máy trạng thái — RoomCraft 3D (Interaction Guide — M5 & M6)
 
-Tài liệu này mô tả bảng điều khiển chuột/bàn phím, toán học kéo thả giữ cao độ Y, Grid/Angle Snapping và **Interaction State Machine** tại **Milestone M5**.
+Tài liệu này mô tả bảng điều khiển chuột/bàn phím, **3-Axis Move Gizmo (M6)**, toán học kéo thả giữ cao độ Y, Grid/Angle Snapping và **Interaction State Machine**.
 
 ---
 
@@ -9,6 +9,7 @@ Tài liệu này mô tả bảng điều khiển chuột/bàn phím, toán học
 | Thao tác | Chức năng |
 |---|---|
 | **Click chuột trái** | Chọn vật thể trong 3D Viewport (nhấn khoảng trống để bỏ chọn) |
+| **Kéo tay cầm 3-Axis Move Gizmo (Đỏ X / Xanh lá Y / Xanh dương Z)** | Di chuyển chính xác theo từng trục X, Y hoặc Z (ưu tiên hit-test hơn vật phía sau; kích thước màn hình ổn định) |
 | **Kéo chuột trái (`Move`)** | Kéo di chuyển vật thể trên mặt phẳng ngang giữ nguyên cao độ `Y` |
 | **Kéo chuột trái (`Rotate`)** | Xoay vật thể quanh trục `Y` (tự động snap góc `15°` khi bật `Snap`) |
 | **Kéo chuột trái (`Scale`)** | Phóng to / thu nhỏ đồng nhất an toàn trong `[0.1, 10.0]` |

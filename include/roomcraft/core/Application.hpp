@@ -40,7 +40,8 @@ enum class ApplicationMode {
     SmokeTestM4,    // Regression GPU integration smoke test M4
     BenchmarkM4,    // Đo hiệu năng 10 / 30 / 100 vật thể tại 1280x720
     SmokeTestM5,    // Regression GPU integration smoke test M5
-    SmokeTestM6     // GPU integration & UI/Thumbnail/Gizmo/Workspace smoke test M6
+    SmokeTestM6,    // GPU integration & UI/Thumbnail/Gizmo/Workspace smoke test M6
+    SmokeTestM8     // GPU integration smoke test M8 (Collision, Persistence, Reload, Picking/Gizmo)
 };
 
 // Không gian làm việc hiện hành trong ứng dụng sản phẩm (loại bỏ hoàn toàn tên milestone trên UI)
@@ -163,6 +164,7 @@ private:
     bool benchmarkSingleObjectCount(std::size_t objectCount, int warmupFrames, int measuredFrames);
     bool runM5IntegrationSuiteOnce();
     bool runM6IntegrationSuiteOnce();
+    bool runM8IntegrationSuiteOnce();
 
     // Sự kiện cửa sổ
     void handleReshape(int width, int height);
@@ -345,6 +347,9 @@ private:
 
     bool m_m6SuiteExecuted = false;
     bool m_m6SuitePassed = false;
+
+    bool m_m8SuiteExecuted = false;
+    bool m_m8SuitePassed = false;
 };
 
 } // namespace roomcraft::core

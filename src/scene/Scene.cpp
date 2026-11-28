@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <limits>
+#include <unordered_set>
 
 namespace roomcraft::scene {
 
@@ -88,6 +90,11 @@ ObjectId Scene::addObject(const std::string& assetId,
         finalName = generateDefaultName(entry->displayName);
     }
 
+    if (m_nextObjectId == std::numeric_limits<ObjectId>::max()) {
+        if (outError != nullptr) *outError = "Object ID allocator overflow.";
+        return kInvalidObjectId;
+    }
+
     SceneObject obj;
     obj.id = m_nextObjectId++;
     obj.name = std::move(finalName);
@@ -124,6 +131,11 @@ ObjectId Scene::duplicateObject(ObjectId id, const glm::vec3& offset, std::strin
 
     if (!isFiniteVec3(offset)) {
         if (outError != nullptr) *outError = "Duplicate offset must be finite.";
+        return kInvalidObjectId;
+    }
+
+    if (m_nextObjectId == std::numeric_limits<ObjectId>::max()) {
+        if (outError != nullptr) *outError = "Object ID allocator overflow.";
         return kInvalidObjectId;
     }
 
@@ -223,6 +235,92 @@ void Scene::clearObjects()
 {
     m_objects.clear();
     // Giữ nguyên m_nextObjectId tăng đơn điệu để không bao giờ tái sử dụng ObjectId đã phát hành
+}
+
+bool Scene::restoreFromSnapshot(const RoomSettings& roomSettings,
+                                const std::vector<SceneObject>& objects,
+                                ObjectId nextObjectId,
+                                const assets::FurnitureCatalog& catalog,
+                                std::string* outError)
+{
+    // 1. Dựng Room ứng viên trước (không sửa m_room hiện tại nếu lỗi)
+    Room candidateRoom;
+    if (!candidateRoom.applySettings(roomSettings, outError)) {
+        return false;
+    }
+
+    // 2. Xác thực toàn bộ danh sách đối tượng: ID hợp lệ, không trùng, Asset ID tồn tại, Transform hợp lệ
+    std::vector<SceneObject> candidateObjects;
+    candidateObjects.reserve(objects.size());
+    std::unordered_set<ObjectId> seenIds;
+    seenIds.reserve(objects.size());
+    ObjectId maxId = 0;
+
+    for (std::size_t i = 0; i < objects.size(); ++i) {
+        const auto& src = objects[i];
+        if (!isValidObjectId(src.id)) {
+            if (outError != nullptr) {
+                *outError = "Object at index " + std::to_string(i) + " has invalid ObjectId (0).";
+            }
+            return false;
+        }
+        if (src.id == std::numeric_limits<ObjectId>::max()) {
+            if (outError != nullptr) {
+                *outError = "Object at index " + std::to_string(i) + " has overflowing ObjectId.";
+            }
+            return false;
+        }
+        if (!seenIds.insert(src.id).second) {
+            if (outError != nullptr) {
+                *outError = "Duplicate ObjectId detected: #" + std::to_string(src.id) + ".";
+            }
+            return false;
+        }
+        if (catalog.findById(src.assetId) == nullptr) {
+            if (outError != nullptr) {
+                *outError = "Missing asset reference '" + src.assetId + "' for object #" + std::to_string(src.id) + ".";
+            }
+            return false;
+        }
+        if (!isValidTransform(src.transform, outError)) {
+            return false;
+        }
+        if (!std::isfinite(src.shininessScale) || src.shininessScale < 0.05f || src.shininessScale > 20.0f) {
+            if (outError != nullptr) {
+                *outError = "Invalid shininessScale for object #" + std::to_string(src.id) + ".";
+            }
+            return false;
+        }
+
+        const std::string cleanName = normalizeObjectName(src.name);
+        if (cleanName.empty()) {
+            if (outError != nullptr) {
+                *outError = "Empty object name for object #" + std::to_string(src.id) + ".";
+            }
+            return false;
+        }
+
+        SceneObject copy = src;
+        copy.name = cleanName;
+        candidateObjects.push_back(std::move(copy));
+        maxId = std::max(maxId, src.id);
+    }
+
+    // 3. Kiểm tra và khôi phục bộ cấp phát ObjectId (bảo đảm ID mới sau này không trùng ID đã có)
+    const ObjectId minValidNext = (maxId == 0) ? 1 : (maxId + 1);
+    if (nextObjectId < minValidNext) {
+        if (outError != nullptr) {
+            *outError = "Invalid nextObjectId (" + std::to_string(nextObjectId) +
+                        "): must be >= " + std::to_string(minValidNext) + ".";
+        }
+        return false;
+    }
+
+    // 4. Commit giao dịch: chỉ thay thế trạng thái Scene sau khi mọi bước xác thực đều thành công
+    m_room = std::move(candidateRoom);
+    m_objects = std::move(candidateObjects);
+    m_nextObjectId = nextObjectId;
+    return true;
 }
 
 bool Scene::isBoundsWithinRoom(const math::BoundingBox& worldBounds, float tolerance) const

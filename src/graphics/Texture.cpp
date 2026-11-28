@@ -95,7 +95,7 @@ bool Texture::createFromMemory(int width,
         return false;
     }
 
-    GLenum internalFormat = GL_RGBA8;
+    GLenum internalFormat = GL_SRGB8_ALPHA8;
     GLenum dataFormat = GL_RGBA;
     std::vector<std::uint8_t> convertedRgb;
     const std::uint8_t* uploadPtr = pixels;
@@ -108,14 +108,14 @@ bool Texture::createFromMemory(int width,
             convertedRgb[i * 3 + 1] = pixels[i];
             convertedRgb[i * 3 + 2] = pixels[i];
         }
-        internalFormat = GL_RGB8;
+        internalFormat = GL_SRGB8;
         dataFormat = GL_RGB;
         uploadPtr = convertedRgb.data();
     } else if (channels == 3) {
-        internalFormat = GL_RGB8;
+        internalFormat = GL_SRGB8;
         dataFormat = GL_RGB;
     } else if (channels == 4) {
-        internalFormat = GL_RGBA8;
+        internalFormat = GL_SRGB8_ALPHA8;
         dataFormat = GL_RGBA;
     } else {
         if (outError != nullptr) {

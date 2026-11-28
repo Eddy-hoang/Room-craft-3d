@@ -6,9 +6,43 @@
 
 #include <iostream>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 namespace roomcraft::core {
 
 Window* Window::s_activeInstance = nullptr;
+
+#ifdef _WIN32
+namespace {
+
+LRESULT CALLBACK roomcraftWindowCloseSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    WNDPROC origProc = reinterpret_cast<WNDPROC>(GetPropW(hwnd, L"RoomCraftPrevWndProc"));
+    if (msg == WM_CLOSE) {
+        auto* fnPtr = reinterpret_cast<std::function<bool()>*>(GetPropW(hwnd, L"RoomCraftCloseReqFn"));
+        if (fnPtr != nullptr && *fnPtr) {
+            if (!(*fnPtr)()) {
+                // Chặn đóng cửa sổ hệ điều hành để hiển thị hộp thoại Save / Discard / Cancel
+                return 0;
+            }
+        }
+    }
+    if (origProc != nullptr) {
+        return CallWindowProcW(origProc, hwnd, msg, wParam, lParam);
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+} // namespace
+#endif
 
 Window::Window(WindowConfig config)
     : m_config(std::move(config))
@@ -19,6 +53,18 @@ Window::Window(WindowConfig config)
 
 Window::~Window()
 {
+#ifdef _WIN32
+    if (m_nativeHwnd != nullptr && m_prevWndProc != nullptr) {
+        HWND hwnd = static_cast<HWND>(m_nativeHwnd);
+        if (IsWindow(hwnd)) {
+            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(m_prevWndProc));
+            RemovePropW(hwnd, L"RoomCraftPrevWndProc");
+            RemovePropW(hwnd, L"RoomCraftCloseReqFn");
+        }
+        m_nativeHwnd = nullptr;
+        m_prevWndProc = nullptr;
+    }
+#endif
     if (s_activeInstance == this) {
         s_activeInstance = nullptr;
     }
@@ -77,6 +123,24 @@ bool Window::initialize(int& argc, char** argv)
     glutMouseWheelFunc(&Window::mouseWheelCallback);
     glutMotionFunc(&Window::motionCallback);
     glutPassiveMotionFunc(&Window::passiveMotionCallback);
+
+    m_currentTitle = m_config.title;
+#ifdef _WIN32
+    HWND hwnd = WindowFromDC(wglGetCurrentDC());
+    if (hwnd == nullptr) {
+        hwnd = GetActiveWindow();
+    }
+    if (hwnd != nullptr) {
+        WNDPROC prev = reinterpret_cast<WNDPROC>(
+            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&roomcraftWindowCloseSubclassProc)));
+        if (prev != nullptr) {
+            SetPropW(hwnd, L"RoomCraftPrevWndProc", reinterpret_cast<HANDLE>(prev));
+            SetPropW(hwnd, L"RoomCraftCloseReqFn", reinterpret_cast<HANDLE>(&m_callbacks.onCloseRequest));
+            m_nativeHwnd = hwnd;
+            m_prevWndProc = reinterpret_cast<void*>(prev);
+        }
+    }
+#endif
 
     m_initialized = true;
     return true;
@@ -150,6 +214,14 @@ void Window::requestClose()
 {
     if (m_initialized) {
         glutLeaveMainLoop();
+    }
+}
+
+void Window::setTitle(const std::string& title)
+{
+    if (m_initialized && title != m_currentTitle) {
+        m_currentTitle = title;
+        glutSetWindowTitle(title.c_str());
     }
 }
 

@@ -8,9 +8,7 @@
 namespace roomcraft::graphics {
 
 // Cấu trúc dữ liệu vật liệu thuần CPU (không chứa GPU handle).
-// Lưu màu cơ bản, đường dẫn texture diffuse và các thuộc tính chuẩn bị cho M7 (Phong/Blinn-Phong).
-// Lưu ý giới hạn M3: renderer preview M3 mới sử dụng baseColor và diffuseTexturePath;
-// specularColor, shininess và opacity được lưu metadata phục vụ M7.
+// Màu nền dùng quy ước sRGB của editor. Ks là hệ số phản xạ tuyến tính.
 struct MaterialData {
     std::string name = "DefaultMaterial";
     glm::vec4 baseColor{0.80f, 0.80f, 0.82f, 1.0f};

@@ -28,6 +28,9 @@ struct WindowCallbacks {
     std::function<void()> onDisplay;
     std::function<void(int, int)> onReshape;
     std::function<void()> onClose;
+    // Trả về true nếu cho phép đóng cửa sổ ngay; trả về false để chặn nút X của hệ điều hành
+    // và hiển thị hộp thoại Save / Discard / Cancel cho dự án có thay đổi chưa lưu (M8.9).
+    std::function<bool()> onCloseRequest;
     std::function<void(unsigned char, int, int)> onKeyboard;
     std::function<void(unsigned char, int, int)> onKeyboardUp;
     std::function<void(int, int, int)> onSpecial;
@@ -59,6 +62,7 @@ public:
 
     // Điều khiển cửa sổ
     void requestClose();
+    void setTitle(const std::string& title);
     void swapBuffers() const;
     void postRedisplay() const;
     void resize(int width, int height);
@@ -96,6 +100,9 @@ private:
     int m_width = 1280;
     int m_height = 720;
     bool m_initialized = false;
+    void* m_nativeHwnd = nullptr;
+    void* m_prevWndProc = nullptr;
+    std::string m_currentTitle;
 };
 
 } // namespace roomcraft::core

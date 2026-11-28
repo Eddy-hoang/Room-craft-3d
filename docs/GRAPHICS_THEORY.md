@@ -143,3 +143,22 @@ Xem chi tiết sơ đồ lớp, sơ đồ tuần tự và luồng render tại [
 - **Kéo thả trên mặt phẳng ngang (`Ray–Plane`)**: Tính $t = \frac{(P_0 - \mathbf{O})\cdot\mathbf{N}}{\mathbf{D}\cdot\mathbf{N}}$ trên mặt phẳng $y = y_{\text{initial}}$ kèm `grabOffset`, bảo toàn cao độ $Y$ cho vật đặt trên bàn/kệ.
 
 Xem phân tích toán học đầy đủ, mã giả và sơ đồ tại [`docs/CAMERA_SYSTEM.md`](CAMERA_SYSTEM.md), [`docs/OBJECT_PICKING.md`](OBJECT_PICKING.md) và [`docs/INTERACTION_GUIDE.md`](INTERACTION_GUIDE.md).
+
+## 11. Chiếu sáng và lấy mẫu
+
+Với tiếp tuyến t vuông góc pháp tuyến n, sau khi nhân t với phần tuyến tính A của model matrix, ta cần n′·At = 0. Chọn n′ = A⁻ᵀn thì n′·At = n·t. Phải chuẩn hóa n′ sau nội suy. Khi kéo dãn vật thể theo X, thành phần X của pháp tuyến giảm theo nghịch đảo độ kéo dãn. Dùng A trực tiếp khiến vệt sáng trượt sai trên bề mặt.
+
+Ánh sáng cộng và nhân trong không gian tuyến tính. Mã sRGB 0,5 tương ứng cường độ khoảng 0,214. Khi giảm ánh sáng một nửa, ta nhận 0,107 tuyến tính, mã hiển thị khoảng 0,361 (92/255). Đây là giá trị mà bài kiểm thử đọc từ framebuffer. Xem [phương trình chiếu sáng](LIGHTING_SYSTEM.md) và [lưới, bộ đệm độ sâu, MSAA](RENDERING_PIPELINE.md).
+
+---
+
+## 12. Milestone M8 — Phát hiện Va chạm (AABB, OBB & Separating Axis Theorem)
+
+### 12.1. Hộp bao AABB vs. OBB khi Vật thể Xoay
+- **AABB (Axis-Aligned Bounding Box)** có các cạnh luôn song song 3 trục thế giới $(X, Y, Z)$. Khi đồ nội thất dài (như bàn, sofa) xoay $45^\circ$, World AABB phình to đáng kể và dễ gây cảnh báo va chạm giả (*false positive*).
+- **OBB (Oriented Bounding Box)** giữ 3 trục cơ sở trực chuẩn $(\mathbf{u}_0, \mathbf{u}_1, \mathbf{u}_2)$ xoay theo ma trận $R = R_y R_x R_z$ và bán kích thước thế giới $\mathbf{h} = (|s_x|h_{L,x}, |s_y|h_{L,y}, |s_z|h_{L,z})$ từ quy ước TRS không shear của RoomCraft 3D.
+
+### 12.2. Định lý Trục Phân tách (Separating Axis Theorem — SAT 3D)
+Hai hình hộp lồi 3D $A, B$ **không giao nhau** khi và chỉ khi tồn tại ít nhất một trục đơn vị $\mathbf{L}$ trong tập **15 trục ứng viên** ($\mathbf{u}_{A,0..2}$, $\mathbf{u}_{B,0..2}$, và 9 tích có hướng $\mathbf{u}_{A,i} \times \mathbf{u}_{B,j}$) thỏa mãn:
+$$|(\mathbf{C}_B - \mathbf{C}_A) \cdot \mathbf{L}| > r_A(\mathbf{L}) + r_B(\mathbf{L}), \qquad r_X(\mathbf{L}) = \sum_{k=0}^{2} |\mathbf{L}\cdot \mathbf{u}_{X,k}|\, h_{X,k}$$
+Nếu hai cạnh gần song song ($\|\mathbf{u}_{A,i}\times \mathbf{u}_{B,j}\| \le 10^{-5}$), trục tích có hướng bị suy biến và được bỏ qua an toàn vì mặt phẳng phân tách đã được phủ bởi 6 trục mặt. Kết hợp **AABB Broad-Phase** lọc nhanh các cặp xa nhau rồi mới chạy **15-axis OBB SAT Narrow-Phase** đạt độ chính xác cao với chi phí dưới `1 ms` cho 100 đối tượng. Xem chi tiết tại [`docs/COLLISION_SYSTEM.md`](COLLISION_SYSTEM.md).

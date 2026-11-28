@@ -4,6 +4,35 @@ Tất cả các thay đổi đáng chú ý của dự án được ghi nhận tr
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-28 (Milestone M8: Collision Detection & Project Persistence)
+### Added
+- **Hệ thống Phát hiện Va chạm & Xác thực Biên phòng thuần CPU (`roomcraft_math` + `roomcraft_scene`)**:
+  - `math::OBB` (`OBB.hpp/cpp`): dựng World-space OBB chính xác từ `BoundingBox` + `Transform` TRS (hỗ trợ xoay 3D & non-uniform scale, từ chối scale `<= 0`/NaN), chiếu `toWorldAABB()` và `intersectAABB()` phân biệt `Separated / Touching / Penetrating`.
+  - `math::SATIntersection` (`SATIntersection.hpp/cpp`): kiểm tra giao nhau 3D OBB bằng **Separating Axis Theorem (15 trục: 3+3+9)**, xử lý trục gần song song ổn định số học và đảm bảo đối xứng.
+  - `systems::CollisionSystem` & `systems::RoomBoundaryValidator` (`CollisionSystem.hpp/cpp`): pipeline 2 giai đoạn AABB Broad-Phase → OBB SAT Narrow-Phase, kiểm tra 6 mặt biên phòng từ hộp bao xoay, bảo toàn vật đặt nâng hợp lệ (`y = 0.75 m`), re-validate sau khi resize phòng mà không xóa/dịch đồ, kiểm tra tăng dần $O(N)$, chính sách loại trừ vật ẩn và cho phép đặt đồ trên thảm trải sàn.
+- **Hệ thống Lưu/Mở Dự án `.roomcraft` & Undo/Redo (`roomcraft_scene` + `roomcraft_engine`)**:
+  - `persistence::Json` (`Json.hpp/cpp`): bộ phân tích/xuất JSON RFC 8259 thuần C++17 (không thêm phụ thuộc ngoài, bảo vệ kích thước `16 MB` & độ sâu `64`, từ chối `NaN`/ký tự thừa).
+  - `persistence::ProjectData`, `ProjectSerializer`, `ProjectValidator`, `ProjectManager` (`include/roomcraft/persistence/*`, `src/persistence/*`): định dạng `.roomcraft` **schema v1** độc lập app version, mã hóa lossless `uint64_t` `objectId`/`nextObjectId` dạng chuỗi thập phân, lưu toàn bộ phòng, 14 asset, transform, `visible`/`locked`, `shininessScale`, cấu hình ánh sáng M7, MSAA, camera, lưới/snap/chế độ va chạm.
+  - **Ghi tệp an toàn nguyên tử** (tệp tạm cùng thư mục + `MoveFileExW` trên Windows, hỗ trợ Unicode & đường dẫn có khoảng trắng, không phá file cũ khi lỗi) và **Nạp giao dịch** (`Scene::restoreFromSnapshot`, bảo toàn 100% dự án đang mở khi file lỗi).
+  - `core::FileDialog` (`FileDialog.hpp/cpp`, Win32 `GetOpenFileNameW`/`GetSaveFileNameW` với `OFN_NOCHANGEDIR`) và chặn `WM_CLOSE` trong `Window.cpp` để đồng bộ hộp thoại **`Save / Discard / Cancel`** khi đóng cửa sổ có thay đổi chưa lưu.
+  - **Recent Projects (P1)** trong menu `File -> Recent Projects` và **Bounded `CommandHistory` Undo/Redo (P2 — 64 bước)** gắn phím `Ctrl+Z` / `Ctrl+Y`.
+  - Tích hợp `RoomEditor`, `SceneRenderer` (tô khung cảnh báo hổ phách/đỏ san hô mà vẫn giữ viền cyan đối tượng chọn), `ViewportInteraction` (`Prevent Invalid` rollback) và `Application` (`File` menu, dấu `*` dirty, `--m8-smoke-test`).
+- **Kiểm thử & Tài liệu M8**:
+  - Bổ sung `M8_CollisionUnitTests`, `M8_PersistenceUnitTests`, `M8_IntegrationSmokeTest` nâng tổng số lên **17 bộ CTest**.
+  - Tạo mới [`docs/COLLISION_SYSTEM.md`](docs/COLLISION_SYSTEM.md), [`docs/PROJECT_FORMAT.md`](docs/PROJECT_FORMAT.md), [`docs/PROJECT_PERSISTENCE.md`](docs/PROJECT_PERSISTENCE.md), [`docs/M8_DELIVERY.md`](docs/M8_DELIVERY.md) và cập nhật toàn bộ tài liệu dự án.
+
+### Verified
+- Build Debug thành công (`0` errors, `0` project warnings dưới `-Wall -Wextra -Wpedantic`); `RoomCraft3D.exe` chỉ link 8 DLL hệ thống Windows.
+- Toàn bộ **`17/17` CTest suites đạt `PASS` trong `6.65 s`** (`M0`–`M8`), chạy độc lập ngoài PATH WinLibs (`--m8-smoke-test` thoát mã `0`, `OpenGL errors: NONE`).
+- Benchmark Collision CPU (Debug): `30` vật thể `0.119 ms` (`0.045 ms` incremental), `100` vật thể `0.510 ms` (`0.170 ms` incremental), `250` vật thể `1.874 ms` (`0.371 ms` incremental).
+- Kiểm thử thủ công & trực quan (`M8-T32` và các mục tồn đọng M6–M7) giữ trạng thái `NOT VERIFIED` chờ người dùng xác nhận.
+
+## [0.7.0] - 2026-11-28 (M7, chờ nghiệm thu thủ công)
+
+- Shader Blinn–Phong world space, bốn preset, diffuse texture sRGB và Material Inspector.
+- Lưới giải tích theo mét, vân sàn, MSAA Off/2x/4x và resolve sang viewport ImGui.
+- Cache thumbnail kiểm tra vòng đời asset bằng weak_ptr. Bổ sung kiểm thử pixel OpenGL và số đo GPU/editor cùng ảnh thực tế trong [báo cáo M7](docs/M7_DELIVERY.md).
+
 ## [0.6.0] - 2026-11-28 (Milestone M6: Professional Editor UI/UX)
 ### Added
 - **Hệ thống Thiết kế Giao diện, Typography & Vector Icons (`roomcraft_engine`)**:

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "roomcraft/graphics/Camera.hpp"
+#include "roomcraft/graphics/Material.hpp"
+#include "roomcraft/graphics/Lighting.hpp"
 #include "roomcraft/graphics/Mesh.hpp"
 #include "roomcraft/graphics/Shader.hpp"
 #include "roomcraft/graphics/Texture.hpp"
@@ -33,6 +35,7 @@ public:
                     const glm::vec4& clearColor,
                     bool enableDepthTest = true);
 
+    void applyLighting(Shader& shader, const Camera& camera, const LightingSettings& lighting);
     void setWireframeMode(bool enabled);
     bool isWireframeMode() const { return m_wireframeEnabled; }
 
@@ -57,7 +60,9 @@ public:
                           const Camera& camera,
                           const glm::vec4& color,
                           const Texture* diffuseTexture,
-                          float faceContrast = 0.0f);
+                          float faceContrast = 0.0f,
+                          const MaterialData* material = nullptr,
+                          float shininessScale = 1.0f);
 
     void drawLines(const Mesh& lineMesh,
                    Shader& shader,

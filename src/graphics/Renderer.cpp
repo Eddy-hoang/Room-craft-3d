@@ -1,6 +1,8 @@
 #include "roomcraft/graphics/Renderer.hpp"
 
 #include <glad/glad.h>
+#include <glm/matrix.hpp>
+#include <cmath>
 
 namespace roomcraft::graphics {
 
@@ -26,6 +28,21 @@ void Renderer::beginFrame(int viewportWidth,
 
     glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void Renderer::applyLighting(Shader& shader, const Camera& camera, const LightingSettings& s)
+{
+    shader.bind();
+    shader.setVec3("uEye", camera.getPosition());
+    shader.setVec3("uOrthoView", camera.getPosition() - camera.getTarget());
+    shader.setInt("uOrthographic", camera.getProjectionMode() == ProjectionMode::Orthographic);
+    shader.setFloat("uAmbient", s.ambient);
+    shader.setVec3("uSunDirection", s.direction);
+    shader.setVec3("uSunRadiance", s.sunColor * (s.sunEnabled ? s.sunIntensity : 0.0f));
+    shader.setVec3("uPointPosition", s.position);
+    shader.setVec3("uPointRadiance", s.pointColor * (s.pointEnabled ? s.pointIntensity : 0.0f));
+    shader.setVec3("uAttenuation", s.attenuation);
+    shader.setInt("uFloor", 0);
 }
 
 void Renderer::setWireframeMode(bool enabled)
@@ -60,7 +77,9 @@ void Renderer::drawMeshTextured(const Mesh& mesh,
                                 const Camera& camera,
                                 const glm::vec4& color,
                                 const Texture* diffuseTexture,
-                                float faceContrast)
+                                float faceContrast,
+                                const MaterialData* material,
+                                float shininessScale)
 {
     if (!mesh.isValid() || !shader.isValid()) {
         return;
@@ -71,7 +90,15 @@ void Renderer::drawMeshTextured(const Mesh& mesh,
     shader.setMat4("uView", camera.getViewMatrix());
     shader.setMat4("uProjection", camera.getProjectionMatrix());
     shader.setVec4("uColor", color);
-    shader.setFloat("uFaceContrast", faceContrast);
+    shader.setInt("uLit", faceContrast > 0.0f);
+    const glm::mat3 basis(modelMatrix);
+    const float determinant = glm::determinant(basis);
+    // Ma trận suy biến không có nghịch đảo. Pháp tuyến 0 chỉ nhận ambient.
+    const glm::mat3 normal = std::isfinite(determinant) && determinant != 0.0f
+                                 ? glm::transpose(glm::inverse(basis)) : glm::mat3(0.0f);
+    shader.setMat3("uNormalMatrix", normal);
+    shader.setVec3("uSpecular", material ? material->specularColor : glm::vec3(0.045f));
+    shader.setFloat("uShininess", (material ? material->shininess : 20.0f) * shininessScale);
 
     const bool useTexture = (diffuseTexture != nullptr && diffuseTexture->isValid());
     if (useTexture) {

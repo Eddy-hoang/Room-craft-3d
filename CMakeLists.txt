@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RoomCraft3D
-    VERSION 0.6.0
+    VERSION 0.8.0
     DESCRIPTION "RoomCraft 3D - Desktop 3D Interior Design and Room Planner"
     LANGUAGES C CXX
 )
@@ -233,6 +233,8 @@ add_library(roomcraft_math STATIC
     src/graphics/Camera.cpp
     src/graphics/MeshValidation.cpp
     src/math/BoundingBox.cpp
+    src/math/OBB.cpp
+    src/math/SATIntersection.cpp
     src/math/Intersection.cpp
 )
 target_include_directories(roomcraft_math PUBLIC
@@ -287,10 +289,15 @@ add_library(roomcraft_scene STATIC
     src/scene/Scene.cpp
     src/scene/ScenePresets.cpp
     src/systems/PlacementSystem.cpp
+    src/systems/CollisionSystem.cpp
     src/systems/CameraController.cpp
     src/systems/PickingSystem.cpp
     src/systems/TransformController.cpp
     src/systems/TransformGizmo.cpp
+    src/persistence/Json.cpp
+    src/persistence/ProjectValidator.cpp
+    src/persistence/ProjectSerializer.cpp
+    src/persistence/ProjectManager.cpp
     src/core/InputManager.cpp
     src/editor/EditorLayout.cpp
     src/editor/ViewportInteraction.cpp
@@ -307,6 +314,7 @@ target_link_libraries(roomcraft_scene PUBLIC
 # ==============================================================================
 add_library(roomcraft_engine STATIC
     src/core/Window.cpp
+    src/core/FileDialog.cpp
     src/core/Application.cpp
     src/graphics/Shader.cpp
     src/graphics/Mesh.cpp
@@ -334,7 +342,7 @@ target_link_libraries(roomcraft_engine PUBLIC
 )
 
 if(WIN32)
-    target_link_libraries(roomcraft_engine PUBLIC winmm gdi32 user32)
+    target_link_libraries(roomcraft_engine PUBLIC winmm gdi32 user32 comdlg32)
 endif()
 
 # Cảnh báo biên dịch chặt cho toàn bộ mã nguồn dự án
@@ -368,6 +376,10 @@ if(MINGW)
     target_link_options(RoomCraft3D PRIVATE -static)
 endif()
 
+set_property(TARGET RoomCraft3D APPEND PROPERTY LINK_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/mesh.vert"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/mesh.frag"
+)
 add_custom_command(TARGET RoomCraft3D POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/assets"
@@ -478,3 +490,40 @@ add_test(NAME M5_InteractionUnitTests  COMMAND $<TARGET_FILE:RoomCraft3D_Interac
 add_test(NAME M5_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m5-smoke-test)
 add_test(NAME M6_EditorUiUnitTests     COMMAND $<TARGET_FILE:RoomCraft3D_EditorUiUnitTests>)
 add_test(NAME M6_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m6-smoke-test)
+
+add_executable(RoomCraft3D_LightingTests tests/LightingTests.cpp)
+target_link_libraries(RoomCraft3D_LightingTests PRIVATE roomcraft_engine)
+if(MINGW)
+    target_link_options(RoomCraft3D_LightingTests PRIVATE -static)
+endif()
+add_test(NAME M7_LightingGpu COMMAND RoomCraft3D_LightingTests)
+set_tests_properties(M7_LightingGpu PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+# 7. M8 Collision Detection (AABB, OBB SAT, Room Boundary, Benchmarks) Unit Tests (CPU-only)
+add_executable(RoomCraft3D_CollisionUnitTests
+    tests/unit/CollisionTests.cpp
+)
+target_link_libraries(RoomCraft3D_CollisionUnitTests PRIVATE roomcraft_scene)
+
+# 8. M8 Project Persistence (JSON, Schema, Transactional Load, Safe Save, Dirty-State, Undo/Redo) Unit Tests (CPU-only)
+add_executable(RoomCraft3D_PersistenceUnitTests
+    tests/unit/PersistenceTests.cpp
+)
+target_link_libraries(RoomCraft3D_PersistenceUnitTests PRIVATE roomcraft_scene)
+
+if(MSVC)
+    target_compile_options(RoomCraft3D_CollisionUnitTests PRIVATE /W4 /permissive- /utf-8)
+    target_compile_options(RoomCraft3D_PersistenceUnitTests PRIVATE /W4 /permissive- /utf-8)
+else()
+    target_compile_options(RoomCraft3D_CollisionUnitTests PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(RoomCraft3D_PersistenceUnitTests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if(MINGW)
+    target_link_options(RoomCraft3D_CollisionUnitTests PRIVATE -static)
+    target_link_options(RoomCraft3D_PersistenceUnitTests PRIVATE -static)
+endif()
+
+add_test(NAME M8_CollisionUnitTests    COMMAND $<TARGET_FILE:RoomCraft3D_CollisionUnitTests>)
+add_test(NAME M8_PersistenceUnitTests  COMMAND $<TARGET_FILE:RoomCraft3D_PersistenceUnitTests>)
+add_test(NAME M8_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m8-smoke-test)

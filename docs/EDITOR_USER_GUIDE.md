@@ -1,6 +1,6 @@
-# Hướng dẫn Sử dụng RoomCraft 3D Editor (Editor User Guide — M6)
+# Hướng dẫn Sử dụng RoomCraft 3D Editor (Editor User Guide — M6–M8)
 
-Tài liệu này hướng dẫn đầy đủ cách sử dụng **RoomCraft 3D** từ phiên bản **`v0.6.0` (Milestone M6)** với giao diện sản phẩm hoàn chỉnh.
+Tài liệu này hướng dẫn đầy đủ cách sử dụng **RoomCraft 3D** từ phiên bản **`v0.6.0` (Milestone M6)** đến **`v0.8.0` (Milestone M8)** với giao diện sản phẩm hoàn chỉnh, ánh sáng Blinn–Phong, kiểm tra va chạm 3D và lưu/mở dự án `.roomcraft`.
 
 ---
 
@@ -31,8 +31,8 @@ Khi khởi động, ứng dụng mở trực tiếp không gian làm việc **Ro
 
 | Menu | Chức năng chính |
 |---|---|
-| **File** | `New Room` (phòng trống), `Room Presets` (`Modern Bedroom`, `Gaming Workspace`, `Minimalist Living Room`), `Exit`. |
-| **Edit** | Chuyển công cụ (`Select Q`, `Move G`, `Rotate R`, `Scale S`), `Duplicate Selected (Ctrl+D)`, `Delete Selected (Del)`, `Reset Transform`. |
+| **File** | `New Project (Ctrl+N)`, `Open Project... (Ctrl+O)`, `Save (Ctrl+S)`, `Save As... (Ctrl+Shift+S)`, `Recent Projects`, `Room Presets` (`Modern Bedroom`, `Gaming Workspace`, `Minimalist Living Room`), `Exit` (hỏi `Save / Discard / Cancel` nếu có thay đổi chưa lưu). |
+| **Edit** | `Undo (Ctrl+Z)`, `Redo (Ctrl+Y)`, chuyển công cụ (`Select Q`, `Move G`, `Rotate R`, `Scale S`), `Duplicate Selected (Ctrl+D)`, `Delete Selected (Del)`, `Reset Transform`. |
 | **View** | Góc nhìn (`Perspective 2`, `Top 2D 1`, `Isometric 3`, `Front`), `Fit Room (Home)`, `Fit Selected (F)`, bật/tắt `Grid`, `Axes`, `Wireframe`, `Selection Bounding Box`, `3-Axis Move Gizmo`, `UI Scale (100% / 125% / 150%)`, `Reset Workspace Layout`, `Performance Monitor`. |
 | **Room** | Mở nhanh `Room Settings...`, đổi nhanh `Wall Visibility` (`All Walls`, `Hide Ceiling`, `Cutaway View`, `Manual`), `Toggle Ceiling`, `Room Presets`. |
 | **Tools** | Quay về `Room Editor (Main Workspace)`, mở **`Geometry Lab`** (công cụ sinh hình học Procedural/Bézier/Revolution), mở **`Asset Inspector`** (kiểm tra mesh/material/texture và `Reload Asset`), hoặc mở **`Developer Tools`** (`Graphics Reference Scene`, `OpenGL Diagnostics`, `Performance Monitor`). |
@@ -74,12 +74,34 @@ Khi khởi động, ứng dụng mở trực tiếp không gian làm việc **Ro
 | **`1` / `2` / `3`** | `Top View (2D Ortho)` / `Perspective 3D` / `Isometric` |
 | **`F`** / **`Home`** | `Focus Selected` / `Fit Room` |
 | **`Ctrl + D`** / **`Delete`** | Nhân bản / Xóa đối tượng đang chọn |
+| **`Ctrl + N`** / **`Ctrl + O`** | Tạo dự án mới (`New Project`) / Mở dự án `.roomcraft` (`Open Project...`) |
+| **`Ctrl + S`** / **`Ctrl + Shift + S`** | Lưu dự án (`Save`) / Lưu thành tệp mới (`Save As...`) |
+| **`Ctrl + Z`** / **`Ctrl + Y`** | Hoàn tác (`Undo`) / Làm lại (`Redo`) (tối đa 64 bước) |
 | **`Esc`** | Hủy thao tác đang chạy & khôi phục Transform ban đầu |
 
 ---
 
-## 5. Phạm vi Dự kiến ở các Milestone Kế tiếp
+## 5. Ánh sáng và vật liệu (M7)
 
-Các chức năng sau **chưa có** trong phiên bản `v0.6.0` (và được cố tình không đặt nút giả trên menu):
-- **Milestone M7**: Chiếu sáng Blinn-Phong đa nguồn sáng, đổ bóng (Shadow Mapping), vật liệu phong phú hơn.
-- **Milestone M8**: Phát hiện va chạm hoàn chỉnh (Collision Detection), Lưu / Mở dự án JSON (`Save` / `Open`), hệ thống `Undo / Redo` lịch sử đầy đủ.
+Trong cột phải, chọn **Room Settings → Lighting Settings**. Chọn Daylight, Warm Interior, Neutral Studio hoặc Evening. Các thanh chỉnh có tác dụng từ khung kế tiếp. Direction chỉ hướng tia sáng đi tới phòng. Position dùng mét trong hệ tọa độ phòng. Constant, Linear và Quadratic điều chỉnh độ suy giảm đèn điểm. Khi sửa một tham số ánh sáng, tên preset chuyển thành Custom. Reset lighting khôi phục Daylight.
+
+Chọn Off, 2x hoặc 4x ở MSAA. Active samples báo số mẫu thật của driver. Off giảm chi phí bộ nhớ và resolve. Mở **Properties → Material** của vật đang chọn để xem nguồn màu diffuse, hệ số phản xạ Ks và số mũ độ bóng Ns từng vật liệu. Thanh **Shininess scale** nhân Ns của từng phần trên riêng vật đang chọn. Đặt lại 1,00x để trở về vật liệu gốc. Vật bị khóa cũng khóa thanh chỉnh này. Khi so màu sàn, dùng nút Grid của viewport để bật/tắt lưới.
+
+---
+
+## 6. Kiểm tra Va chạm & Lưu/Mở Dự án (M8)
+
+### Kiểm tra va chạm (OBB SAT) và biên phòng (Room Boundary)
+- Mở **Room Settings → Collision & Placement** để chọn chế độ kiểm tra:
+  - **`Off`**: Tắt kiểm tra va chạm/biên phòng.
+  - **`Warning Only`** *(mặc định)*: Cho phép đặt vật thể tự do nhưng tô khung cảnh báo trong 3D Viewport (**vàng cam** khi xuyên nhau giữa 2 nội thất, **đỏ san hô** khi vượt biên phòng) trong khi vẫn giữ khung **xanh ngọc (cyan)** của đối tượng đang chọn.
+  - **`Prevent Invalid`**: Ngăn hoàn tất thao tác di chuyển/xoay/scale nếu kết quả cuối cùng xuyên vật thể khác hoặc vượt biên phòng — hệ thống tự hoàn nguyên về Transform hợp lệ trước đó và hiện Toast giải thích lý do.
+- Có thể bật/tắt riêng **`Allow Rug / Carpet Overlap`** (mặc định bật để cho phép ghế, bàn, giường đặt trên thảm mà không báo lỗi giả) và **`Show Collision Highlights`**.
+- Trong **Properties → Dimensions & Placement**, trạng thái đặt của vật thể đang chọn hiển thị trực tiếp (`Placement: Valid`, danh sách vật thể đang xuyên kèm độ xuyên theo mét `m`, hoặc vượt biên phòng); **Status Bar** ở cạnh dưới luôn tổng hợp số cảnh báo toàn cảnh.
+
+### Lưu, mở dự án `.roomcraft` và Undo/Redo
+- Dùng menu **`File`** hoặc phím tắt **`Ctrl+N`** (New), **`Ctrl+O`** (Open), **`Ctrl+S`** (Save), **`Ctrl+Shift+S`** (Save As) để mở hộp thoại tệp gốc của Windows hỗ trợ đường dẫn Unicode và dấu cách.
+- Khi dự án có thay đổi chưa lưu, dấu **`*`** xuất hiện cạnh tên dự án trên thanh tiêu đề cửa sổ và thanh menu. Nếu bạn thực hiện `New`, `Open`, `Load Preset` hoặc đóng cửa sổ (`File -> Exit` hay nút **`X`**), hộp thoại **`Unsaved Changes`** sẽ hỏi **`Save`** / **`Discard`** / **`Cancel`** để tránh mất dữ liệu.
+- Danh sách tối đa 8 dự án gần nhất nằm tại **`File -> Recent Projects`**.
+- Lưu dự án dùng cơ chế **ghi tệp tạm cùng thư mục rồi thay thế nguyên tử (`MoveFileExW`)**; mở dự án dùng cơ chế **transactional** — nếu tệp hỏng hoặc sai schema, dự án hiện đang mở vẫn được giữ nguyên vẹn.
+- **`Edit -> Undo (Ctrl+Z)`** và **`Edit -> Redo (Ctrl+Y)`** hỗ trợ hoàn tác/làm lại cho các thao tác thêm, xóa, nhân bản, biến đổi (1 lần kéo = 1 bước Undo), đổi tên, ẩn/hiện, khóa/mở khóa, đổi độ bóng vật liệu và đổi thiết lập phòng.

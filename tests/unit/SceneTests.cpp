@@ -52,6 +52,11 @@ int runSceneTests()
     check(uniqueIds && approx(scene.findObject(chair2)->transform.position.x, 1.5f),
           "TC-M4-11/13 Unique stable ObjectIds & duplicate offset", failures);
 
+    scene.findObject(chair2)->shininessScale = 2.5f;
+    check(approx(scene.findObject(chair1)->shininessScale, 1.0f) &&
+          approx(scene.findObject(chair3)->shininessScale, 1.0f),
+          "M7 shared chairs keep independent material adjustments", failures);
+
     // TC-M4-16: Transform independence across 3 instances of same Asset ID
     auto tr1 = scene.findObject(chair1)->transform;
     tr1.rotationDegrees.y = 90.0f;

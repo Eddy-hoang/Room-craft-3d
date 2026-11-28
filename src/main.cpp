@@ -26,6 +26,8 @@ int main(int argc, char** argv)
             config.title = "RoomCraft 3D - M4 Regression Smoke Test";
         } else if (arg == "--m4-benchmark") {
             config.mode = roomcraft::core::ApplicationMode::BenchmarkM4;
+            config.width = 1878;
+            config.height = 815;
             config.title = "RoomCraft 3D - M4 Performance Benchmark (10/30/100 Objects)";
         } else if (arg == "--m5-smoke-test") {
             config.mode = roomcraft::core::ApplicationMode::SmokeTestM5;
@@ -33,8 +35,11 @@ int main(int argc, char** argv)
         } else if (arg == "--m6-smoke-test") {
             config.mode = roomcraft::core::ApplicationMode::SmokeTestM6;
             config.title = "RoomCraft 3D - M6 Professional UI/UX, Thumbnails & Gizmo Smoke Test";
+        } else if (arg == "--m8-smoke-test") {
+            config.mode = roomcraft::core::ApplicationMode::SmokeTestM8;
+            config.title = "RoomCraft 3D - M8 Collision & Project Persistence GPU Smoke Test";
         } else if (arg == "--help" || arg == "-h") {
-            std::cout << "RoomCraft 3D v0.6.0 — 3D Interior Design Studio\n"
+            std::cout << "RoomCraft 3D v0.8.0 — 3D Interior Design Studio\n"
                       << "Usage: RoomCraft3D [option]\n"
                       << "  (no option)      Launch RoomCraft 3D Interactive Editor\n"
                       << "  --smoke-test     Run M0 regression smoke test\n"
@@ -44,7 +49,8 @@ int main(int argc, char** argv)
                       << "  --m4-smoke-test  Run M4 regression GPU integration smoke test\n"
                       << "  --m4-benchmark   Run M4 10/30/100 furniture object GPU performance benchmark\n"
                       << "  --m5-smoke-test  Run M5 regression GPU integration smoke test\n"
-                      << "  --m6-smoke-test  Run M6 UI/UX, Thumbnails, Move Gizmo & Performance smoke test\n";
+                      << "  --m6-smoke-test  Run M6 UI/UX, Thumbnails, Move Gizmo & Performance smoke test\n"
+                      << "  --m8-smoke-test  Run M8 Collision & Project Persistence GPU integration smoke test\n";
             return 0;
         }
     }

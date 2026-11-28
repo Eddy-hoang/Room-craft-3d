@@ -26,6 +26,12 @@ struct ViewportInputContext {
 struct ViewportInteractionOutcome {
     bool sceneModified = false;
     bool consumedEscape = false;
+    bool transformConfirmed = false;
+    scene::ObjectId transformedObjectId = scene::kInvalidObjectId;
+    scene::Transform transformBefore{};
+    std::string transformDescription;
+    bool objectDeleted = false;
+    bool objectDuplicated = false;
     std::string statusMessage;
     std::string errorMessage;
 };

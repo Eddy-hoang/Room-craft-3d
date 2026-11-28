@@ -24,6 +24,8 @@ public:
 
     // Kích hoạt/hủy kích hoạt framebuffer để render off-screen
     void bind() const;
+    int bindMultisampled(int requestedSamples);
+    void resolveMultisampled() const;
     static void unbind();
 
     // Giải phóng tường minh trước khi OpenGL context bị hủy
@@ -39,6 +41,12 @@ private:
     bool allocateAttachments(int width, int height);
 
 private:
+    void releaseMultisample();
+    unsigned int m_msFbo = 0;
+    unsigned int m_msColor = 0;
+    unsigned int m_msDepth = 0;
+    int m_samples = 1;
+    int m_requestedSamples = 1;
     unsigned int m_fbo = 0;
     unsigned int m_colorTexture = 0;
     unsigned int m_depthStencilRbo = 0;

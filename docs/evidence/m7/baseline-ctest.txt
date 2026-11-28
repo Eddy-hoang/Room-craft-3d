@@ -1,0 +1,31 @@
+Test project D:/CG/build/mingw-x64-debug
+      Start  1: M0_SmokeTest
+ 1/13 Test  #1: M0_SmokeTest .....................   Passed    0.41 sec
+      Start  2: M1_UnitTests
+ 2/13 Test  #2: M1_UnitTests .....................   Passed    0.04 sec
+      Start  3: M1_IntegrationSmokeTest
+ 3/13 Test  #3: M1_IntegrationSmokeTest ..........   Passed    0.40 sec
+      Start  4: M2_GeometryUnitTests
+ 4/13 Test  #4: M2_GeometryUnitTests .............   Passed    0.03 sec
+      Start  5: M2_IntegrationSmokeTest
+ 5/13 Test  #5: M2_IntegrationSmokeTest ..........   Passed    0.45 sec
+      Start  6: M3_AssetUnitTests
+ 6/13 Test  #6: M3_AssetUnitTests ................   Passed    0.21 sec
+      Start  7: M3_IntegrationSmokeTest
+ 7/13 Test  #7: M3_IntegrationSmokeTest ..........   Passed    0.75 sec
+      Start  8: M4_SceneUnitTests
+ 8/13 Test  #8: M4_SceneUnitTests ................   Passed    0.03 sec
+      Start  9: M4_IntegrationSmokeTest
+ 9/13 Test  #9: M4_IntegrationSmokeTest ..........   Passed    0.82 sec
+      Start 10: M5_InteractionUnitTests
+10/13 Test #10: M5_InteractionUnitTests ..........   Passed    0.03 sec
+      Start 11: M5_IntegrationSmokeTest
+11/13 Test #11: M5_IntegrationSmokeTest ..........   Passed    0.67 sec
+      Start 12: M6_EditorUiUnitTests
+12/13 Test #12: M6_EditorUiUnitTests .............   Passed    0.03 sec
+      Start 13: M6_IntegrationSmokeTest
+13/13 Test #13: M6_IntegrationSmokeTest ..........   Passed    0.88 sec
+
+100% tests passed out of 13
+
+Total Test time (real) =   4.77 sec

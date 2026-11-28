@@ -1,5 +1,6 @@
 #include "roomcraft/editor/RoomEditor.hpp"
 
+#include "roomcraft/core/FileDialog.hpp"
 #include "roomcraft/editor/EditorIcons.hpp"
 #include "roomcraft/systems/PlacementSystem.hpp"
 
@@ -15,12 +16,15 @@ namespace roomcraft::editor {
 void RoomEditor::initialize(assets::AssetManager& assetManager, graphics::Camera& camera)
 {
     applyPresetImmediate(scene::ScenePresetType::ModernBedroom, assetManager, camera);
-    m_sceneDirty = false;
+    m_projectManager.clearDirty();
     m_notifications.clear();
 }
 
 std::string RoomEditor::getActiveSceneDisplayName() const
 {
+    if (!m_projectManager.getProjectName().empty()) {
+        return m_projectManager.getProjectName();
+    }
     if (m_isCustomEmptyRoom) {
         return "Custom Room";
     }
@@ -32,11 +36,122 @@ std::string RoomEditor::getActiveSceneDisplayName() const
     }
 }
 
+std::string RoomEditor::getWindowTitleLabel() const
+{
+    std::string label = getActiveSceneDisplayName();
+    if (m_projectManager.isDirty()) {
+        label += " *";
+    }
+    return label;
+}
+
+void RoomEditor::markSceneModified(bool collisionAffected)
+{
+    m_projectManager.markDirty();
+    if (collisionAffected) {
+        m_collisionDirty = true;
+    }
+}
+
+void RoomEditor::recordUndoBeforeEdit(const std::string& description)
+{
+    m_commandHistory.pushUndo(
+        systems::CommandHistory::capture(m_scene, m_selection.getSelectedObjectId(), description));
+}
+
+systems::CollisionSystem::LocalBoundsLookupFn RoomEditor::makeBoundsLookup(assets::AssetManager& assetManager) const
+{
+    return [&assetManager](const std::string& assetId) -> math::BoundingBox {
+        auto gpu = assetManager.getOrLoadAsset(assetId, nullptr);
+        return gpu ? gpu->cpuData.localBounds : math::BoundingBox{};
+    };
+}
+
+void RoomEditor::setPlacementValidationMode(systems::PlacementValidationMode mode)
+{
+    if (m_placementMode != mode) {
+        m_placementMode = mode;
+        markSceneModified(true);
+    }
+}
+
+void RoomEditor::setCollisionOptions(const systems::CollisionOptions& opts)
+{
+    m_collisionOptions = opts;
+    m_collisionDirty = true;
+}
+
+void RoomEditor::refreshCollisionReport(assets::AssetManager& assetManager)
+{
+    if (m_placementMode == systems::PlacementValidationMode::Off) {
+        m_collisionReport = systems::SceneCollisionReport{};
+        m_collisionDirty = false;
+        return;
+    }
+    m_collisionReport = systems::CollisionSystem::validateScene(
+        m_scene, makeBoundsLookup(assetManager), m_collisionOptions);
+    m_collisionDirty = false;
+}
+
+persistence::ProjectData RoomEditor::buildProjectData(const graphics::Camera& camera) const
+{
+    persistence::ProjectData data;
+    data.format = persistence::kProjectFormatId;
+    data.schemaVersion = persistence::kCurrentSchemaVersion;
+    data.projectName = getActiveSceneDisplayName();
+    data.room = m_scene.getRoom().getSettings();
+    data.nextObjectId = m_scene.getNextObjectId();
+    data.objects = m_scene.getObjects();
+    data.lightingPreset = m_lightPreset;
+    data.lighting = m_lighting;
+    data.renderSettings.msaaSampleIndex = m_sampleIndex;
+    data.renderSettings.wireframe = wireframeMode;
+    data.renderSettings.showAxes = showAxes;
+    data.renderSettings.showSelectedBBox = showSelectedBBox;
+    data.renderSettings.showMoveGizmo = showMoveGizmo;
+    data.camera = persistence::ProjectCameraData::fromCamera(camera);
+    data.editorSettings.showGrid = showGrid;
+    data.editorSettings.gridSnapEnabled = m_gridSnapEnabled;
+    data.editorSettings.placementMode = m_placementMode;
+    data.editorSettings.allowRugOverlap = m_collisionOptions.allowRugOverlap;
+    return data;
+}
+
+void RoomEditor::applyLoadedProjectData(const persistence::ProjectData& data, graphics::Camera& camera)
+{
+    m_interactionState.resetToIdle();
+    m_inspectorTransformEditActive = false;
+    m_commandHistory.clear();
+    m_roomDraft = m_scene.getRoom().getSettings();
+    m_lighting = data.lighting;
+    m_lightPreset = data.lightingPreset;
+    m_sampleIndex = std::clamp(data.renderSettings.msaaSampleIndex, 0, 2);
+    wireframeMode = data.renderSettings.wireframe;
+    showAxes = data.renderSettings.showAxes;
+    showSelectedBBox = data.renderSettings.showSelectedBBox;
+    showMoveGizmo = data.renderSettings.showMoveGizmo;
+    showGrid = data.editorSettings.showGrid;
+    m_gridSnapEnabled = data.editorSettings.gridSnapEnabled;
+    m_placementMode = data.editorSettings.placementMode;
+    m_collisionOptions.allowRugOverlap = data.editorSettings.allowRugOverlap;
+
+    m_selection.clearSelection();
+    if (!m_scene.getObjects().empty()) {
+        m_selection.selectObject(m_scene.getObjects().front().id);
+    }
+    m_renameSyncedObjectId = scene::kInvalidObjectId;
+    m_interactionState.warningMessage.clear();
+    m_cameraController.syncFromCamera(camera);
+    m_collisionDirty = true;
+}
+
 void RoomEditor::applyPresetImmediate(scene::ScenePresetType preset,
                                       assets::AssetManager& assetManager,
                                       graphics::Camera& camera)
 {
     m_interactionState.resetToIdle();
+    m_inspectorTransformEditActive = false;
+    m_commandHistory.clear();
 
     std::string err;
     if (!scene::ScenePresets::applyPreset(preset, m_scene, assetManager.getCatalog(), &err)) {
@@ -46,16 +161,23 @@ void RoomEditor::applyPresetImmediate(scene::ScenePresetType preset,
 
     m_activePreset = preset;
     m_isCustomEmptyRoom = false;
+    std::string presetName = "Room Design";
+    if (preset == scene::ScenePresetType::ModernBedroom) presetName = "Modern Bedroom";
+    else if (preset == scene::ScenePresetType::GamingWorkspace) presetName = "Gaming Workspace";
+    else if (preset == scene::ScenePresetType::MinimalistLivingRoom) presetName = "Minimalist Living Room";
+    m_projectManager.resetForNewProject(presetName, false);
+
     m_roomDraft = m_scene.getRoom().getSettings();
     m_selection.clearSelection();
     if (!m_scene.getObjects().empty()) {
         m_selection.selectObject(m_scene.getObjects().front().id);
     }
     m_renameSyncedObjectId = scene::kInvalidObjectId;
-    m_sceneDirty = false;
     m_interactionState.warningMessage.clear();
+    m_collisionDirty = true;
+    refreshCollisionReport(assetManager);
     m_statusMessage = "Scene ready";
-    m_notifications.push(NotificationLevel::Success, "Loaded " + getActiveSceneDisplayName());
+    m_notifications.push(NotificationLevel::Success, "Loaded " + presetName);
 
     setPerspective3DCamera(camera);
 }
@@ -63,25 +185,29 @@ void RoomEditor::applyPresetImmediate(scene::ScenePresetType preset,
 void RoomEditor::createNewEmptyRoomImmediate(graphics::Camera& camera)
 {
     m_interactionState.resetToIdle();
+    m_inspectorTransformEditActive = false;
+    m_commandHistory.clear();
     m_scene.clearObjects();
     m_scene.getRoom().resetToDefault();
     m_isCustomEmptyRoom = true;
+    m_projectManager.resetForNewProject("Untitled Room", false);
     m_roomDraft = m_scene.getRoom().getSettings();
     m_selection.clearSelection();
     m_renameSyncedObjectId = scene::kInvalidObjectId;
-    m_sceneDirty = false;
     m_interactionState.warningMessage.clear();
+    m_collisionReport = systems::SceneCollisionReport{};
+    m_collisionDirty = false;
     m_statusMessage = "New empty room ready";
-    m_notifications.push(NotificationLevel::Info, "Created new room (5.0 x 6.0 x 3.0 m)");
+    m_notifications.push(NotificationLevel::Info, "Created new project (5.0 x 6.0 x 3.0 m)");
     setPerspective3DCamera(camera);
 }
 
 void RoomEditor::requestNewEmptyRoom(graphics::Camera& camera)
 {
     m_interactionState.resetToIdle();
-    if (m_sceneDirty && m_scene.getObjectCount() > 0) {
-        m_pendingNewEmptyRoom = true;
-        m_openConfirmSceneModal = true;
+    if (m_projectManager.isDirty()) {
+        m_pendingDirtyAction = PendingDirtyAction::NewProject;
+        m_openDirtyActionModal = true;
     } else {
         createNewEmptyRoomImmediate(camera);
     }
@@ -92,13 +218,195 @@ void RoomEditor::requestPresetChange(scene::ScenePresetType preset,
                                      graphics::Camera& camera)
 {
     m_interactionState.resetToIdle();
-    if (m_sceneDirty && m_scene.getObjectCount() > 0) {
+    if (m_projectManager.isDirty()) {
         m_pendingPreset = preset;
-        m_pendingNewEmptyRoom = false;
-        m_openConfirmSceneModal = true;
+        m_pendingDirtyAction = PendingDirtyAction::ApplyPreset;
+        m_openDirtyActionModal = true;
     } else {
         applyPresetImmediate(preset, assetManager, camera);
     }
+}
+
+void RoomEditor::requestOpenProjectDialog(assets::AssetManager& assetManager, graphics::Camera& camera)
+{
+    m_interactionState.resetToIdle();
+    if (m_projectManager.isDirty()) {
+        m_pendingDirtyAction = PendingDirtyAction::OpenDialog;
+        m_openDirtyActionModal = true;
+        return;
+    }
+    std::filesystem::path chosen;
+    const auto initDir = m_projectManager.hasCurrentFilePath()
+                             ? m_projectManager.getCurrentFilePath().parent_path()
+                             : std::filesystem::path{};
+    if (core::FileDialog::openProjectFile(chosen, initDir)) {
+        openProjectImmediate(chosen, assetManager, camera);
+    }
+}
+
+void RoomEditor::requestOpenProjectPath(const std::filesystem::path& path,
+                                        assets::AssetManager& assetManager,
+                                        graphics::Camera& camera)
+{
+    m_interactionState.resetToIdle();
+    if (m_projectManager.isDirty()) {
+        m_pendingOpenPath = path;
+        m_pendingDirtyAction = PendingDirtyAction::OpenSpecificPath;
+        m_openDirtyActionModal = true;
+        return;
+    }
+    openProjectImmediate(path, assetManager, camera);
+}
+
+bool RoomEditor::saveProjectToPathImmediate(const std::filesystem::path& path,
+                                            assets::AssetManager& assetManager,
+                                            const graphics::Camera& camera,
+                                            std::string* outError)
+{
+    persistence::ProjectData data = buildProjectData(camera);
+    data.projectName = persistence::ProjectManager::deriveProjectNameFromPath(path);
+    std::string err;
+    if (!m_projectManager.saveCurrentOrAs(path, data, assetManager.getCatalog(), &err)) {
+        if (outError != nullptr) *outError = err;
+        m_statusMessage = "Save failed";
+        m_notifications.push(NotificationLevel::Error, "Save failed: " + err, 5.0f);
+        return false;
+    }
+    m_statusMessage = "Saved '" + data.projectName + "'";
+    m_notifications.push(NotificationLevel::Success, "Saved project '" + data.projectName + "'");
+    return true;
+}
+
+bool RoomEditor::saveProject(assets::AssetManager& assetManager, const graphics::Camera& camera)
+{
+    if (m_projectManager.hasCurrentFilePath()) {
+        return saveProjectToPathImmediate(m_projectManager.getCurrentFilePath(), assetManager, camera);
+    }
+    return saveProjectAs(assetManager, camera);
+}
+
+bool RoomEditor::saveProjectAs(assets::AssetManager& assetManager, const graphics::Camera& camera)
+{
+    std::filesystem::path chosen;
+    const std::string defaultFile = getActiveSceneDisplayName() + ".roomcraft";
+    const auto initDir = m_projectManager.hasCurrentFilePath()
+                             ? m_projectManager.getCurrentFilePath().parent_path()
+                             : std::filesystem::path{};
+    if (!core::FileDialog::saveProjectFile(chosen, defaultFile, initDir)) {
+        return false;
+    }
+    return saveProjectToPathImmediate(chosen, assetManager, camera);
+}
+
+bool RoomEditor::openProjectImmediate(const std::filesystem::path& path,
+                                      assets::AssetManager& assetManager,
+                                      graphics::Camera& camera,
+                                      std::string* outError)
+{
+    persistence::ProjectData loadedData;
+    std::string err;
+    if (!m_projectManager.openTransactional(path, assetManager.getCatalog(), m_scene, camera, loadedData, &err)) {
+        if (outError != nullptr) *outError = err;
+        m_statusMessage = "Open project failed";
+        m_notifications.push(NotificationLevel::Error, "Open failed: " + err, 5.5f);
+        return false;
+    }
+
+    applyLoadedProjectData(loadedData, camera);
+    refreshCollisionReport(assetManager);
+    m_statusMessage = "Opened '" + loadedData.projectName + "'";
+    m_notifications.push(NotificationLevel::Success, "Opened project '" + loadedData.projectName + "'");
+    return true;
+}
+
+bool RoomEditor::requestApplicationClose()
+{
+    if (!m_projectManager.isDirty()) {
+        m_shouldExitApplication = true;
+        return true;
+    }
+    m_pendingDirtyAction = PendingDirtyAction::ExitApp;
+    m_openDirtyActionModal = true;
+    return false;
+}
+
+void RoomEditor::executePendingDirtyAction(assets::AssetManager& assetManager, graphics::Camera& camera)
+{
+    const PendingDirtyAction action = m_pendingDirtyAction;
+    m_pendingDirtyAction = PendingDirtyAction::None;
+
+    if (action == PendingDirtyAction::NewProject) {
+        createNewEmptyRoomImmediate(camera);
+    } else if (action == PendingDirtyAction::ApplyPreset) {
+        applyPresetImmediate(m_pendingPreset, assetManager, camera);
+    } else if (action == PendingDirtyAction::OpenDialog) {
+        std::filesystem::path chosen;
+        const auto initDir = m_projectManager.hasCurrentFilePath()
+                                 ? m_projectManager.getCurrentFilePath().parent_path()
+                                 : std::filesystem::path{};
+        if (core::FileDialog::openProjectFile(chosen, initDir)) {
+            openProjectImmediate(chosen, assetManager, camera);
+        }
+    } else if (action == PendingDirtyAction::OpenSpecificPath) {
+        if (!m_pendingOpenPath.empty()) {
+            openProjectImmediate(m_pendingOpenPath, assetManager, camera);
+        }
+        m_pendingOpenPath.clear();
+    } else if (action == PendingDirtyAction::ExitApp) {
+        m_shouldExitApplication = true;
+    }
+}
+
+bool RoomEditor::undo(assets::AssetManager& assetManager)
+{
+    m_interactionState.resetToIdle();
+    scene::ObjectId selId = m_selection.getSelectedObjectId();
+    std::string desc;
+    std::string err;
+    if (!m_commandHistory.undo(m_scene, selId, assetManager.getCatalog(), &desc, &err)) {
+        if (!err.empty()) {
+            m_notifications.push(NotificationLevel::Error, "Undo failed: " + err);
+        }
+        return false;
+    }
+    if (scene::isValidObjectId(selId)) {
+        m_selection.selectObject(selId);
+    } else {
+        m_selection.clearSelection();
+    }
+    m_roomDraft = m_scene.getRoom().getSettings();
+    m_renameSyncedObjectId = scene::kInvalidObjectId;
+    markSceneModified(true);
+    refreshCollisionReport(assetManager);
+    m_statusMessage = "Undid: " + desc;
+    m_notifications.push(NotificationLevel::Info, "Undo: " + desc, 2.2f);
+    return true;
+}
+
+bool RoomEditor::redo(assets::AssetManager& assetManager)
+{
+    m_interactionState.resetToIdle();
+    scene::ObjectId selId = m_selection.getSelectedObjectId();
+    std::string desc;
+    std::string err;
+    if (!m_commandHistory.redo(m_scene, selId, assetManager.getCatalog(), &desc, &err)) {
+        if (!err.empty()) {
+            m_notifications.push(NotificationLevel::Error, "Redo failed: " + err);
+        }
+        return false;
+    }
+    if (scene::isValidObjectId(selId)) {
+        m_selection.selectObject(selId);
+    } else {
+        m_selection.clearSelection();
+    }
+    m_roomDraft = m_scene.getRoom().getSettings();
+    m_renameSyncedObjectId = scene::kInvalidObjectId;
+    markSceneModified(true);
+    refreshCollisionReport(assetManager);
+    m_statusMessage = "Redid: " + desc;
+    m_notifications.push(NotificationLevel::Info, "Redo: " + desc, 2.2f);
+    return true;
 }
 
 void RoomEditor::setActiveTool(systems::TransformMode mode)
@@ -113,11 +421,12 @@ void RoomEditor::duplicateSelectedObject()
     if (!m_selection.hasSelection()) {
         return;
     }
+    recordUndoBeforeEdit("Duplicate object");
     std::string err;
     const auto newId = m_scene.duplicateObject(m_selection.getSelectedObjectId(), glm::vec3(0.45f, 0.0f, 0.45f), &err);
     if (scene::isValidObjectId(newId)) {
         m_selection.selectObject(newId);
-        m_sceneDirty = true;
+        markSceneModified(true);
         m_statusMessage = "Duplicated object #" + std::to_string(newId);
         m_notifications.push(NotificationLevel::Success, "Duplicated object (#" + std::to_string(newId) + ")");
     } else {
@@ -159,10 +468,11 @@ void RoomEditor::resetSelectedTransform()
         m_notifications.push(NotificationLevel::Warning, "Cannot reset transform of locked object.");
         return;
     }
+    recordUndoBeforeEdit("Reset transform");
     scene::Transform resetTr;
     resetTr.position = glm::vec3(0.0f, (obj->assetId == "blender-carpet") ? 0.003f : 0.0f, 0.0f);
     if (m_scene.setObjectTransform(obj->id, resetTr)) {
-        m_sceneDirty = true;
+        markSceneModified(true);
         m_notifications.push(NotificationLevel::Info, "Reset transform for '" + obj->name + "'");
     }
 }
@@ -175,10 +485,11 @@ void RoomEditor::focusRoomSettingsTab()
 
 void RoomEditor::setWallVisibilityMode(scene::WallVisibilityMode mode)
 {
+    recordUndoBeforeEdit("Change wall visibility");
     m_roomDraft.wallVisibilityMode = mode;
     std::string err;
     if (m_scene.getRoom().applySettings(m_roomDraft, &err)) {
-        m_sceneDirty = true;
+        markSceneModified(false);
         m_statusMessage = std::string("Walls: ") + scene::wallVisibilityModeToString(mode);
     } else {
         m_notifications.push(NotificationLevel::Error, err);
@@ -187,11 +498,12 @@ void RoomEditor::setWallVisibilityMode(scene::WallVisibilityMode mode)
 
 void RoomEditor::toggleCeilingVisibility()
 {
+    recordUndoBeforeEdit("Toggle ceiling visibility");
     m_roomDraft.wallVisibilityMode = scene::WallVisibilityMode::Manual;
     m_roomDraft.showCeiling = !m_scene.getRoom().getSettings().isCeilingVisible();
     std::string err;
     if (m_scene.getRoom().applySettings(m_roomDraft, &err)) {
-        m_sceneDirty = true;
+        markSceneModified(false);
     }
 }
 
@@ -261,14 +573,46 @@ void RoomEditor::addFurnitureToScene(const std::string& assetId, assets::AssetMa
         return;
     }
 
-    const auto newId = systems::PlacementSystem::placeFurniture(
-        m_scene, assetId, assetManager.getCatalog(), &m_selection, m_gridSnapEnabled, &err);
+    const auto* entry = assetManager.getCatalog().findById(assetId);
+    if (entry == nullptr) {
+        m_notifications.push(NotificationLevel::Error, "Unknown asset: " + assetId, 4.0f);
+        return;
+    }
+
+    // Nếu đang ở chế độ PreventInvalid, kiểm tra vị trí spawn trước khi thêm vào Scene
+    scene::Transform spawnTr;
+    spawnTr.position = systems::PlacementSystem::computeSpawnPosition(m_scene, *entry, m_gridSnapEnabled);
+    if (m_placementMode == systems::PlacementValidationMode::PreventInvalid) {
+        const auto check = systems::CollisionSystem::validateCandidateObject(
+            m_scene, scene::kInvalidObjectId, assetId, spawnTr, makeBoundsLookup(assetManager), m_collisionOptions);
+        if (check.hasAnyIssue()) {
+            const std::string msg = check.hasBoundaryViolation()
+                                        ? "Placement blocked: " + check.boundary.formatSummary()
+                                        : "Placement blocked: overlaps with " + check.collidingObjectNames.front();
+            m_notifications.push(NotificationLevel::Warning, msg, 4.0f);
+            m_statusMessage = msg;
+            return;
+        }
+    }
+
+    recordUndoBeforeEdit("Add " + gpuAsset->cpuData.displayName);
+    const auto newId = m_scene.addObject(assetId, "", spawnTr, assetManager.getCatalog(), &err);
     if (scene::isValidObjectId(newId)) {
-        m_sceneDirty = true;
+        m_selection.selectObject(newId);
+        markSceneModified(true);
+        refreshCollisionReport(assetManager);
         m_rightBottomTab = 0;
         const std::string display = gpuAsset->cpuData.displayName;
         m_statusMessage = "Added '" + display + "'";
         m_notifications.push(NotificationLevel::Success, "Added '" + display + "' (#" + std::to_string(newId) + ")");
+        if (m_placementMode == systems::PlacementValidationMode::WarningOnly) {
+            if (const auto* st = m_collisionReport.findStatus(newId); st != nullptr && st->hasAnyIssue()) {
+                m_notifications.push(NotificationLevel::Warning,
+                                     st->hasCollision() ? ("Warning: overlaps with " + st->collidingObjectNames.front())
+                                                        : st->boundary.formatSummary(),
+                                     3.5f);
+            }
+        }
     } else {
         m_notifications.push(NotificationLevel::Error, err, 4.0f);
     }
@@ -305,8 +649,19 @@ void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
                                : systems::AxisConstraint::None;
     opts.hoveredGizmoAxis = m_interactionState.hoveredGizmoAxis;
     opts.faceContrast = faceContrast;
+    opts.lighting = m_lighting;
 
-    framebuffer.bind();
+    // Truyền danh sách vật thể đang vi phạm va chạm / biên phòng sang SceneRenderer để tô khung cảnh báo
+    if (m_placementMode != systems::PlacementValidationMode::Off) {
+        opts.outOfBoundsObjectIds = m_collisionReport.outOfBoundsObjectIds;
+        for (const auto& kv : m_collisionReport.objectStatuses) {
+            if (kv.second.hasCollision()) {
+                opts.collidingObjectIds.push_back(kv.first);
+            }
+        }
+    }
+
+    m_activeSamples = framebuffer.bindMultisampled(1 << m_sampleIndex);
     m_sceneRenderer.renderScene(m_scene,
                                 assetManager,
                                 m_selection,
@@ -321,6 +676,7 @@ void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
                                 framebuffer.getHeight(),
                                 clearColor,
                                 opts);
+    framebuffer.resolveMultisampled();
     framebuffer.unbind();
 }
 
@@ -354,6 +710,30 @@ bool RoomEditor::renderUiAndProcessInput(int windowWidth,
     }
     renderViewportPanel(layout.centerViewport, framebuffer, camera);
 
+    // Phím tắt dự án & Undo/Redo toàn cục (khi không gõ text / không mở popup)
+    if (!ImGui::GetIO().WantTextInput && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+        const bool ctrl = input.isCtrlDown();
+        const bool shift = input.isShiftDown();
+        if (input.isKeyPressed(0x0E) || (ctrl && input.isKeyPressed('n'))) {
+            requestNewEmptyRoom(camera);
+        } else if (input.isKeyPressed(0x0F) || (ctrl && input.isKeyPressed('o'))) {
+            requestOpenProjectDialog(assetManager, camera);
+        } else if (input.isKeyPressed(0x13) || (ctrl && input.isKeyPressed('s'))) {
+            if (shift) {
+                saveProjectAs(assetManager, camera);
+            } else {
+                saveProject(assetManager, camera);
+            }
+        } else if (input.isKeyPressed(0x1A) || (ctrl && input.isKeyPressed('z'))) {
+            if (canUndo()) undo(assetManager);
+        } else if (input.isKeyPressed(0x19) || (ctrl && input.isKeyPressed('y'))) {
+            if (canRedo()) redo(assetManager);
+        }
+    }
+
+    // Lưu snapshot trước ViewportInteraction để ghi Undo 1 lần cho Delete/Ctrl+D bằng phím tắt
+    const auto preInputSnapshot = systems::CommandHistory::capture(m_scene, m_selection.getSelectedObjectId(), "Edit scene");
+
     // Định tuyến đầu vào ngay sau khi đo xong kích thước ảnh Viewport thực tế
     const auto assetLookup = [&assetManager](const std::string& assetId) -> const assets::AssetData* {
         auto gpuAsset = assetManager.getOrLoadAsset(assetId, nullptr);
@@ -370,10 +750,67 @@ bool RoomEditor::renderUiAndProcessInput(int windowWidth,
         m_interactionState,
         assetLookup);
 
-    if (outcome.sceneModified) {
-        m_sceneDirty = true;
+    if (outcome.objectDeleted) {
+        auto snap = preInputSnapshot;
+        snap.description = "Delete object";
+        m_commandHistory.pushUndo(std::move(snap));
+    } else if (outcome.objectDuplicated) {
+        auto snap = preInputSnapshot;
+        snap.description = "Duplicate object";
+        m_commandHistory.pushUndo(std::move(snap));
     }
-    if (!outcome.statusMessage.empty()) {
+
+    if (outcome.transformConfirmed && scene::isValidObjectId(outcome.transformedObjectId)) {
+        const auto* movedObj = m_scene.findObject(outcome.transformedObjectId);
+        if (movedObj != nullptr) {
+            const bool actuallyChanged =
+                glm::length(movedObj->transform.position - outcome.transformBefore.position) > 1e-5f ||
+                glm::length(movedObj->transform.rotationDegrees - outcome.transformBefore.rotationDegrees) > 1e-4f ||
+                glm::length(movedObj->transform.scale - outcome.transformBefore.scale) > 1e-5f;
+
+            if (actuallyChanged) {
+                bool blockedByPrevent = false;
+                if (m_placementMode == systems::PlacementValidationMode::PreventInvalid) {
+                    const auto st = systems::CollisionSystem::validateCandidateObject(
+                        m_scene, movedObj->id, movedObj->assetId, movedObj->transform,
+                        makeBoundsLookup(assetManager), m_collisionOptions);
+                    if (st.hasAnyIssue()) {
+                        // Khôi phục nguyên trạng transform hợp lệ trước kéo mà không mở hộp thoại chặn chuột
+                        m_scene.setObjectTransform(movedObj->id, outcome.transformBefore);
+                        blockedByPrevent = true;
+                        const std::string msg = st.hasBoundaryViolation()
+                                                    ? ("Placement prevented: " + st.boundary.formatSummary())
+                                                    : ("Placement prevented: overlaps with " + st.collidingObjectNames.front());
+                        m_statusMessage = msg;
+                        m_notifications.push(NotificationLevel::Warning, msg, 3.8f);
+                    }
+                }
+                if (!blockedByPrevent) {
+                    // Ghi ĐÚNG 1 mục Undo cho toàn bộ thao tác kéo hoàn tất (KHÔNG ghi mỗi frame di chuột)
+                    auto snap = systems::CommandHistory::capture(m_scene, movedObj->id, outcome.transformDescription);
+                    for (auto& o : snap.objects) {
+                        if (o.id == movedObj->id) {
+                            o.transform = outcome.transformBefore;
+                            break;
+                        }
+                    }
+                    m_commandHistory.pushUndo(std::move(snap));
+                    markSceneModified(true);
+                }
+                m_collisionDirty = true;
+            }
+        }
+    } else if (outcome.sceneModified) {
+        markSceneModified(true);
+    }
+
+    if (m_collisionDirty) {
+        refreshCollisionReport(assetManager);
+    }
+
+    if (!outcome.statusMessage.empty() && !outcome.transformConfirmed) {
+        m_statusMessage = outcome.statusMessage;
+    } else if (!outcome.statusMessage.empty() && m_placementMode != systems::PlacementValidationMode::PreventInvalid) {
         m_statusMessage = outcome.statusMessage;
     }
     if (!outcome.errorMessage.empty()) {
@@ -931,13 +1368,15 @@ void RoomEditor::renderHierarchyPanel(const PanelRect& rect,
                     pendingDuplicateId = obj.id;
                 }
                 if (ImGui::MenuItem(obj.visible ? "Hide" : "Show")) {
+                    recordUndoBeforeEdit(obj.visible ? "Hide object" : "Show object");
                     m_scene.setObjectVisibility(obj.id, !obj.visible);
-                    m_sceneDirty = true;
+                    markSceneModified(true);
                 }
                 if (ImGui::MenuItem(obj.locked ? "Unlock" : "Lock")) {
                     if (auto* mutObj = m_scene.findObject(obj.id)) {
+                        recordUndoBeforeEdit(mutObj->locked ? "Unlock object" : "Lock object");
                         mutObj->locked = !mutObj->locked;
-                        m_sceneDirty = true;
+                        markSceneModified(false);
                         if (mutObj->locked) m_interactionState.abortIfInvalid(m_scene);
                     }
                 }
@@ -954,8 +1393,9 @@ void RoomEditor::renderHierarchyPanel(const PanelRect& rect,
                                              false,
                                              obj.visible ? "Hide object" : "Show object",
                                              obj.visible ? tokens::kTextPrimary : tokens::kTextSecondary)) {
+                recordUndoBeforeEdit(obj.visible ? "Hide object" : "Show object");
                 m_scene.setObjectVisibility(obj.id, !obj.visible);
-                m_sceneDirty = true;
+                markSceneModified(true);
             }
             ImGui::SameLine(0.0f, 4.0f);
             if (EditorIcons::smallIconButton("lock",
@@ -964,8 +1404,9 @@ void RoomEditor::renderHierarchyPanel(const PanelRect& rect,
                                              obj.locked ? "Unlock object" : "Lock object",
                                              obj.locked ? tokens::kWarning : tokens::kTextSecondary)) {
                 if (auto* mutObj = m_scene.findObject(obj.id)) {
+                    recordUndoBeforeEdit(mutObj->locked ? "Unlock object" : "Lock object");
                     mutObj->locked = !mutObj->locked;
-                    m_sceneDirty = true;
+                    markSceneModified(false);
                     if (mutObj->locked) m_interactionState.abortIfInvalid(m_scene);
                 }
             }
@@ -1090,9 +1531,10 @@ void RoomEditor::renderPropertiesPanel(const PanelRect& rect,
                     ImGui::InputText("##ObjName", m_renameBuf.data(), m_renameBuf.size());
                     ImGui::SameLine(0.0f, 4.0f);
                     if (ImGui::Button("Rename", ImVec2(58.0f, 0.0f))) {
+                        recordUndoBeforeEdit("Rename object");
                         std::string err;
                         if (m_scene.renameObject(obj->id, m_renameBuf.data(), &err)) {
-                            m_sceneDirty = true;
+                            markSceneModified(false);
                             m_notifications.push(NotificationLevel::Success, "Renamed to '" + obj->name + "'");
                         } else {
                             m_notifications.push(NotificationLevel::Error, err);
@@ -1104,12 +1546,14 @@ void RoomEditor::renderPropertiesPanel(const PanelRect& rect,
 
                     bool vis = obj->visible;
                     if (ImGui::Checkbox("Visible", &vis)) {
+                        recordUndoBeforeEdit(vis ? "Show object" : "Hide object");
                         m_scene.setObjectVisibility(obj->id, vis);
-                        m_sceneDirty = true;
+                        markSceneModified(true);
                     }
                     ImGui::SameLine(0.0f, 16.0f);
                     if (ImGui::Checkbox("Locked", &obj->locked)) {
-                        m_sceneDirty = true;
+                        recordUndoBeforeEdit(obj->locked ? "Lock object" : "Unlock object");
+                        markSceneModified(false);
                         if (obj->locked) m_interactionState.abortIfInvalid(m_scene);
                     }
 
@@ -1127,6 +1571,8 @@ void RoomEditor::renderPropertiesPanel(const PanelRect& rect,
                     scene::Transform edited = obj->transform;
                     bool changed = false;
                     bool posDeactivated = false;
+                    bool rotDeactivated = false;
+                    bool sclDeactivated = false;
 
                     const float posSpeed = m_gridSnapEnabled ? 0.10f : 0.05f;
                     changed |= renderAxisDragFloat3("Position (m)", edited.position, posSpeed, -30.0f, 30.0f, "%.2f", &posDeactivated);
@@ -1136,7 +1582,7 @@ void RoomEditor::renderPropertiesPanel(const PanelRect& rect,
                         changed = true;
                     }
 
-                    changed |= renderAxisDragFloat3("Rotation (deg)", edited.rotationDegrees, 1.0f, -360.0f, 360.0f, "%.1f");
+                    changed |= renderAxisDragFloat3("Rotation (deg)", edited.rotationDegrees, 1.0f, -360.0f, 360.0f, "%.1f", &rotDeactivated);
 
                     ImGui::Spacing();
                     ImGui::TextColored(tokens::kTextSecondary, "Scale");
@@ -1150,17 +1596,48 @@ void RoomEditor::renderPropertiesPanel(const PanelRect& rect,
                             edited.scale = glm::vec3(uni, uni, uni);
                             changed = true;
                         }
+                        if (ImGui::IsItemDeactivatedAfterEdit()) {
+                            sclDeactivated = true;
+                        }
                     } else {
-                        changed |= renderAxisDragFloat3("", edited.scale, 0.02f, 0.10f, 10.0f, "%.2f");
+                        changed |= renderAxisDragFloat3("", edited.scale, 0.02f, 0.10f, 10.0f, "%.2f", &sclDeactivated);
                     }
 
                     if (changed) {
+                        if (!m_inspectorTransformEditActive || m_inspectorLastValidObjectId != obj->id) {
+                            m_inspectorBeforeEdit = systems::CommandHistory::capture(m_scene, obj->id, "Edit transform");
+                            m_inspectorLastValidTransform = obj->transform;
+                            m_inspectorLastValidObjectId = obj->id;
+                            m_inspectorTransformEditActive = true;
+                        }
                         std::string err;
                         if (m_scene.setObjectTransform(obj->id, edited, &err)) {
-                            m_sceneDirty = true;
+                            markSceneModified(true);
                         } else {
                             m_notifications.push(NotificationLevel::Error, err);
                         }
+                    }
+
+                    if (m_inspectorTransformEditActive && (posDeactivated || rotDeactivated || sclDeactivated)) {
+                        bool reverted = false;
+                        if (m_placementMode == systems::PlacementValidationMode::PreventInvalid) {
+                            const auto st = systems::CollisionSystem::validateCandidateObject(
+                                m_scene, obj->id, obj->assetId, obj->transform,
+                                makeBoundsLookup(assetManager), m_collisionOptions);
+                            if (st.hasAnyIssue()) {
+                                m_scene.setObjectTransform(obj->id, m_inspectorLastValidTransform);
+                                m_collisionDirty = true;
+                                reverted = true;
+                                const std::string msg = st.hasBoundaryViolation()
+                                                            ? ("Edit prevented: " + st.boundary.formatSummary())
+                                                            : ("Edit prevented: overlaps with " + st.collidingObjectNames.front());
+                                m_notifications.push(NotificationLevel::Warning, msg, 3.8f);
+                            }
+                        }
+                        if (!reverted) {
+                            m_commandHistory.pushUndo(m_inspectorBeforeEdit);
+                        }
+                        m_inspectorTransformEditActive = false;
                     }
 
                     ImGui::Spacing();
@@ -1170,27 +1647,61 @@ void RoomEditor::renderPropertiesPanel(const PanelRect& rect,
                     if (obj->locked) ImGui::EndDisabled();
                 }
 
-                // 3. Nhóm Dimensions
-                if (gpuAsset && ImGui::CollapsingHeader("Dimensions", ImGuiTreeNodeFlags_DefaultOpen)) {
+                // 3. Nhóm Dimensions & Placement Validation (M8)
+                if (gpuAsset && ImGui::CollapsingHeader("Dimensions & Placement", ImGuiTreeNodeFlags_DefaultOpen)) {
                     const glm::vec3 localSz = gpuAsset->cpuData.localBounds.getSize();
                     const math::BoundingBox worldBox = obj->getWorldBounds(gpuAsset->cpuData.localBounds);
                     const glm::vec3 worldSz = worldBox.getSize();
                     ImGui::Text("Asset : %.2f x %.2f x %.2f m", localSz.x, localSz.y, localSz.z);
                     ImGui::Text("World : %.2f x %.2f x %.2f m", worldSz.x, worldSz.y, worldSz.z);
 
-                    if (!m_scene.isBoundsWithinRoom(worldBox)) {
-                        ImGui::PushStyleColor(ImGuiCol_Text, tokens::kWarning);
-                        ImGui::TextWrapped("[Warning] Exceeds room interior bounds.");
-                        ImGui::PopStyleColor();
+                    if (m_placementMode == systems::PlacementValidationMode::Off) {
+                        ImGui::TextDisabled("Collision check: Off");
+                    } else if (!obj->visible) {
+                        ImGui::TextDisabled("Hidden object (excluded from collision check)");
+                    } else if (const auto* st = m_collisionReport.findStatus(obj->id)) {
+                        if (!st->hasAnyIssue()) {
+                            ImGui::TextColored(tokens::kSuccess, "Placement valid");
+                        } else {
+                            if (st->hasCollision()) {
+                                std::string names;
+                                for (std::size_t i = 0; i < st->collidingObjectNames.size(); ++i) {
+                                    if (i > 0) names += ", ";
+                                    names += st->collidingObjectNames[i];
+                                }
+                                ImGui::PushStyleColor(ImGuiCol_Text, tokens::kWarning);
+                                ImGui::TextWrapped("[Collision] Overlaps with: %s", names.c_str());
+                                ImGui::PopStyleColor();
+                            }
+                            if (st->hasBoundaryViolation()) {
+                                ImGui::PushStyleColor(ImGuiCol_Text, tokens::kError);
+                                ImGui::TextWrapped("[Boundary] %s", st->boundary.formatSummary().c_str());
+                                ImGui::PopStyleColor();
+                            }
+                        }
                     }
                 }
 
-                // 4. Nhóm Material (chỉ hiển thị thông tin thật mà renderer M6 hỗ trợ)
+                // 4. Vật liệu dùng chung, hệ số độ bóng riêng của instance.
                 if (gpuAsset && ImGui::CollapsingHeader("Material")) {
                     ImGui::Text("Materials: %zu | Textures: %zu",
                                 gpuAsset->cpuData.materials.size(),
                                 gpuAsset->cpuData.getUniqueTextureCount());
-                    ImGui::TextColored(tokens::kTextSecondary, "Diffuse baseColor + map_Kd active.");
+                    ImGui::BeginDisabled(obj->locked);
+                    if (ImGui::SliderFloat("Shininess scale", &obj->shininessScale, 0.25f, 4.0f, "%.2fx",
+                                           ImGuiSliderFlags_AlwaysClamp)) {
+                        markSceneModified(false);
+                    }
+                    ImGui::EndDisabled();
+                    for (std::size_t i = 0; i < gpuAsset->cpuData.materials.size(); ++i) {
+                        const auto& mat = gpuAsset->cpuData.materials[i];
+                        const auto* texture = gpuAsset->materialDiffuseTextures[i].get();
+                        ImGui::TextWrapped("%s", mat.name.c_str());
+                        ImGui::TextDisabled("Diffuse: %s", !texture ? "Base color" :
+                                            texture->isFallback() ? "Fallback checker" : "Texture");
+                        ImGui::TextDisabled("Ks %.2f %.2f %.2f | Ns %.1f",
+                                            mat.specularColor.r, mat.specularColor.g, mat.specularColor.b, mat.shininess * obj->shininessScale);
+                    }
                 }
 
                 // 5. Nhóm Geometry (mặc định thu gọn để giữ giao diện gọn gàng)
@@ -1236,8 +1747,64 @@ void RoomEditor::renderPropertiesPanel(const PanelRect& rect,
     ImGui::End();
 }
 
-void RoomEditor::renderRoomSettingsContent(assets::AssetManager& /*assetManager*/)
+void RoomEditor::renderRoomSettingsContent(assets::AssetManager& assetManager)
 {
+    if (ImGui::CollapsingHeader("Collision & Placement", ImGuiTreeNodeFlags_DefaultOpen)) {
+        static constexpr const char* kModeLabels[] = {"Off", "Warning Only", "Prevent Invalid"};
+        int modeIdx = static_cast<int>(m_placementMode);
+        if (ImGui::Combo("Validation Mode", &modeIdx, kModeLabels, 3)) {
+            setPlacementValidationMode(static_cast<systems::PlacementValidationMode>(modeIdx));
+        }
+        if (ImGui::Checkbox("Allow furniture on rugs", &m_collisionOptions.allowRugOverlap)) {
+            markSceneModified(true);
+        }
+        if (m_placementMode != systems::PlacementValidationMode::Off) {
+            ImGui::TextDisabled("Active: %zu | Overlaps: %zu | Out of bounds: %zu (%.2f ms)",
+                                m_collisionReport.activeObjects,
+                                m_collisionReport.collisions.size(),
+                                m_collisionReport.outOfBoundsObjectIds.size(),
+                                m_collisionReport.elapsedMs);
+        }
+    }
+    if (ImGui::CollapsingHeader("Lighting Settings")) {
+        const char* presets[] = {"Daylight", "Warm Interior", "Neutral Studio", "Evening"};
+        if (ImGui::BeginCombo("Preset", m_lightPreset < 0 ? "Custom" : presets[m_lightPreset])) {
+            for (int i = 0; i < 4; ++i) {
+                if (ImGui::Selectable(presets[i], i == m_lightPreset)) {
+                    m_lightPreset = i;
+                    m_lighting = graphics::LightingSettings::preset(static_cast<graphics::LightingPreset>(i));
+                    markSceneModified(false);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        bool edited = ImGui::SliderFloat("Ambient", &m_lighting.ambient, 0, 1);
+        edited |= ImGui::Checkbox("Directional light", &m_lighting.sunEnabled);
+        edited |= ImGui::SliderFloat3("Direction", &m_lighting.direction.x, -1, 1);
+        edited |= ImGui::SliderFloat("Sun intensity", &m_lighting.sunIntensity, 0, 3);
+        edited |= ImGui::ColorEdit3("Sun color", &m_lighting.sunColor.x);
+        edited |= ImGui::Checkbox("Point light", &m_lighting.pointEnabled);
+        edited |= ImGui::DragFloat3("Position (m)", &m_lighting.position.x, 0.05f);
+        edited |= ImGui::SliderFloat("Point intensity", &m_lighting.pointIntensity, 0, 5);
+        edited |= ImGui::ColorEdit3("Point color", &m_lighting.pointColor.x);
+        edited |= ImGui::SliderFloat("Constant", &m_lighting.attenuation.x, 0.1f, 3);
+        edited |= ImGui::SliderFloat("Linear", &m_lighting.attenuation.y, 0, 2);
+        edited |= ImGui::SliderFloat("Quadratic", &m_lighting.attenuation.z, 0, 2);
+        if (edited) {
+            m_lightPreset = -1;
+            markSceneModified(false);
+        }
+        if (ImGui::Button("Reset lighting")) {
+            m_lightPreset = 0;
+            m_lighting = {};
+            markSceneModified(false);
+        }
+        const char* samples[] = {"Off", "2x", "4x"};
+        if (ImGui::Combo("MSAA", &m_sampleIndex, samples, 3)) {
+            markSceneModified(false);
+        }
+        ImGui::TextDisabled("Active samples: %d", m_activeSamples);
+    }
     ImGui::TextColored(tokens::kTextSecondary, "Interior Dimensions (meters)");
     ImGui::DragFloat("Width (X)", &m_roomDraft.width, 0.1f, scene::room_limits::kMinWidth, scene::room_limits::kMaxWidth, "%.2f m");
     ImGui::DragFloat("Length (Z)", &m_roomDraft.length, 0.1f, scene::room_limits::kMinLength, scene::room_limits::kMaxLength, "%.2f m");
@@ -1269,19 +1836,32 @@ void RoomEditor::renderRoomSettingsContent(assets::AssetManager& /*assetManager*
 
     ImGui::Spacing();
     if (ImGui::Button("Apply Changes", ImVec2(124.0f, 26.0f))) {
+        recordUndoBeforeEdit("Resize / Update room");
         std::string err;
         if (m_scene.getRoom().applySettings(m_roomDraft, &err)) {
-            m_sceneDirty = true;
-            m_notifications.push(NotificationLevel::Success, "Room settings applied.");
+            markSceneModified(true);
+            refreshCollisionReport(assetManager);
+            if (!m_collisionReport.outOfBoundsObjectIds.empty()) {
+                m_notifications.push(
+                    NotificationLevel::Warning,
+                    "Room resized: " + std::to_string(m_collisionReport.outOfBoundsObjectIds.size()) +
+                        " object(s) now exceed room bounds (kept without auto-delete).",
+                    4.5f);
+            } else {
+                m_notifications.push(NotificationLevel::Success, "Room settings applied.");
+            }
         } else {
             m_notifications.push(NotificationLevel::Error, err, 4.0f);
         }
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset", ImVec2(76.0f, 26.0f))) {
+        recordUndoBeforeEdit("Reset room settings");
         m_roomDraft = scene::RoomSettings{};
         std::string err;
         m_scene.getRoom().applySettings(m_roomDraft, &err);
+        markSceneModified(true);
+        refreshCollisionReport(assetManager);
         m_notifications.push(NotificationLevel::Info, "Room settings reset.");
     }
 
@@ -1424,18 +2004,25 @@ void RoomEditor::renderStatusBar(const PanelRect& rect,
                            rs.gridSpacing, camStr, selName.c_str());
     }
 
-    // Bên phải: Chấm trạng thái màu xanh + status message ngắn gọn
-    const std::string rightText = m_interactionState.isIdle()
-                                      ? m_statusMessage
-                                      : std::string(systems::interactionPhaseToString(m_interactionState.phase));
+    // Bên phải: Cảnh báo va chạm/biên phòng (nếu có) + chấm trạng thái + status message ngắn gọn
+    std::string rightText = m_interactionState.isIdle()
+                                ? m_statusMessage
+                                : std::string(systems::interactionPhaseToString(m_interactionState.phase));
+    const bool hasCollisionWarnings = (m_placementMode != systems::PlacementValidationMode::Off) &&
+                                      m_collisionReport.hasAnyIssues();
+    if (hasCollisionWarnings && m_interactionState.isIdle()) {
+        rightText = "Warnings: " + std::to_string(m_collisionReport.collisions.size()) + " overlap, " +
+                    std::to_string(m_collisionReport.outOfBoundsObjectIds.size()) + " bounds";
+    }
     const ImVec2 rightSz = ImGui::CalcTextSize(rightText.c_str());
     const float rightX = rect.width - rightSz.x - 16.0f;
     if (rightX > ImGui::GetCursorPosX() + 20.0f) {
         ImGui::SameLine(rightX);
         const ImVec2 dotPos(rect.x + rightX - 10.0f, rect.y + rect.height * 0.5f);
-        ImGui::GetWindowDrawList()->AddCircleFilled(
-            dotPos, 4.0f,
-            EditorTheme::toU32(m_interactionState.warningMessage.empty() ? tokens::kSuccess : tokens::kWarning));
+        const ImVec4 dotCol = (!m_interactionState.warningMessage.empty() || hasCollisionWarnings)
+                                  ? tokens::kWarning
+                                  : tokens::kSuccess;
+        ImGui::GetWindowDrawList()->AddCircleFilled(dotPos, 4.0f, EditorTheme::toU32(dotCol));
         ImGui::TextUnformatted(rightText.c_str());
     }
 
@@ -1446,23 +2033,38 @@ void RoomEditor::renderStatusBar(const PanelRect& rect,
 
 void RoomEditor::renderConfirmationModals(assets::AssetManager& assetManager, graphics::Camera& camera)
 {
-    if (m_openConfirmSceneModal) {
-        ImGui::OpenPopup("Confirm Replace Scene");
-        m_openConfirmSceneModal = false;
+    if (m_openDirtyActionModal) {
+        ImGui::OpenPopup("Unsaved Changes");
+        m_openDirtyActionModal = false;
     }
-    if (ImGui::BeginPopupModal("Confirm Replace Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::TextWrapped("Your current room has unsaved edits. Replace the current scene?");
+    if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextWrapped("Project '%s' has unsaved changes. Would you like to save before continuing?",
+                           getActiveSceneDisplayName().c_str());
         ImGui::Spacing();
-        if (ImGui::Button("Replace Scene", ImVec2(124.0f, 0.0f))) {
-            if (m_pendingNewEmptyRoom) {
-                createNewEmptyRoomImmediate(camera);
+        ImGui::PushStyleColor(ImGuiCol_Button, tokens::kPrimary);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.06f, 0.08f, 0.12f, 1.0f));
+        if (ImGui::Button("Save", ImVec2(96.0f, 0.0f))) {
+            // Chỉ thực thi hành động chờ nếu lưu thành công; nếu người dùng hủy hoặc lỗi ghi -> giữ nguyên dự án!
+            if (saveProject(assetManager, camera)) {
+                ImGui::CloseCurrentPopup();
+                executePendingDirtyAction(assetManager, camera);
             } else {
-                applyPresetImmediate(m_pendingPreset, assetManager, camera);
+                m_pendingDirtyAction = PendingDirtyAction::None;
+                ImGui::CloseCurrentPopup();
             }
-            ImGui::CloseCurrentPopup();
         }
+        ImGui::PopStyleColor(2);
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.24f, 0.24f, 1.0f));
+        if (ImGui::Button("Discard", ImVec2(96.0f, 0.0f))) {
+            ImGui::CloseCurrentPopup();
+            executePendingDirtyAction(assetManager, camera);
+        }
+        ImGui::PopStyleColor();
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f))) {
+            m_pendingDirtyAction = PendingDirtyAction::None;
+            m_pendingOpenPath.clear();
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -1482,11 +2084,12 @@ void RoomEditor::renderConfirmationModals(assets::AssetManager& assetManager, gr
             ImGui::Spacing();
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.65f, 0.24f, 0.24f, 1.0f));
             if (ImGui::Button("Delete", ImVec2(104.0f, 0.0f))) {
+                recordUndoBeforeEdit("Delete " + obj->name);
                 const std::string nameCopy = obj->name;
                 m_scene.removeObject(m_pendingDeleteObjectId);
                 m_interactionState.abortIfInvalid(m_scene);
                 m_selection.reconcileWithScene(m_scene);
-                m_sceneDirty = true;
+                markSceneModified(true);
                 m_pendingDeleteObjectId = scene::kInvalidObjectId;
                 m_notifications.push(NotificationLevel::Info, "Deleted '" + nameCopy + "'");
                 ImGui::CloseCurrentPopup();

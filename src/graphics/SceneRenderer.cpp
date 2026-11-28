@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 
+#include <algorithm>
 #include <unordered_set>
 
 namespace roomcraft::graphics {
@@ -86,10 +87,15 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
     const glm::mat4 identity(1.0f);
 
     // 1. Vẽ cấu trúc căn phòng (Sàn, 4 tường theo WallVisibilityMode, Trần tùy chọn)
+    renderer.applyLighting(meshShader, camera, options.lighting);
     if (m_floorMesh.isValid()) {
+        meshShader.setInt("uFloor", 1);
+        meshShader.setVec3("uGrid", {rs.width * 0.5f, rs.length * 0.5f,
+                                     options.showGrid && rs.showGrid && !options.wireframe ? rs.gridSpacing : 0.0f});
         renderer.drawMeshWithMatrix(m_floorMesh, meshShader, identity, camera, rs.floorColor, options.faceContrast);
         ++metrics.roomDrawCalls;
     }
+    meshShader.setInt("uFloor", 0);
     if (rs.isNorthWallVisible() && m_northWallMesh.isValid()) {
         renderer.drawMeshWithMatrix(m_northWallMesh, meshShader, identity, camera, rs.wallColor, options.faceContrast);
         ++metrics.roomDrawCalls;
@@ -157,7 +163,10 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
                                       camera,
                                       color,
                                       diffuseTex,
-                                      options.faceContrast);
+                                      options.faceContrast,
+                                      sub.materialIndex < gpuAsset->cpuData.materials.size()
+                                          ? &gpuAsset->cpuData.materials[sub.materialIndex] : nullptr,
+                                      obj.shininessScale);
             ++metrics.objectDrawCalls;
         }
 
@@ -173,7 +182,7 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
     // 3. Vẽ lưới sàn, trục tọa độ và hộp bao nổi bật của đối tượng đang chọn (luôn ở chế độ GL_FILL)
     renderer.setWireframeMode(false);
 
-    if (options.showGrid && rs.showGrid && m_roomGridMesh.isValid()) {
+    if (options.wireframe && options.showGrid && rs.showGrid && m_roomGridMesh.isValid()) {
         renderer.drawLines(m_roomGridMesh, gridShader, identity, camera, glm::vec4(0.32f, 0.36f, 0.44f, 0.70f));
     }
 
@@ -195,6 +204,29 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
                            selectedObjectMatrix,
                            camera,
                            glm::vec4(0.20f, 0.88f, 1.00f, 1.0f)); // Cyan selection bounding box highlight
+    }
+
+    // 3b. Vẽ khung cảnh báo va chạm (hổ phách) và vượt biên phòng (đỏ san hô) cho các vật thể vi phạm (M8.4)
+    if (!options.collidingObjectIds.empty() || !options.outOfBoundsObjectIds.empty()) {
+        auto containsId = [](const std::vector<scene::ObjectId>& ids, scene::ObjectId target) {
+            return std::find(ids.begin(), ids.end(), target) != ids.end();
+        };
+        for (const auto& obj : scene.getObjects()) {
+            if (!obj.visible) continue;
+            const bool isOutOfBounds = containsId(options.outOfBoundsObjectIds, obj.id);
+            const bool isColliding = containsId(options.collidingObjectIds, obj.id);
+            if (!isOutOfBounds && !isColliding) continue;
+            // Không ghi đè đường viền cyan của đối tượng đang chọn để giữ rõ ràng (và bảo toàn TC-M5-38)
+            if (hasSelectedToHighlight && selection.isSelected(obj.id)) continue;
+
+            auto gpuAsset = assetManager.getOrLoadAsset(obj.assetId, nullptr);
+            if (!gpuAsset || !gpuAsset->boundingBoxLines.isValid()) continue;
+
+            const glm::vec4 warnColor = isOutOfBounds
+                                            ? glm::vec4(0.92f, 0.36f, 0.36f, 1.0f)  // Đỏ san hô: vượt biên phòng
+                                            : glm::vec4(0.92f, 0.70f, 0.32f, 1.0f); // Hổ phách: va chạm nội thất
+            renderer.drawLines(gpuAsset->boundingBoxLines, gridShader, obj.getModelMatrix(), camera, warnColor);
+        }
     }
 
     // 4. Vẽ Move Gizmo 3 trục (X Đỏ, Y Xanh lá, Z Xanh dương) tại tâm đối tượng đang chọn
@@ -256,8 +288,8 @@ void SceneRenderer::renderMoveGizmo(const glm::vec3& origin,
         const glm::mat4 tip = glm::translate(glm::mat4(1.0f), origin) * rotMat *
                               glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.85f * len, 0.0f)) *
                               glm::scale(glm::mat4(1.0f), glm::vec3(len));
-        renderer.drawMeshWithMatrix(m_gizmoShaftMesh, meshShader, base, camera, baseColor, 0.20f);
-        renderer.drawMeshWithMatrix(m_gizmoConeMesh, meshShader, tip, camera, baseColor, 0.20f);
+        renderer.drawMeshWithMatrix(m_gizmoShaftMesh, meshShader, base, camera, baseColor, 0.0f);
+        renderer.drawMeshWithMatrix(m_gizmoConeMesh, meshShader, tip, camera, baseColor, 0.0f);
     };
 
     // Mặc định Cylinder/Cone hướng +Y; xoay sang +X (-90° quanh Z) và +Z (+90° quanh X)

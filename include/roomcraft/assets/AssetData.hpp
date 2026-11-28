@@ -185,6 +185,18 @@ struct AssetData {
             graphics::MaterialData mat;
             mat.name = part.name + "_Mat";
             mat.baseColor = part.baseColor;
+            mat.specularColor = glm::vec3(0.12f);
+            mat.shininess = 26.0f;
+            if (part.name == "SeatCushion") {
+                mat.specularColor = glm::vec3(0.025f);
+                mat.shininess = 8.0f;
+            } else if (part.name == "VaseBody_Revolution") {
+                mat.specularColor = glm::vec3(0.48f);
+                mat.shininess = 72.0f;
+            } else if (part.name.rfind("Lamp", 0) == 0) {
+                mat.specularColor = glm::vec3(part.name == "LampShade" ? 0.10f : 0.56f);
+                mat.shininess = part.name == "LampShade" ? 24.0f : 90.0f;
+            }
             asset.materials.push_back(std::move(mat));
 
             SubMeshData sub;

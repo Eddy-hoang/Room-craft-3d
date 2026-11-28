@@ -97,7 +97,7 @@ bool ThumbnailRenderer::renderAssetIntoTexture(const assets::GpuAsset& asset,
         Renderer thumbRenderer;
         const glm::vec4 neutralStudioBg(0.165f, 0.188f, 0.232f, 1.0f); // #2A303B
         thumbRenderer.beginFrame(size, size, neutralStudioBg, true);
-        thumbRenderer.setWireframeMode(false);
+        thumbRenderer.applyLighting(meshShader, thumbCam, LightingSettings::preset(LightingPreset::NeutralStudio));
 
         for (const auto& sub : asset.subMeshes) {
             const glm::mat4 worldMat = sub.localTransform.getModelMatrix();
@@ -110,7 +110,8 @@ bool ThumbnailRenderer::renderAssetIntoTexture(const assets::GpuAsset& asset,
                 asset.materialDiffuseTextures[sub.materialIndex] != nullptr) {
                 diffuseTex = asset.materialDiffuseTextures[sub.materialIndex].get();
             }
-            thumbRenderer.drawMeshTextured(sub.mesh, meshShader, worldMat, thumbCam, baseColor, diffuseTex, 0.42f);
+            thumbRenderer.drawMeshTextured(sub.mesh, meshShader, worldMat, thumbCam, baseColor, diffuseTex, 1.0f,
+                                          &asset.cpuData.materials[sub.materialIndex]);
         }
 
         thumbRenderer.endFrame();
@@ -152,20 +153,13 @@ unsigned int ThumbnailRenderer::getOrCreateThumbnail(const std::string& assetId,
         return 0;
     }
 
-    const auto currentToken = reinterpret_cast<std::uintptr_t>(gpuAsset.get());
     const auto it = m_cache.find(assetId);
     if (it != m_cache.end() &&
         it->second.textureId != 0 &&
-        it->second.sourceAssetToken == currentToken &&
+        it->second.sourceAsset.lock() == gpuAsset &&
         it->second.width == size &&
         it->second.height == size) {
         return it->second.textureId;
-    }
-
-    // Nếu asset vừa được reload (token đổi), giải phóng texture cũ trước khi tạo mới
-    if (it != m_cache.end() && it->second.textureId != 0) {
-        glDeleteTextures(1, &it->second.textureId);
-        m_cache.erase(it);
     }
 
     unsigned int texId = 0;
@@ -176,7 +170,8 @@ unsigned int ThumbnailRenderer::getOrCreateThumbnail(const std::string& assetId,
 
     ThumbnailEntry entry;
     entry.textureId = texId;
-    entry.sourceAssetToken = currentToken;
+    entry.sourceAsset = gpuAsset;
+    if (it != m_cache.end()) glDeleteTextures(1, &it->second.textureId);
     entry.width = size;
     entry.height = size;
     entry.generationMs = genMs;

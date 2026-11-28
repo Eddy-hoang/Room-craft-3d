@@ -23,6 +23,8 @@ CMakeUserPresets.json
 *.lib
 *.a
 *.obj
+!/assets/models/*/*.obj
+!/tests/fixtures/*.obj
 *.o
 *.pdb
 *.ilk

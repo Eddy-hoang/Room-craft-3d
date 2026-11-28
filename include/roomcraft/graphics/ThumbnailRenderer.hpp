@@ -11,7 +11,7 @@ namespace roomcraft::graphics {
 
 struct ThumbnailEntry {
     unsigned int textureId = 0;
-    std::uintptr_t sourceAssetToken = 0;
+    std::weak_ptr<assets::GpuAsset> sourceAsset;
     int width = 0;
     int height = 0;
     double generationMs = 0.0;
@@ -22,7 +22,7 @@ struct ThumbnailEntry {
 // - Không vẽ Grid, Axes hay BoundingBox trong ảnh thumbnail.
 // - Tự động lưu và khôi phục hoàn toàn OpenGL state (FBO, viewport, depth test, polygon mode)
 //   để không làm ảnh hưởng tới Room Editor.
-// - Cache theo assetId + con trỏ GpuAsset hiện tại; tự invalidate khi reloadAsset().
+// - Cache theo assetId + weak_ptr của GpuAsset hiện tại; tự invalidate khi reloadAsset().
 class ThumbnailRenderer {
 public:
     static constexpr int kDefaultSize = 256;

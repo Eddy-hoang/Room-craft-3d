@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <utility>
+#include <algorithm>
 
 namespace roomcraft::graphics {
 
@@ -13,7 +14,12 @@ Framebuffer::~Framebuffer()
 }
 
 Framebuffer::Framebuffer(Framebuffer&& other) noexcept
-    : m_fbo(std::exchange(other.m_fbo, 0))
+    : m_msFbo(std::exchange(other.m_msFbo, 0))
+    , m_msColor(std::exchange(other.m_msColor, 0))
+    , m_msDepth(std::exchange(other.m_msDepth, 0))
+    , m_samples(std::exchange(other.m_samples, 1))
+    , m_requestedSamples(std::exchange(other.m_requestedSamples, 1))
+    , m_fbo(std::exchange(other.m_fbo, 0))
     , m_colorTexture(std::exchange(other.m_colorTexture, 0))
     , m_depthStencilRbo(std::exchange(other.m_depthStencilRbo, 0))
     , m_width(std::exchange(other.m_width, 0))
@@ -26,6 +32,11 @@ Framebuffer& Framebuffer::operator=(Framebuffer&& other) noexcept
 {
     if (this != &other) {
         destroy();
+        m_msFbo = std::exchange(other.m_msFbo, 0);
+        m_msColor = std::exchange(other.m_msColor, 0);
+        m_msDepth = std::exchange(other.m_msDepth, 0);
+        m_samples = std::exchange(other.m_samples, 1);
+        m_requestedSamples = std::exchange(other.m_requestedSamples, 1);
         m_fbo = std::exchange(other.m_fbo, 0);
         m_colorTexture = std::exchange(other.m_colorTexture, 0);
         m_depthStencilRbo = std::exchange(other.m_depthStencilRbo, 0);
@@ -44,7 +55,10 @@ bool Framebuffer::create(int width, int height)
         return false;
     }
 
-    return allocateAttachments(width, height);
+    Framebuffer next;
+    if (!next.allocateAttachments(width, height)) return false;
+    *this = std::move(next);
+    return true;
 }
 
 bool Framebuffer::resize(int width, int height)
@@ -59,7 +73,10 @@ bool Framebuffer::resize(int width, int height)
         return true;
     }
 
-    return allocateAttachments(width, height);
+    Framebuffer next;
+    if (!next.allocateAttachments(width, height)) return false;
+    *this = std::move(next);
+    return true;
 }
 
 bool Framebuffer::allocateAttachments(int width, int height)
@@ -113,6 +130,56 @@ void Framebuffer::bind() const
     glViewport(0, 0, m_width, m_height);
 }
 
+int Framebuffer::bindMultisampled(int requestedSamples)
+{
+    if (!isComplete()) return 0;
+    if (requestedSamples != m_requestedSamples) {
+        releaseMultisample();
+        m_requestedSamples = requestedSamples;
+        GLint limit = 0;
+        glGetIntegerv(GL_MAX_SAMPLES, &limit);
+        for (int n : {4, 2}) {
+            if (n > requestedSamples || n > limit) continue;
+            glGenFramebuffers(1, &m_msFbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, m_msFbo);
+            auto attach = [&](GLuint& handle, GLenum format, GLenum attachment) {
+                glGenRenderbuffers(1, &handle);
+                glBindRenderbuffer(GL_RENDERBUFFER, handle);
+                glRenderbufferStorageMultisample(GL_RENDERBUFFER, n, format, m_width, m_height);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, handle);
+            };
+            attach(m_msColor, GL_RGBA8, GL_COLOR_ATTACHMENT0);
+            attach(m_msDepth, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL_ATTACHMENT);
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+                glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_SAMPLES, &m_samples);
+                break;
+            }
+            releaseMultisample();
+        }
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, m_msFbo ? m_msFbo : m_fbo);
+    glViewport(0, 0, m_width, m_height);
+    return m_samples;
+}
+
+void Framebuffer::resolveMultisampled() const
+{
+    if (!m_msFbo) return;
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_msFbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo);
+    glBlitFramebuffer(0, 0, m_width, m_height, 0, 0, m_width, m_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+}
+
+void Framebuffer::releaseMultisample()
+{
+    if (m_msDepth) glDeleteRenderbuffers(1, &m_msDepth);
+    if (m_msColor) glDeleteRenderbuffers(1, &m_msColor);
+    if (m_msFbo) glDeleteFramebuffers(1, &m_msFbo);
+    m_msFbo = m_msColor = m_msDepth = 0;
+    m_samples = 1;
+}
+
 void Framebuffer::unbind()
 {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -120,6 +187,8 @@ void Framebuffer::unbind()
 
 void Framebuffer::destroy()
 {
+    releaseMultisample();
+    m_requestedSamples = 1;
     if (m_depthStencilRbo != 0) {
         glDeleteRenderbuffers(1, &m_depthStencilRbo);
         m_depthStencilRbo = 0;

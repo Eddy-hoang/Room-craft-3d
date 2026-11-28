@@ -17,10 +17,27 @@ Cập nhật lần cuối: **2026-11-28**
 | ID | Mức độ | Mô tả | Hướng xử lý / Ghi chú |
 |---|---|---|---|
 | **KI-M2-01** | Trung bình | Các kiểm thử tương tác GUI thủ công `TC-M0-MANUAL`..`TC-M6-MANUAL` và kiểm tra thị giác / ảnh chụp giao diện M6 đang ở trạng thái **`NOT VERIFIED`**. | Người dùng mở trực tiếp `.\build\mingw-x64-debug\RoomCraft3D.exe` và xác nhận checklist trực quan trong báo cáo M6. |
-| **KI-M3-03** | Thấp | Shader hiện tại mới dùng `baseColor` + `uDiffuseMap` với chiếu sáng định hướng đơn giản. | Hệ thống Blinn-Phong Lighting, Shadow Mapping & Materials thuộc **Milestone M7**. |
 | **KI-M4-01** | Thấp | Benchmark 10/30/100 vật thể đo trên bản `Debug` off-screen FBO + `glFinish()` (20–30 frame), chưa đo bản `Release` và phiên dài end-to-end. | Sẽ mở rộng benchmark dài hơi hơn và đo Release ở **Milestone M9**. |
-| **KI-M4-02** | Thấp | `Scene::isBoundsWithinRoom()` mới kiểm tra sơ bộ biên phòng; chưa có phát hiện va chạm (Collision Detection) ngăn chồng lấn giữa các đồ nội thất. | Hệ thống Collision Detection hoàn chỉnh thuộc **Milestone M8**. |
+| **KI-M4-02** | Đã xử lý (M8) | Kiểm tra va chạm nội thất (AABB + 3D OBB SAT) và xác thực biên phòng đã hoàn tất trong M8; giới hạn hộp bao lồi OBB được ghi nhận tại `KI-M8-01`. | Xem [`docs/COLLISION_SYSTEM.md`](COLLISION_SYSTEM.md). |
 | **KI-M5-02** | Thấp | `M5_IntegrationSmokeTest` & `M6_IntegrationSmokeTest` kiểm thử thuật toán Ray Casting / Picking / Move Gizmo / Drag / Cancel trên ngữ cảnh OpenGL thật nhưng mô phỏng tọa độ chuột thay vì gửi sự kiện chuột vật lý của hệ điều hành qua FreeGLUT/ImGui. | Ghi nhận trung thực; thao tác chuột/phím thực tế cần được người dùng xác nhận qua `TC-M5-MANUAL` / `TC-M6-MANUAL`. |
 | **KI-M6-01** | Thấp | **UI Scaling (`100% / 125% / 150%`)** được chọn chủ động qua `View -> UI Scale`; FreeGLUT không cung cấp sự kiện tự động đổi DPI động khi kéo cửa sổ giữa hai màn hình khác hệ số scale Windows. | Hành vi thiết kế an toàn trong phạm vi FreeGLUT; chữ và vector icon sắc nét ngay sau khi chọn mức scale. |
 | **KI-M6-02** | Thấp | Hạng mục tùy chọn **P2 (`M6-T22`: Rotate / Scale Visual Gizmos)** và **P1 (`M6-T23`: UI Layout Persistence giữa các phiên chạy)** đang giữ trạng thái **`TODO`**. | Hiện tại **3-Axis Move Gizmo (P1 — `M6-T21`)** đã hoạt động đầy đủ; Rotate/Scale thao tác trực tiếp bằng `R` / `S` + trục `X/Y/Z` và Inspector. |
-| **KI-M6-03** | Thông tin | Chưa có tính năng **Lighting/Shadows (M7)**, **Collision Detection & JSON Save/Load (M8)**, **Undo/Redo History đầy đủ** (cố tình không đặt nút giả trên thanh menu). | Thuộc phạm vi các milestone kế tiếp theo [`docs/ROADMAP.md`](ROADMAP.md). |
+| **KI-M6-03** | Thông tin | Chưa có tính năng **Shadow Mapping (M7 P2)**, **Collision Detection & JSON Save/Load (M8)**, **Undo/Redo History đầy đủ** (cố tình không đặt nút giả trên thanh menu). | Thuộc phạm vi các milestone kế tiếp theo [`docs/ROADMAP.md`](ROADMAP.md). |
+
+## M7
+
+- Nợ nghiệm thu thủ công M6 còn mở cho tương tác chuột/phím và Furniture Library ở Grid View. Bộ ảnh M7 cho thấy bố cục và màu sắc trong các cấu hình đã chụp. Việc ký duyệt trải nghiệm trên máy người dùng còn chờ.
+- Bóng đổ thời gian thực được hoãn. Một lượt dựng depth từ đèn hướng sẽ cần vẽ lại caster, đo ngân sách p95 và kiểm tra bias của vật nhỏ ở nhiều kích thước phòng.
+- MSAA resolve trung bình các mẫu đã mã hóa để hiển thị. Ở đường biên tương phản mạnh, kết quả có thể tối hơn resolve trong HDR tuyến tính. Ảnh chụp và số đo trong báo cáo dùng Intel UHD.
+
+### Final QA M7
+
+- CMake và CTest dùng bản M7 tại đường dẫn mặc định. Output trong m7-bin là bản cũ.
+- p95 biến động giữa các vòng đo với WGL swap interval 1. Nguyên nhân chênh lệch giữa hai lượt đo lịch sử chưa xác định. Shadow Mapping giữ DEFERRED.
+- Ảnh Neutral Studio và Evening còn thiếu. Checklist Manual/Visual của M7 và nợ Manual M6 vẫn mở. [Bằng chứng QA](M7_DELIVERY.md#kiểm-toán-kỹ-thuật-cuối-m7)
+
+## M8
+
+- **KI-M8-01 (Giới hạn hình học hộp bao)**: Hệ thống va chạm M8 dùng **World OBB + 15-axis SAT** làm xấp xỉ hình học lồi cho nội thất (không phải triangle-level mesh collision hay Physics Engine). Các vật có khoang rỗng (như gầm bàn) có thể báo giao OBB khi đặt ghế sát gầm → giữ `Warning Only` làm mặc định.
+- **KI-M8-02 (Hạng mục P2 hoãn sang M9)**: `UI Layout Persistence` (`M8-F18`) và `Rotate/Scale Visual Gizmos` (`M6-T22`) tiếp tục giữ `TODO` cho M9; `Recent Projects` lưu trong phiên chạy (chưa ghi tệp cấu hình người dùng toàn cục ở `%APPDATA%`).
+- **KI-M8-03 (Kiểm thử thủ công & thị giác `M8-T32`)**: Các thao tác hộp thoại tệp Windows, `Save / Discard / Cancel` khi bấm nút `X` cửa sổ, và trải nghiệm kéo đồ ở chế độ `Warning Only` / `Prevent Invalid` chưa được người dùng xác nhận trực tiếp (`NOT VERIFIED`), cùng với nợ manual/visual của M6–M7 và benchmark cô lập Release Build cho M9.

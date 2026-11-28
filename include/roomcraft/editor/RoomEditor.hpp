@@ -13,15 +13,20 @@
 #include "roomcraft/graphics/SceneRenderer.hpp"
 #include "roomcraft/graphics/Shader.hpp"
 #include "roomcraft/graphics/ThumbnailRenderer.hpp"
+#include "roomcraft/persistence/ProjectData.hpp"
+#include "roomcraft/persistence/ProjectManager.hpp"
 #include "roomcraft/scene/Scene.hpp"
 #include "roomcraft/scene/ScenePresets.hpp"
 #include "roomcraft/systems/CameraController.hpp"
+#include "roomcraft/systems/CollisionSystem.hpp"
+#include "roomcraft/systems/CommandHistory.hpp"
 #include "roomcraft/systems/InteractionState.hpp"
 #include "roomcraft/systems/SelectionState.hpp"
 
 #include <glm/vec4.hpp>
 
 #include <array>
+#include <filesystem>
 #include <string>
 
 namespace roomcraft::editor {
@@ -48,6 +53,30 @@ public:
     void requestPresetChange(scene::ScenePresetType preset,
                              assets::AssetManager& assetManager,
                              graphics::Camera& camera);
+    void requestOpenProjectDialog(assets::AssetManager& assetManager, graphics::Camera& camera);
+    void requestOpenProjectPath(const std::filesystem::path& path,
+                                assets::AssetManager& assetManager,
+                                graphics::Camera& camera);
+    bool saveProject(assets::AssetManager& assetManager, const graphics::Camera& camera);
+    bool saveProjectAs(assets::AssetManager& assetManager, const graphics::Camera& camera);
+    bool openProjectImmediate(const std::filesystem::path& path,
+                              assets::AssetManager& assetManager,
+                              graphics::Camera& camera,
+                              std::string* outError = nullptr);
+    bool saveProjectToPathImmediate(const std::filesystem::path& path,
+                                    assets::AssetManager& assetManager,
+                                    const graphics::Camera& camera,
+                                    std::string* outError = nullptr);
+    // Trả về true nếu an toàn đóng ngay; trả về false nếu đang dirty và đã mở hộp thoại Save/Discard/Cancel
+    bool requestApplicationClose();
+    bool shouldExitApplication() const { return m_shouldExitApplication; }
+
+    // Undo / Redo (P2 - M8.10)
+    bool undo(assets::AssetManager& assetManager);
+    bool redo(assets::AssetManager& assetManager);
+    bool canUndo() const { return m_commandHistory.canUndo(); }
+    bool canRedo() const { return m_commandHistory.canRedo(); }
+
     void setActiveTool(systems::TransformMode mode);
     void duplicateSelectedObject();
     void requestDeleteSelectedObject();
@@ -57,6 +86,23 @@ public:
     void toggleCeilingVisibility();
     void resetLayout();
     void setUiScale(float scale);
+    void setMsaaSampleIndex(int index) { m_sampleIndex = index; }
+    int getActiveSamples() const { return m_activeSamples; }
+
+    // Cấu hình & truy vấn Collision Detection (M8)
+    void setPlacementValidationMode(systems::PlacementValidationMode mode);
+    systems::PlacementValidationMode getPlacementValidationMode() const { return m_placementMode; }
+    void setCollisionOptions(const systems::CollisionOptions& opts);
+    const systems::CollisionOptions& getCollisionOptions() const { return m_collisionOptions; }
+    const systems::SceneCollisionReport& getCollisionReport() const { return m_collisionReport; }
+    void refreshCollisionReport(assets::AssetManager& assetManager);
+
+    // Đóng gói & khôi phục dữ liệu dự án (M8.5 - M8.8)
+    persistence::ProjectData buildProjectData(const graphics::Camera& camera) const;
+    persistence::ProjectManager& getProjectManager() { return m_projectManager; }
+    const persistence::ProjectManager& getProjectManager() const { return m_projectManager; }
+    bool isDirty() const { return m_projectManager.isDirty(); }
+    std::string getWindowTitleLabel() const;
 
     // Render toàn bộ scene vào Framebuffer hiện tại
     void renderSceneToFramebuffer(assets::AssetManager& assetManager,
@@ -112,6 +158,21 @@ public:
     bool showPerformanceInStatus = false;
 
 private:
+    enum class PendingDirtyAction {
+        None = 0,
+        NewProject,
+        ApplyPreset,
+        OpenDialog,
+        OpenSpecificPath,
+        ExitApp
+    };
+
+    void markSceneModified(bool collisionAffected = true);
+    void recordUndoBeforeEdit(const std::string& description);
+    void executePendingDirtyAction(assets::AssetManager& assetManager, graphics::Camera& camera);
+    void applyLoadedProjectData(const persistence::ProjectData& data, graphics::Camera& camera);
+    systems::CollisionSystem::LocalBoundsLookupFn makeBoundsLookup(assets::AssetManager& assetManager) const;
+
     void applyPresetImmediate(scene::ScenePresetType preset,
                               assets::AssetManager& assetManager,
                               graphics::Camera& camera);
@@ -161,17 +222,36 @@ private:
     ViewportInputContext m_viewportInputCtx;
     graphics::SceneRenderer m_sceneRenderer;
 
+    graphics::LightingSettings m_lighting;
+    int m_lightPreset = 0;
+    int m_sampleIndex = 0;
+    int m_activeSamples = 1;
     scene::RoomSettings m_roomDraft;
     scene::ScenePresetType m_activePreset = scene::ScenePresetType::ModernBedroom;
     bool m_isCustomEmptyRoom = false;
 
-    // Hộp thoại xác nhận
+    // Trạng thái Dự án, Lưu/Mở & Lịch sử Undo/Redo (M8)
+    persistence::ProjectManager m_projectManager;
+    systems::CommandHistory m_commandHistory;
+    systems::PlacementValidationMode m_placementMode = systems::PlacementValidationMode::WarningOnly;
+    systems::CollisionOptions m_collisionOptions;
+    systems::SceneCollisionReport m_collisionReport;
+    bool m_collisionDirty = true;
+
+    // Hộp thoại xác nhận (Save / Discard / Cancel cho mọi hành động phá hủy khi dirty)
+    PendingDirtyAction m_pendingDirtyAction = PendingDirtyAction::None;
     scene::ScenePresetType m_pendingPreset = scene::ScenePresetType::ModernBedroom;
-    bool m_pendingNewEmptyRoom = false;
-    bool m_openConfirmSceneModal = false;
+    std::filesystem::path m_pendingOpenPath;
+    bool m_openDirtyActionModal = false;
     bool m_openConfirmDeleteModal = false;
     scene::ObjectId m_pendingDeleteObjectId = scene::kInvalidObjectId;
-    bool m_sceneDirty = false;
+    bool m_shouldExitApplication = false;
+
+    // Theo dõi sửa thuộc tính Inspector để gộp thành 1 mục Undo khi nhả chuột
+    bool m_inspectorTransformEditActive = false;
+    systems::SceneHistorySnapshot m_inspectorBeforeEdit;
+    scene::Transform m_inspectorLastValidTransform;
+    scene::ObjectId m_inspectorLastValidObjectId = scene::kInvalidObjectId;
 
     // Trạng thái Furniture Library & Inspector
     int m_librarySourceFilter = 0;   // 0=All, 1=Procedural, 2=Blender

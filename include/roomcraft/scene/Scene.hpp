@@ -57,11 +57,21 @@ public:
     const std::vector<SceneObject>& getObjects() const { return m_objects; }
     std::size_t getObjectCount() const { return m_objects.size(); }
     std::size_t getVisibleObjectCount() const;
+    ObjectId getNextObjectId() const { return m_nextObjectId; }
 
     void clearObjects();
 
+    // Khôi phục giao dịch toàn bộ Room, danh sách SceneObject (giữ nguyên ObjectId ổn định)
+    // và bộ cấp phát m_nextObjectId từ bản lưu dự án. Nếu có bất kỳ lỗi hợp lệ nào, Scene cũ
+    // hoàn toàn không bị thay đổi.
+    bool restoreFromSnapshot(const RoomSettings& roomSettings,
+                             const std::vector<SceneObject>& objects,
+                             ObjectId nextObjectId,
+                             const assets::FurnitureCatalog& catalog,
+                             std::string* outError = nullptr);
+
     // Kiểm tra sơ bộ xem hộp bao thế giới của đối tượng có nằm trong phạm vi phòng hay không
-    // (chỉ phục vụ cảnh báo trực quan ở M4, KHÔNG phải CollisionSystem đầy đủ của M8)
+    // (chỉ phục vụ cảnh báo trực quan ở M4; kiểm tra đầy đủ dùng RoomBoundaryValidator của M8)
     bool isBoundsWithinRoom(const math::BoundingBox& worldBounds, float tolerance = 1e-3f) const;
 
 private:

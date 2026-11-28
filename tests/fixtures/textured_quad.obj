@@ -1,0 +1,15 @@
+# Fixture: 2x2 quad in XY plane facing +Z with standard OpenGL UV (v=0 bottom, v=1 top)
+mtllib textured_quad.mtl
+o TexturedQuad
+v -1.0 0.0 0.0
+v  1.0 0.0 0.0
+v  1.0 2.0 0.0
+v -1.0 2.0 0.0
+vn 0.0 0.0 1.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+usemtl MatAsymTex
+f 1/1/1 2/2/1 3/3/1
+f 1/1/1 3/3/1 4/4/1

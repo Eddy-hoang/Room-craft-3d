@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace roomcraft::graphics {
 
@@ -25,7 +26,11 @@ struct SceneRenderOptions {
     bool showMoveGizmo = false;
     systems::AxisConstraint activeGizmoAxis = systems::AxisConstraint::None;
     systems::AxisConstraint hoveredGizmoAxis = systems::AxisConstraint::None;
+    LightingSettings lighting;
     float faceContrast = 0.35f;
+    // Phản hồi trực quan va chạm & vượt biên phòng (M8.4)
+    std::vector<scene::ObjectId> collidingObjectIds;
+    std::vector<scene::ObjectId> outOfBoundsObjectIds;
 };
 
 // Thống kê render thực tế của SceneRenderer — phân biệt rõ dữ liệu lưu trên GPU dùng chung

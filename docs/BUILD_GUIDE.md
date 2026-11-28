@@ -27,7 +27,7 @@ cd d:\CG
 cmake --preset mingw-x64-debug
 cmake --build --preset mingw-x64-debug
 
-# 3. Chạy toàn bộ 13 bộ kiểm thử tự động (M0–M6)
+# 3. Chạy toàn bộ 14 bộ kiểm thử tự động (M0–M7)
 ctest --test-dir build\mingw-x64-debug --output-on-failure -V
 
 # 4. Chạy ứng dụng tương tác RoomCraft 3D (chạy độc lập, không cần PATH WinLibs)
@@ -50,3 +50,5 @@ cmake --preset msvc-x64-vcpkg-debug
 cmake --build --preset msvc-x64-vcpkg-debug
 ```
 > *Lưu ý*: Preset MSVC + vcpkg chưa được chạy kiểm chứng thực tế trên máy phát triển hiện tại (`NOT RUN`).
+
+Lượt Final QA đã gỡ override CMAKE_RUNTIME_OUTPUT_DIRECTORY sau khi đóng M6. Bản Debug chuẩn dùng `build/mingw-x64-debug/RoomCraft3D.exe`.

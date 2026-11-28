@@ -166,6 +166,7 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
                 if (scene.removeObject(targetId)) {
                     selection.clearSelection();
                     out.sceneModified = true;
+                    out.objectDeleted = true;
                     out.statusMessage = "Deleted '" + removedName + "' (Delete).";
                 }
             }
@@ -179,6 +180,7 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
             if (scene::isValidObjectId(newId)) {
                 selection.selectObject(newId);
                 out.sceneModified = true;
+                out.objectDuplicated = true;
                 out.statusMessage = "Duplicated object -> ID #" + std::to_string(newId) + " (Ctrl+D).";
             } else {
                 out.errorMessage = err;
@@ -226,6 +228,10 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
                 }
             }
         } else {
+            out.transformConfirmed = true;
+            out.transformedObjectId = state.activeObjectId;
+            out.transformBefore = state.initialTransform;
+            out.transformDescription = "Move object";
             systems::TransformController::confirmInteraction(state);
             out.statusMessage = "Move confirmed.";
         }
@@ -239,6 +245,10 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
                 out.sceneModified = true;
             }
         } else {
+            out.transformConfirmed = true;
+            out.transformedObjectId = state.activeObjectId;
+            out.transformBefore = state.initialTransform;
+            out.transformDescription = "Rotate object";
             systems::TransformController::confirmInteraction(state);
             out.statusMessage = "Rotation confirmed.";
         }
@@ -252,6 +262,10 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
                 out.sceneModified = true;
             }
         } else {
+            out.transformConfirmed = true;
+            out.transformedObjectId = state.activeObjectId;
+            out.transformBefore = state.initialTransform;
+            out.transformDescription = "Scale object";
             systems::TransformController::confirmInteraction(state);
             out.statusMessage = "Scale confirmed.";
         }

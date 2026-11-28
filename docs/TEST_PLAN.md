@@ -65,3 +65,41 @@ Phân loại rõ theo tầng kiểm chứng: **[Auto-CPU]**, **[Auto-GPU]**, **[
 | **TC-M6-GIZMO** | Auto-CPU + GPU | 3-Axis Move Gizmo (P1) | Hit-test 3 trục X/Y/Z ưu tiên trước vật phía sau + render vào FBO | Trúng đúng trục X/Y/Z, vẽ nổi bật trên FBO không gây lỗi OpenGL |
 | **TC-M6-PERF** | Auto-GPU | M6 30-Object & Thumbnail Perf | Đo 30 vật thể off-screen `1280×720` + thời gian sinh 14 thumbnail | Không suy giảm hiệu năng; thumbnail chỉ sinh 1 lần (`< 5 ms` tổng) |
 | **TC-M6-MANUAL** | Manual-Visual | End-to-End Visual & UX Review | Người dùng chạy trực tiếp `RoomCraft3D.exe` và xác nhận checklist thị giác + chụp ảnh | Chờ người dùng trực tiếp xác nhận |
+
+## M7
+
+Chạy đủ CTest từ build Debug. M7_LightingGpu tạo context thật, đọc pixel tâm trên FBO lẻ kích thước để tránh lấy mẫu giữa hai pixel. Dùng sai số 1–2 mức màu 8 bit, kiểm tra bất biến hướng, cường độ và fallback ma trận suy biến. Asset unit tests đối chiếu Ks/Ns với MTL và so sánh các loại vật liệu thủ tục. Chạy benchmark riêng sau build khi máy hết biên dịch. Xem bảng M7-T01–T23, ảnh đối chứng và checklist duyệt thủ công trong [báo cáo](M7_DELIVERY.md).
+
+---
+
+## 4. Danh mục Test Case — Milestone M8 (Collision Detection & Project Persistence)
+
+Tổng số bộ CTest nâng lên **17 suites** (thêm `M8_CollisionUnitTests`, `M8_PersistenceUnitTests`, `M8_IntegrationSmokeTest`).
+
+| Test ID | Loại | Hạng mục | Kịch bản kiểm thử |
+|---|---|---|---|
+| **M8-T01** | Auto-All | Baseline Regression | Toàn bộ `14/14` CTest M0–M7 tiếp tục đạt `PASS` |
+| **M8-T02** | Auto-CPU | AABB Overlap & Separation | Giao nhau chính xác `depth=0.5 m`, tách rời và từ chối AABB không hợp lệ |
+| **M8-T03** | Auto-CPU | AABB Touching | Đèn đặt trên bàn `y = 0.75 m` và hai vật kê sát cạnh phân loại `Touching`, không phải `Penetrating` |
+| **M8-T04** | Auto-CPU | 3D OBB SAT Intersection | Kiểm tra 2 OBB xoay 3D cắt nhau & tính đối xứng `testOBB(A,B) == testOBB(B,A)` |
+| **M8-T05** | Auto-CPU | Rotated OBB False-Positive Rejection | Hai thanh dài xoay `45°`: World AABB giao nhau nhưng 15-axis SAT tách rời chính xác |
+| **M8-T06** | Auto-CPU | Near-Parallel SAT Axes | Các góc `0.0005° / 90° / 180°` không phát sinh NaN, trục MTV hữu hạn |
+| **M8-T07** | Auto-CPU | Non-Uniform Scale & Invalid TRS | World OBB khớp `BoundingBox::transformed(M)`; từ chối scale `0`, âm, `NaN` |
+| **M8-T08** | Auto-CPU | Room Boundary Validation | Kiểm tra 6 mặt phòng, góc xoay thò ra ngoài tường, vật đặt trên mặt bàn hợp lệ |
+| **M8-T09** | Auto-CPU | Room Resize & Policies | Thu nhỏ phòng giữ nguyên nội thất, báo vượt biên; xác minh chính sách ẩn và thảm |
+| **M8-T10** | Auto-CPU | Object ID & Allocator Restoration | Bảo toàn ID lớn `uint64_t` (`2^53 + 1`) và `nextObjectId`; thêm vật mới không trùng ID |
+| **M8-T11..12** | Auto-CPU | JSON Serialization / Deserialization | Xuất/nhập schema v1 `.roomcraft`, không rò rỉ handle GPU hay đường dẫn tuyệt đối |
+| **M8-T13..18** | Auto-CPU + GPU | Full 14-Asset Round-Trip | Lưu & nạp đầy đủ 14 mẫu, Transform, Material overrides, M7 Lighting, Room, Camera, MSAA |
+| **M8-T19** | Auto-CPU | Invalid JSON Rejection | Từ chối cú pháp lỗi, ký tự thừa, file rỗng, token `NaN` |
+| **M8-T20** | Auto-CPU | Unsupported Schema Rejection | Từ chối `schemaVersion = 99` và `format != "RoomCraft3D"` |
+| **M8-T21** | Auto-CPU | Duplicate / Invalid ID Rejection | Từ chối trùng `objectId`, `objectId = 0`, `nextObjectId <= maxId` |
+| **M8-T22** | Auto-CPU | Invalid Numeric & Transform | Từ chối scale âm, `NaN`, kích thước phòng ngoài biên, attenuation hằng số `<= 0` |
+| **M8-T23** | Auto-CPU | Missing Asset Handling | Từ chối `assetId` không tồn tại kèm tên `assetId` bị thiếu |
+| **M8-T24** | Auto-CPU | Transactional Load Failure | Nạp file hỏng giữ nguyên 100% Scene, Camera, dirty state & tên dự án đang mở |
+| **M8-T25** | Auto-CPU | Safe Save Failure | Lưu vào file `Read-Only` / thư mục sai giữ nguyên byte-for-byte file cũ hợp lệ |
+| **M8-T26..27** | Auto-CPU | Dirty-State & Save/Discard/Cancel | Save lỗi giữ dirty `true`, Save thành công xóa dirty & ghi Recent Projects |
+| **M8-T28** | Auto-GPU | Collision Warning Integration | Render FBO với khung cảnh báo va chạm & biên phòng trong `RoomEditor` |
+| **M8-T29** | Auto-GPU | Picking & Gizmo Regression | Chọn vật thể & Move Gizmo hoạt động chính xác ngay sau khi mở `.roomcraft` |
+| **M8-T30** | Auto-GPU | Repeated Save/Load & GPU Lifetime | Nạp lại 5 lần liên tiếp, tái dùng GPU cache, `OpenGL errors: NONE` |
+| **M8-T31** | Auto-CPU | Undo / Redo (P2) | `CommandHistory`: Add/Move/Rotate/Scale/Delete, xóa Redo khi sửa mới, giới hạn 64 bước |
+| **M8-T32** | Manual-Visual | UI Integration & Manual Acceptance | Kiểm thử thủ công File Dialog, `Save/Discard/Cancel` khi bấm X, kéo đồ ở `Warning`/`Prevent` |

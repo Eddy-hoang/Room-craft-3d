@@ -2,6 +2,23 @@
 
 Cập nhật lần cuối: **2026-11-28**
 
+## Kết quả M8 ngày 28/11/2026 (`v0.8.0` — Collision Detection & Project Persistence)
+
+- **Build Debug (`mingw-x64-debug`)**: `cmake --preset mingw-x64-debug -DFETCHCONTENT_UPDATES_DISCONNECTED=ON` + `cmake --build --preset mingw-x64-debug` → **Exit `0`**, `0` compile errors, `0` project warnings dưới `-Wall -Wextra -Wpedantic`.
+- **CTest tổng hợp**: `ctest --test-dir build/mingw-x64-debug --output-on-failure` → **`17/17 Passed (100%, 6.65 sec)`** (`14/14` regression M0–M7 + `M8_CollisionUnitTests` + `M8_PersistenceUnitTests` + `M8_IntegrationSmokeTest`).
+- **Kiểm tra độc lập ngoài PATH WinLibs**: `RoomCraft3D.exe --help` (`v0.8.0`) và `RoomCraft3D.exe --m8-smoke-test` thoát mã `0`, `OpenGL errors: NONE`; `ntldd` chỉ link **8 DLL hệ thống Windows** (`ADVAPI32`, `COMDLG32`, `GDI32`, `KERNEL32`, `OPENGL32`, `SHELL32`, `USER32`, `WINMM`).
+- **Benchmark Collision CPU (Debug, 20 vòng đo)**:
+  - `N = 30` (`435` broad pairs, `10` narrow SAT): **`0.1191 ms`** full scene / **`0.0451 ms`** incremental 1-object.
+  - `N = 100` (`4,950` broad pairs, `6` narrow SAT): **`0.5097 ms`** full scene / **`0.1702 ms`** incremental 1-object.
+  - `N = 250` (`31,125` broad pairs, `303` narrow SAT): **`1.8744 ms`** full scene / **`0.3709 ms`** incremental 1-object.
+- **Trạng thái kiểm thử thủ công**: `M8-T32` và các mục manual/visual tồn đọng M6–M7 giữ **`NOT VERIFIED`**. Xem ma trận truy vết đầy đủ `M8-T01`..`M8-T32` tại [`docs/M8_DELIVERY.md`](M8_DELIVERY.md).
+
+---
+
+## Kết quả M7 ngày 28/11/2026
+
+Baseline M6 đạt 13/13 trong 4,77 s. M7 đạt 14/14 trong 6,63 s. Cả hai benchmark thoát mã 0. M7 đạt 6,08 ms trung bình toàn editor với 30 vật thể, p95 7,36 ms. Dữ liệu gốc, phương pháp, traceability và ảnh thật nằm trong [báo cáo M7](M7_DELIVERY.md). Phần bên dưới là kết quả lịch sử M6.
+
 ## 1. Cấu hình máy kiểm thử
 
 - **OS**: Microsoft Windows 11 Home Single Language 64-bit (`10.0.26200`)
@@ -87,3 +104,7 @@ Tại M5, **39 test case định nghĩa trong `TEST_PLAN.md`** (`TC-M5-01`..`TC-
 - **M3 (`TC-M3-01`..`TC-M3-27`)**: **27/27 PASS** (tự động; `TC-M3-02` đối chiếu trực tiếp từ `ModelLoaderTests.cpp` + `AssetCatalogTests.cpp`). `TC-M3-MANUAL`: **NOT VERIFIED**.
 - **M4 (`TC-M4-01`..`TC-M4-29`)**: **29/29 PASS** (tự động; benchmark 10/30/100 đạt `0.68 / 1.50 / 5.03 ms`). `TC-M4-MANUAL`: **NOT VERIFIED**.
 - **M5 (`TC-M5-01`..`TC-M5-39` + `TRI`/`OCC`)**: **39/39 (+2 P1) PASS** (tự động). `TC-M5-MANUAL`: **NOT VERIFIED**.
+
+## Final QA M7
+
+Bản M7 chuẩn đạt 14/14 CTest trong 11,81 s. Benchmark kiểm số mẫu thật 1/2/4 và ghi đủ chín lượt, p95 11,71–49,84 ms theo cấu hình và vòng đo. [CTest](evidence/m7/qa-ctest.txt) · [Benchmark](evidence/m7/qa-bench.txt) · [Ma trận truy vết](M7_DELIVERY.md#kiểm-toán-kỹ-thuật-cuối-m7)

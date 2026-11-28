@@ -24,6 +24,7 @@ struct SceneObject {
     Transform transform;
     bool visible = true;
     bool locked = false;
+    float shininessScale = 1.0f;
 
     glm::mat4 getModelMatrix() const
     {

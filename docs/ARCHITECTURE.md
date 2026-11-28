@@ -45,3 +45,18 @@ flowchart TD
 - `Application::switchWorkspace()` lưu trữ riêng `m_roomCameraState` trước khi chuyển sang các công cụ trong menu `Tools` và khôi phục trọn vẹn khi quay về `Room Editor`.
 
 Xem thêm chi tiết tại [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md), [`docs/UI_ARCHITECTURE.md`](UI_ARCHITECTURE.md), [`docs/CAMERA_SYSTEM.md`](CAMERA_SYSTEM.md), [`docs/OBJECT_PICKING.md`](OBJECT_PICKING.md) và [`docs/INTERACTION_GUIDE.md`](INTERACTION_GUIDE.md).
+
+## Dòng dữ liệu M7
+
+RoomEditor giữ LightingSettings theo phiên. Mỗi khung, SceneRenderOptions mang một bản giá trị tới SceneRenderer. Renderer gửi uniform nguồn sáng theo camera và gửi normal matrix, Ks, Ns theo submesh. AssetManager giữ mesh và texture dùng chung. Framebuffer sở hữu cả đích resolve và renderbuffer đa mẫu. ThumbnailRenderer dùng cùng shader với ánh sáng studio cố định. Xem [pipeline M7](RENDERING_PIPELINE.md).
+
+## Kiến trúc M8 — Collision Detection & Project Persistence (`v0.8.0`)
+
+- **`roomcraft_math` (CPU-only)**: Bổ sung `OBB` (`OBB.hpp/cpp`, `intersectAABB`, `ContactState`) và `SATIntersection` (`SATIntersection.hpp/cpp`, 15-axis 3D OBB SAT).
+- **`roomcraft_scene` (CPU-only)**:
+  - **Collision**: `CollisionSystem` & `RoomBoundaryValidator` (`CollisionSystem.hpp/cpp`) — kiểm tra 2 giai đoạn AABB Broad-Phase → OBB SAT Narrow-Phase, kiểm tra biên phòng 6 mặt, chính sách ẩn/thảm và kiểm tra tăng dần $O(N)$.
+  - **Persistence**: `Json` (`Json.hpp/cpp`, RFC 8259 nội bộ có giới hạn kích thước/độ sâu), `ProjectData` (`ProjectData.hpp`), `ProjectValidator` (`ProjectValidator.hpp/cpp`), `ProjectSerializer` (`ProjectSerializer.hpp/cpp`, schema v1 `.roomcraft`, `ObjectId` chuỗi thập phân lossless), `ProjectManager` (`ProjectManager.hpp/cpp`, ghi nguyên tử qua tệp tạm + `MoveFileExW`, nạp giao dịch bảo toàn scene cũ, dirty-state & Recent Projects P1).
+  - **Undo/Redo (P2)**: `CommandHistory` (`CommandHistory.hpp`, hàng đợi giới hạn 64 mục).
+- **`roomcraft_engine` (Win32 + ImGui + OpenGL)**:
+  - `FileDialog` (`FileDialog.hpp/cpp`, Win32 `GetOpenFileNameW`/`GetSaveFileNameW` hỗ trợ Unicode + `OFN_NOCHANGEDIR`), `Window` (chặn `WM_CLOSE` gọi hộp thoại Save/Discard/Cancel khi dirty), `SceneRenderer` (tô khung cảnh báo va chạm hổ phách / vượt biên phòng đỏ san hô mà vẫn giữ nguyên viền cyan chọn đối tượng), `RoomEditor` & `Application` (File menu `New/Open/Save/Save As/Recent`, `Edit -> Undo/Redo`, `Room Settings -> Collision & Placement`).
+- Xem chi tiết tại [`docs/COLLISION_SYSTEM.md`](COLLISION_SYSTEM.md), [`docs/PROJECT_FORMAT.md`](PROJECT_FORMAT.md) và [`docs/PROJECT_PERSISTENCE.md`](PROJECT_PERSISTENCE.md).

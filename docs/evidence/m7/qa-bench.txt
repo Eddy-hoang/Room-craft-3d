@@ -1,0 +1,42 @@
+[RoomCraft3D] FreeGLUT window created (1878x815).
+================ OpenGL Environment Info ================
+GPU Vendor     : Intel
+GPU Renderer   : Intel(R) UHD Graphics
+OpenGL Version : 3.3.0 - Build 32.0.101.7088 (Parsed: 3.3)
+OpenGL Profile : Core Profile
+GLSL Version   : 3.30 - Build 32.0.101.7088
+=========================================================
+[RoomCraft3D] M1/M2/M3/M4 Engine, Asset Pipeline & Room Editor resources initialized.
+[RoomCraft3D] Loaded UI font: D:\CG\build\mingw-x64-debug\assets/fonts/Roboto-Medium.ttf (15 px)
+[RoomCraft3D] Dear ImGui initialized (imgui_impl_glut + imgui_impl_opengl3 #version 330 core).
+[RoomCraft3D] Application initialized successfully.
+[RoomCraft3D] Entering FreeGLUT main loop...
+[M4-BENCH] Config=Debug | GPU=Intel(R) UHD Graphics | FBO=1280x720 | VSync=N/A (Off-screen FBO + glFinish) | Warmup=5 | Measured=30
+  Objects=10 (Visible=10) | UniqueAssets=6 (CacheAssets=6, CacheTex=6)
+  UniqueGPU(stored once): verts=7121, indices=14904, tris=4968
+  Submitted/Frame       : drawCalls=162 (room=3, objs=156), verts=12541, indices=24306, tris=8100
+  Timing                : avgFrameMs=4.79556 ms | avgFPS=208.526
+[Isolated frame] CPU submit avgMs=18.5444 | GPU avgMs=0.567443
+[M4-BENCH] Config=Debug | GPU=Intel(R) UHD Graphics | FBO=1280x720 | VSync=N/A (Off-screen FBO + glFinish) | Warmup=5 | Measured=30
+  Objects=30 (Visible=30) | UniqueAssets=6 (CacheAssets=6, CacheTex=6)
+  UniqueGPU(stored once): verts=7121, indices=14904, tris=4968
+  Submitted/Frame       : drawCalls=416 (room=3, objs=410), verts=35683, indices=74634, tris=24876
+  Timing                : avgFrameMs=11.9379 ms | avgFPS=83.7669
+[M4-BENCH] Config=Debug | GPU=Intel(R) UHD Graphics | FBO=1280x720 | VSync=N/A (Off-screen FBO + glFinish) | Warmup=5 | Measured=20
+  Objects=100 (Visible=100) | UniqueAssets=6 (CacheAssets=6, CacheTex=6)
+  UniqueGPU(stored once): verts=7121, indices=14904, tris=4968
+  Submitted/Frame       : drawCalls=1392 (room=3, objs=1386), verts=119356, indices=247866, tris=82620
+  Timing                : avgFrameMs=39.9445 ms | avgFPS=25.0347
+[Editor bench] round=1 | FBO=1280x720 | objects=30 | requested=1 | actual=1 | warmup=60 | frames=300 | avgMs=23.355 | medianMs=17.8137 | p95Ms=49.839 | p99Ms=86.7489 | WGL swap interval=1
+[Editor bench] round=1 | FBO=1280x720 | objects=30 | requested=2 | actual=2 | warmup=60 | frames=300 | avgMs=19.5252 | medianMs=16.8903 | p95Ms=33.2299 | p99Ms=64.923 | WGL swap interval=1
+[Editor bench] round=1 | FBO=1280x720 | objects=30 | requested=4 | actual=4 | warmup=60 | frames=300 | avgMs=18.0948 | medianMs=16.7666 | p95Ms=31.259 | p99Ms=38.2396 | WGL swap interval=1
+[Editor bench] round=2 | FBO=1280x720 | objects=30 | requested=2 | actual=2 | warmup=60 | frames=300 | avgMs=11.4868 | medianMs=11.0319 | p95Ms=17.2155 | p99Ms=17.9749 | WGL swap interval=1
+[Editor bench] round=2 | FBO=1280x720 | objects=30 | requested=4 | actual=4 | warmup=60 | frames=300 | avgMs=9.49281 | medianMs=8.91405 | p95Ms=15.3433 | p99Ms=20.0458 | WGL swap interval=1
+[Editor bench] round=2 | FBO=1280x720 | objects=30 | requested=1 | actual=1 | warmup=60 | frames=300 | avgMs=8.71283 | medianMs=9.10415 | p95Ms=12.5751 | p99Ms=16.0616 | WGL swap interval=1
+[Editor bench] round=3 | FBO=1280x720 | objects=30 | requested=4 | actual=4 | warmup=60 | frames=300 | avgMs=8.71452 | medianMs=9.0866 | p95Ms=12.3253 | p99Ms=15.1976 | WGL swap interval=1
+[Editor bench] round=3 | FBO=1280x720 | objects=30 | requested=1 | actual=1 | warmup=60 | frames=300 | avgMs=8.66207 | medianMs=9.02145 | p95Ms=12.5744 | p99Ms=16.5063 | WGL swap interval=1
+[Editor bench] round=3 | FBO=1280x720 | objects=30 | requested=2 | actual=2 | warmup=60 | frames=300 | avgMs=8.42825 | medianMs=8.95245 | p95Ms=11.7133 | p99Ms=12.419 | WGL swap interval=1
+[RoomCraft3D] GPU, Asset/Texture caches & Dear ImGui resources released cleanly.
+[RoomCraft3D] Exited FreeGLUT main loop cleanly.
+[M4-BENCH] Benchmark suite       : PASS
+[M4-BENCH] OpenGL errors         : NONE

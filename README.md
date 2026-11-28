@@ -1,10 +1,10 @@
 # RoomCraft 3D
 
-**RoomCraft 3D** là ứng dụng desktop thiết kế và bố trí nội thất 3D viết bằng **C++17**, **Modern OpenGL 3.3 Core Profile**, **FreeGLUT**, **GLAD**, **GLM**, **GLSL**, **Dear ImGui**, **Assimp** và **stb_image**, kết hợp **Hybrid Modeling** (Procedural C++ + Blender Assets), **Scene Management**, **Interactive 3D Editing** và **Professional CAD Editor UI/UX**.
+**RoomCraft 3D** là ứng dụng desktop thiết kế và bố trí nội thất 3D viết bằng **C++17**, **Modern OpenGL 3.3 Core Profile**, **FreeGLUT**, **GLAD**, **GLM**, **GLSL**, **Dear ImGui**, **Assimp** và **stb_image**, kết hợp **Hybrid Modeling** (Procedural C++ + Blender Assets), **Scene Management**, **Interactive 3D Editing**, **Blinn–Phong Lighting**, **3D OBB SAT Collision Detection** và **`.roomcraft` Project Persistence**.
 
-> **Trạng thái hiện tại**: Đã hoàn thành triển khai & kiểm thử tự động **Milestone M6 — Professional Editor UI/UX (`v0.6.0`)** (**`13/13` CTest suites `PASS` trong `2.90s`**; các kiểm thử tương tác GUI và đánh giá thị giác thủ công chờ người dùng xác nhận).
+**M8 v0.8.0 đã triển khai (`IMPLEMENTED` — 17/17 CTest PASS).** Bổ sung hệ thống kiểm tra va chạm 3D OBB SAT (15 trục) & biên phòng 6 mặt phẳng, định dạng dự án `.roomcraft` JSON (schema v1) với mở giao dịch (transactional load) và lưu nguyên tử (atomic save), hộp thoại tệp Windows native, theo dõi trạng thái chưa lưu (`Save / Discard / Cancel`), danh sách `Recent Projects` và `Undo/Redo`. M6 giữ `CONDITIONAL PASS`, M7 giữ `IMPLEMENTED` (hiệu năng `CONDITIONAL PASS`, Shadow Mapping `DEFERRED`). Xem [báo cáo nghiệm thu M8](docs/M8_DELIVERY.md) và [báo cáo M7](docs/M7_DELIVERY.md) để đối chiếu kết quả kiểm thử tự động và các mục kiểm chứng thủ công (`NOT VERIFIED`) còn mở.
 
-## Tính năng hiện có (M0–M6)
+## Tính năng hiện có (M0–M8)
 
 - **Core Graphics Engine (M0–M1)**: `Window`, `Shader`, `Vertex`, `Mesh` (VAO/VBO/EBO), `Transform`, `Camera` (Perspective/Orthographic + `fitBoundingBox()`), `Framebuffer` (`RGBA8 + DEPTH24_STENCIL8`), `Renderer`.
 - **Procedural Geometry Engine (`roomcraft_geometry` — M2)**: 7 Primitives, 3 Parametric Generators (`BezierCurve`, `BezierSurface`, `RevolutionSurface`) và 6 mẫu nội thất Procedural thuần CPU.
@@ -20,6 +20,11 @@
   - **GPU Asset Thumbnail Renderer**: Render FBO `256×256` thật trên GPU cho cả **14 mẫu nội thất** (`~3.70 ms` tổng cho 14 mẫu), cache theo ID + asset token, tự động làm mới khi `Reload Asset`.
   - **Responsive Resizable Layout & Workspace Polish**: Thanh kéo chia panel (`EditorLayout`), Furniture Library dạng **Grid ảnh thu nhỏ 2 cột / List View**, Scene Hierarchy có biểu tượng **Eye / Lock** & **Context Menu chuột phải**, Properties Inspector thu gọn theo nhóm với ô Transform **X/Y/Z mã màu**, Status Bar sạch, **Toast Notifications** và **Confirmation Modals**.
   - **3-Axis Move Gizmo (P1)**: Tay cầm 3 trục Đỏ/Xanh lá/Xanh dương kích thước màn hình ổn định, ưu tiên hit-test trước picking cảnh, hỗ trợ khóa đối tượng và `Esc` khôi phục.
+- **Lighting, Materials & Visual Quality (M7)**:
+  - Chiếu sáng **Blinn–Phong** (Ambient + Directional + Point Light suy giảm theo khoảng cách + Normal Matrix + Gamma Correction `2.2`), 4 preset ánh sáng (`Daylight`, `Warm Interior`, `Neutral Studio`, `Evening`), điều chỉnh `Shininess scale` theo từng đối tượng, lưới sàn khử răng cưa theo pixel (`fwidth`) và **MSAA `Off / 2x / 4x`**.
+- **Collision Detection & Project Persistence (M8)**:
+  - **Collision System (CPU-only)**: World AABB + World OBB từ TRS, **3D OBB SAT 15 trục** ổn định với góc song song, phân biệt `Touching` và `Penetrating`, kiểm tra biên phòng 6 mặt phẳng (hỗ trợ đặt nội thất trên mặt bàn và đổi kích thước phòng không phá hủy), 3 chế độ (`Off` / `Warning Only` / `Prevent Invalid`), quy tắc thảm (`Allow Rug Overlap`) và khung cảnh báo trực quan tách biệt màu selection.
+  - **Project Persistence (`.roomcraft` JSON v1)**: Bộ phân tích JSON RFC-8259 nội bộ nghiêm ngặt, lưu/tải đầy đủ Phòng + Nội thất + ID `uint64_t` không mất độ chính xác + Ánh sáng M7 + MSAA + Camera + Cài đặt Editor, **Transactional Load** không phá dự án hiện tại khi lỗi, **Atomic Save** qua tệp tạm cùng thư mục + `MoveFileExW`, hộp thoại Win32 native (`comdlg32`, hỗ trợ Unicode/khoảng trắng, `OFN_NOCHANGEDIR`), theo dõi trạng thái Dirty (`*` + `Save / Discard / Cancel` kể cả khi đóng cửa sổ `WM_CLOSE`), **`Recent Projects`** (P1) và **`Undo/Redo`** tối đa 64 bước (P2).
 
 ## Build và chạy nhanh trên Windows x64
 
@@ -32,7 +37,7 @@ $env:PATH = "$winlibsBin;$env:PATH"
 cmake --preset mingw-x64-debug
 cmake --build --preset mingw-x64-debug
 
-# Chạy toàn bộ 13 bộ kiểm thử tự động (M0–M6)
+# Chạy toàn bộ 17 bộ kiểm thử tự động (M0–M8)
 ctest --test-dir build\mingw-x64-debug --output-on-failure -V
 
 # Chạy ứng dụng tương tác RoomCraft 3D (chạy độc lập, không cần PATH WinLibs)
@@ -42,12 +47,17 @@ ctest --test-dir build\mingw-x64-debug --output-on-failure -V
 ## Tài liệu dự án
 
 - [`AGENTS.md`](AGENTS.md) — Quy tắc kỹ thuật và chuẩn phát triển dự án
+- [`docs/COLLISION_SYSTEM.md`](docs/COLLISION_SYSTEM.md) — Hệ thống va chạm World AABB, 3D OBB SAT & Room Boundary (M8)
+- [`docs/PROJECT_FORMAT.md`](docs/PROJECT_FORMAT.md) — Đặc tả định dạng dự án `.roomcraft` JSON Schema v1 (M8)
+- [`docs/PROJECT_PERSISTENCE.md`](docs/PROJECT_PERSISTENCE.md) — Kiến trúc lưu nguyên tử, tải giao dịch, Dirty-State & Undo/Redo (M8)
+- [`docs/M8_DELIVERY.md`](docs/M8_DELIVERY.md) — Báo cáo nghiệm thu Milestone M8 (`v0.8.0`)
+- [`docs/M7_DELIVERY.md`](docs/M7_DELIVERY.md) — Báo cáo nghiệm thu Milestone M7 (`v0.7.0`)
 - [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) — Hệ thống màu sắc Dark CAD, Typography & Vector Icons (M6)
 - [`docs/UI_ARCHITECTURE.md`](docs/UI_ARCHITECTURE.md) — Kiến trúc bố cục, Splitters, ThumbnailRenderer & 3-Axis Move Gizmo (M6)
-- [`docs/EDITOR_USER_GUIDE.md`](docs/EDITOR_USER_GUIDE.md) — Hướng dẫn sử dụng RoomCraft 3D Editor đầy đủ (M6)
+- [`docs/EDITOR_USER_GUIDE.md`](docs/EDITOR_USER_GUIDE.md) — Hướng dẫn sử dụng RoomCraft 3D Editor đầy đủ (M6–M8)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Kiến trúc phần mềm phân tầng
 - [`docs/CAMERA_SYSTEM.md`](docs/CAMERA_SYSTEM.md), [`docs/OBJECT_PICKING.md`](docs/OBJECT_PICKING.md), [`docs/INTERACTION_GUIDE.md`](docs/INTERACTION_GUIDE.md) — Camera, Ray Casting & Interaction (M5)
 - [`docs/SCENE_MANAGEMENT.md`](docs/SCENE_MANAGEMENT.md) & [`docs/ROOM_EDITOR_GUIDE.md`](docs/ROOM_EDITOR_GUIDE.md) — Scene Management & Room Editor (M4)
 - [`docs/ASSET_PIPELINE.md`](docs/ASSET_PIPELINE.md) & [`docs/BLENDER_GUIDE.md`](docs/BLENDER_GUIDE.md) — Blender Asset Pipeline (M3)
 - [`docs/GEOMETRY_ALGORITHMS.md`](docs/GEOMETRY_ALGORITHMS.md) & [`docs/GRAPHICS_THEORY.md`](docs/GRAPHICS_THEORY.md) — Toán học & thuật toán CG
-- [`docs/ROADMAP.md`](docs/ROADMAP.md), [`docs/PROGRESS.md`](docs/PROGRESS.md), [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md), [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md), [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md), [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md), [`docs/ASSET_LICENSES.md`](docs/ASSET_LICENSES.md)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md), [`docs/PROGRESS.md`](docs/PROGRESS.md), [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md), [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md), [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md), [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md), [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md), [`docs/SESSION_HANDOFF.md`](docs/SESSION_HANDOFF.md), [`docs/ASSET_LICENSES.md`](docs/ASSET_LICENSES.md)

@@ -47,7 +47,7 @@ Một tính năng hoặc milestone chỉ đạt trạng thái `DONE` khi:
 - CMake configure và build thành công.
 - Acceptance criteria và các test liên quan đã chạy và đạt (`PASS`).
 - Runtime đã kiểm chứng (nếu phụ thuộc GUI/GPU).
-- Tài liệu (`docs/PROGRESS.md`, `docs/TEST_RESULTS.md`, `docs/KNOWN_ISSUES.md`, `CHANGELOG.md`) được cập nhật theo kết quả thực tế.
+- Hướng dẫn sử dụng và build được cập nhật khi quy trình thay đổi. Kết quả kiểm thử thực tế được ghi trong nội dung bàn giao.
 
 Trạng thái công việc chuẩn: `TODO`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED`, `DONE`.
 

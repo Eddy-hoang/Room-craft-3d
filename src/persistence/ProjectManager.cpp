@@ -255,6 +255,7 @@ bool ProjectManager::saveCurrentOrAs(const std::filesystem::path& path,
     m_currentFilePath = path;
     m_projectName = data.projectName;
     m_dirty = false;
+    captureSavedBaseline(data);
     recordRecentProject(path);
     return true;
 }
@@ -281,6 +282,7 @@ bool ProjectManager::openTransactional(const std::filesystem::path& path,
     m_currentFilePath = path;
     m_projectName = outLoadedData.projectName;
     m_dirty = false;
+    captureSavedBaseline(outLoadedData);
     recordRecentProject(path);
     return true;
 }
@@ -290,6 +292,38 @@ void ProjectManager::resetForNewProject(const std::string& projectName, bool dir
     m_currentFilePath.clear();
     m_projectName = projectName.empty() ? "Untitled Room" : projectName;
     m_dirty = dirty;
+    m_savedBaselineSignature.clear();
+}
+
+std::string ProjectManager::computeComparableStateSignature(const ProjectData& data)
+{
+    // Chuẩn hóa bản sao không phụ thuộc góc nhìn camera tạm thời và nextObjectId đơn điệu
+    // để Undo về đúng trạng thái đã lưu cho m_dirty == false, đồng thời vẫn phát hiện mọi sửa đổi
+    // về phòng, đối tượng, transform, vật liệu, ánh sáng, render và cấu hình va chạm/snap.
+    ProjectData normalized = data;
+    normalized.projectName = "baseline";
+    normalized.nextObjectId = 1;
+    normalized.camera = ProjectCameraData{};
+    std::string out;
+    ProjectSerializer::toJsonString(normalized, out, nullptr);
+    return out;
+}
+
+void ProjectManager::captureSavedBaseline(const ProjectData& baselineData)
+{
+    m_savedBaselineSignature = computeComparableStateSignature(baselineData);
+    m_dirty = false;
+}
+
+bool ProjectManager::syncDirtyWithState(const ProjectData& currentData)
+{
+    if (m_savedBaselineSignature.empty()) {
+        m_dirty = true;
+        return m_dirty;
+    }
+    const std::string currentSig = computeComparableStateSignature(currentData);
+    m_dirty = (currentSig != m_savedBaselineSignature);
+    return m_dirty;
 }
 
 void ProjectManager::recordRecentProject(const std::filesystem::path& path)
@@ -303,6 +337,18 @@ void ProjectManager::recordRecentProject(const std::filesystem::path& path)
     m_recentProjects.insert(m_recentProjects.begin(), path);
     if (m_recentProjects.size() > kMaxRecentProjects) {
         m_recentProjects.resize(kMaxRecentProjects);
+    }
+}
+
+void ProjectManager::setRecentProjects(const std::vector<std::filesystem::path>& paths)
+{
+    m_recentProjects.clear();
+    for (const auto& p : paths) {
+        if (p.empty()) continue;
+        if (std::find(m_recentProjects.begin(), m_recentProjects.end(), p) == m_recentProjects.end()) {
+            m_recentProjects.push_back(p);
+            if (m_recentProjects.size() >= kMaxRecentProjects) break;
+        }
     }
 }
 

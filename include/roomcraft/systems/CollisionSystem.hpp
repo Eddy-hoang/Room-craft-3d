@@ -144,6 +144,14 @@ public:
                                                          const scene::Transform& candidateTransform,
                                                          const LocalBoundsLookupFn& localBoundsLookup,
                                                          const CollisionOptions& options = {});
+
+    // Quy tắc chống kẹt (non-trapping) cho chế độ Prevent Invalid (M9.1):
+    // - Nếu vị trí mới hợp lệ -> luôn cho phép.
+    // - Nếu vị trí cũ hợp lệ và vị trí mới vi phạm -> chặn (trả về false).
+    // - Nếu vật thể ĐÃ vi phạm sẵn từ trước (ví dụ sau thu nhỏ phòng hoặc đổi từ WarningOnly sang PreventInvalid),
+    //   cho phép dịch chuyển nếu thao tác GIẢM bớt mức độ vi phạm để người dùng có thể kéo vật về vùng hợp lệ.
+    static bool isPreventInvalidTransitionAllowed(const ObjectCollisionStatus& beforeStatus,
+                                                  const ObjectCollisionStatus& afterStatus);
 };
 
 } // namespace roomcraft::systems

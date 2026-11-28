@@ -157,9 +157,12 @@ bool ModelLoader::loadFromFile(const std::filesystem::path& filePath,
 {
     const auto startTime = std::chrono::steady_clock::now();
 
+    const auto u8PathRaw = filePath.u8string();
+    const std::string utf8Path(u8PathRaw.begin(), u8PathRaw.end());
+
     std::error_code ec;
     if (filePath.empty() || !std::filesystem::exists(filePath, ec) || !std::filesystem::is_regular_file(filePath, ec)) {
-        return failWith(outError, "Model file does not exist or is not a regular file: " + filePath.string());
+        return failWith(outError, "Model file does not exist or is not a regular file: " + utf8Path);
     }
 
     Assimp::Importer importer;
@@ -176,18 +179,21 @@ bool ModelLoader::loadFromFile(const std::filesystem::path& filePath,
                                aiProcess_GenSmoothNormals |
                                aiProcess_ValidateDataStructure;
 
-    const aiScene* scene = importer.ReadFile(filePath.string(), flags);
+    const aiScene* scene = importer.ReadFile(utf8Path, flags);
     if (scene == nullptr || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) != 0 || scene->mRootNode == nullptr) {
-        return failWith(outError, std::string("Assimp failed to load '") + filePath.string() +
+        return failWith(outError, std::string("Assimp failed to load '") + utf8Path +
                                       "': " + importer.GetErrorString());
     }
 
+    const auto stemU8 = filePath.stem().u8string();
+    const std::string stemStr(stemU8.begin(), stemU8.end());
+
     AssetData asset;
-    asset.assetId = options.assetId.empty() ? filePath.stem().string() : options.assetId;
-    asset.displayName = options.displayName.empty() ? filePath.stem().string() : options.displayName;
+    asset.assetId = options.assetId.empty() ? stemStr : options.assetId;
+    asset.displayName = options.displayName.empty() ? stemStr : options.displayName;
     asset.sourceType = AssetSourceType::Imported;
     asset.category = options.category;
-    asset.sourcePath = filePath.string();
+    asset.sourcePath = utf8Path;
     asset.unitScale = options.unitScale;
     asset.author = options.author;
     asset.license = options.license;
@@ -196,7 +202,8 @@ bool ModelLoader::loadFromFile(const std::filesystem::path& filePath,
     // 1. Đọc danh sách Material từ Assimp (OBJ/MTL); tạo default material nếu thiếu
     const std::filesystem::path modelDir = filePath.parent_path();
     if (scene->mNumMaterials == 0) {
-        std::cerr << "[RoomCraft3D][WARN] Model '" << filePath.filename().string()
+        const auto fnameU8 = filePath.filename().u8string();
+        std::cerr << "[RoomCraft3D][WARN] Model '" << std::string(fnameU8.begin(), fnameU8.end())
                   << "' has no materials; using fallback default material." << std::endl;
         asset.materials.push_back(graphics::MaterialData::makeDefault());
     } else {
@@ -234,10 +241,11 @@ bool ModelLoader::loadFromFile(const std::filesystem::path& filePath,
             if (aiMat->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
                 aiString texPath;
                 if (aiMat->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS && texPath.length > 0) {
-                    const std::filesystem::path rawTexPath(texPath.C_Str());
+                    const std::filesystem::path rawTexPath = std::filesystem::u8path(texPath.C_Str());
                     const std::filesystem::path resolvedTex =
                         rawTexPath.is_absolute() ? rawTexPath : (modelDir / rawTexPath);
-                    mat.diffuseTexturePath = resolvedTex.lexically_normal().string();
+                    const auto normU8 = resolvedTex.lexically_normal().u8string();
+                    mat.diffuseTexturePath = std::string(normU8.begin(), normU8.end());
                     mat.hasDiffuseTexture = true;
                 }
             }

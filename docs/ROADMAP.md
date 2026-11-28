@@ -12,8 +12,8 @@ Dự án được chia thành 10 milestone trong khoảng thời gian dự kiế
 | **M5** | Camera, Transformation & Object Picking | Tuần 4–5 | `v0.5.0` | VERIFIED (Auto 39/39 PASS; Manual GUI pending) |
 | **M6** | Professional Editor UI/UX | Tuần 5–6 | `v0.6.0` | CONDITIONAL PASS (Auto 13/13 CTest PASS; Manual & Visual GUI pending) |
 | **M7** | Lighting, Materials & Visual Quality | Tuần 6–7 | `v0.7.0` | IMPLEMENTED (Final QA CONDITIONAL PASS; Manual & Visual pending) |
-| **M8** | Collision Detection & Project Persistence | Tuần 7 | `v0.8.0` | IMPLEMENTED (Auto 17/17 CTest PASS; Manual & Visual pending) |
-| **M9** | Testing, Optimization & Release | Tuần 8 | `v1.0.0` | TODO |
+| **M8** | Collision Detection & Project Persistence | Tuần 7 | `v0.8.0` | CONDITIONAL PASS (Auto 17/17 CTest PASS; Manual pending) |
+| **M9** | Testing, Optimization, Polish & Release | Tuần 8 | `v1.0.0` | **RELEASE CANDIDATE (`v1.0.0-rc1`)** — 19/19 CTest Debug & Release PASS, Portable ZIP verified; chờ người dùng duyệt `v1.0.0` |
 
 ## Quan hệ phụ thuộc giữa các milestone
 

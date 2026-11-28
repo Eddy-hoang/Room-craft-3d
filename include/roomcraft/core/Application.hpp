@@ -41,7 +41,10 @@ enum class ApplicationMode {
     BenchmarkM4,    // Đo hiệu năng 10 / 30 / 100 vật thể tại 1280x720
     SmokeTestM5,    // Regression GPU integration smoke test M5
     SmokeTestM6,    // GPU integration & UI/Thumbnail/Gizmo/Workspace smoke test M6
-    SmokeTestM8     // GPU integration smoke test M8 (Collision, Persistence, Reload, Picking/Gizmo)
+    SmokeTestM8,    // GPU integration smoke test M8 (Collision, Persistence, Reload, Picking/Gizmo)
+    SmokeTestM9,    // GPU integration smoke test M9 (Directional Shadow Mapping, Preferences, Resource Lifetime)
+    BenchmarkM9,    // Reproducible CPU/GPU/Wall-clock benchmark suite (30/100/250, MSAA, Orbit, Gizmo, Reload, Save/Load, Stability)
+    CaptureEvidenceM9 // Chụp ảnh GPU thật (PNG) cho M9 visual acceptance & xuất 3 dự án mẫu examples/*.roomcraft
 };
 
 // Không gian làm việc hiện hành trong ứng dụng sản phẩm (loại bỏ hoàn toàn tên milestone trên UI)
@@ -65,6 +68,7 @@ struct ApplicationConfig {
     std::string title = "RoomCraft 3D — 3D Interior Design Studio";
     ApplicationMode mode = ApplicationMode::InteractiveApp;
     int smokeTestFrames = 10;
+    std::filesystem::path outputDir;
 };
 
 struct DemoCubeObject {
@@ -120,7 +124,7 @@ private:
     // Vòng lặp render
     void renderFrame();
     void renderM0RegressionFrame();
-    void renderInteractiveFrame();
+    void renderInteractiveFrame(graphics::Framebuffer* compositeTarget = nullptr);
     void renderM1DemoSceneToFramebuffer(float faceContrast);
     void renderPlaygroundSceneToFramebuffer(float faceContrast);
     void renderAssetBrowserSceneToFramebuffer(float faceContrast);
@@ -165,6 +169,11 @@ private:
     bool runM5IntegrationSuiteOnce();
     bool runM6IntegrationSuiteOnce();
     bool runM8IntegrationSuiteOnce();
+    bool runM9IntegrationSuiteOnce();
+    bool runM9BenchmarkSuiteOnce();
+    bool runM9CaptureEvidenceOnce();
+    void loadUserPreferences();
+    void saveUserPreferences() const;
 
     // Sự kiện cửa sổ
     void handleReshape(int width, int height);
@@ -191,6 +200,7 @@ private:
     // Tài nguyên đồ họa dùng chung
     graphics::Shader m_meshShader;
     graphics::Shader m_gridShader;
+    graphics::Shader m_shadowShader;
     graphics::Mesh m_cubeMesh;
     graphics::Mesh m_controlMarkerMesh;
     graphics::Mesh m_gridMesh;
@@ -350,6 +360,15 @@ private:
 
     bool m_m8SuiteExecuted = false;
     bool m_m8SuitePassed = false;
+
+    bool m_m9SuiteExecuted = false;
+    bool m_m9SuitePassed = false;
+
+    bool m_m9BenchmarkExecuted = false;
+    bool m_m9BenchmarkPassed = false;
+
+    bool m_m9CaptureExecuted = false;
+    bool m_m9CapturePassed = false;
 };
 
 } // namespace roomcraft::core

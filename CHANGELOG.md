@@ -4,6 +4,34 @@ Tất cả các thay đổi đáng chú ý của dự án được ghi nhận tr
 
 ## [Unreleased]
 
+## [1.0.0-rc1] - 2026-11-28 (Milestone M9: Testing, Optimization, Polish, Shadow Mapping & Portable Packaging — Release Candidate)
+### Added
+- **Directional Shadow Mapping & Architectural Shading (`roomcraft_engine` — M9.4)**:
+  - `graphics::ShadowMap` (`ShadowMap.hpp/cpp`) và shader độ sâu `assets/shaders/shadow_depth.vert/frag` (OpenGL 3.3 Core): bản đồ bóng hướng độ phân giải `512 / 1024 / 2048`, chiếu trực giao bao khít phòng, slope-scaled bias, lọc mềm 3×3 PCF, mạch ván gỗ tinh tế và Corner AO nhẹ.
+  - Điều khiển trực tiếp trong `Room Settings -> Lighting Settings` (`Directional Shadows`, `Shadow Quality`, `Shadow Bias`), lưu tùy chọn tương thích ngược vào `.roomcraft` schema v1.
+- **UI Layout Persistence (`M8-F18` / `M9-F14`) & Product Polish (`M9.3`)**:
+  - `persistence::PreferencesManager` (`PreferencesManager.hpp/cpp`): lưu tùy chọn giao diện (độ rộng panel, tỷ lệ Hierarchy, UI Scale, Grid/List, tối đa 8 Recent Projects) tách biệt khỏi `.roomcraft` tại `%APPDATA%\RoomCraft3D\preferences.json`, có kiểm tra/clamp giá trị và fallback an toàn khi thiếu/hỏng.
+  - Biểu tượng đa độ phân giải `assets/icons/roomcraft.ico` và tài nguyên Windows `resources/roomcraft.rc` (`VS_VERSION_INFO 1.0.0-rc1`) nhúng trực tiếp vào `RoomCraft3D.exe`.
+  - Ba tệp dự án mẫu `.roomcraft` xác thực tại `examples/`: `ModernBedroom.roomcraft`, `GamingWorkspace.roomcraft`, `MinimalistLivingRoom.roomcraft`.
+  - Script đóng gói portable tái lập `scripts/package_portable.ps1` tạo `dist/RoomCraft3D-v1.0.0-rc1-win64.zip` kèm `SHA256SUMS.txt` và `licenses/THIRD_PARTY_NOTICES.txt`.
+- **Kiểm thử Độ tin cậy, Benchmark & Tài liệu Học thuật (M9.1, M9.2, M9.7, M9.8)**:
+  - Bổ sung `M9_ReliabilityUnitTests` (16 kiểm thử gồm 1.500 ca fuzzing JSON, tiêm lỗi khóa file Windows, kiểm chứng dirty-state Undo/Redo, Prevent Invalid không kẹt, Preferences) và `M9_IntegrationSmokeTest` nâng tổng số lên **19 bộ CTest**.
+  - Bổ sung cờ CLI `--version`, `--m9-smoke-test`, `--m9-benchmark` (đo tách bạch CPU / `GL_TIME_ELAPSED` GPU / Wall-Clock `avg/med/p95/p99`) và `--m9-capture-evidence` (chụp `12/12` ảnh PNG thật `1280×720` vào `docs/evidence/m9/`).
+  - Tạo mới `docs/M9_DELIVERY.md`, `docs/FINAL_QA_REPORT.md`, `docs/PERFORMANCE_REPORT.md`, `docs/PACKAGING_GUIDE.md`, `docs/RELEASE_CHECKLIST.md`, `docs/ACADEMIC_REPORT_GUIDE.md`, `licenses/THIRD_PARTY_NOTICES.txt`.
+
+### Fixed
+- **JSON Parser (`src/persistence/Json.cpp`)**: Thêm kiểm tra UTF-8 đa byte nghiêm ngặt, từ chối lone low surrogate (`\uDC00`), từ chối khóa trùng lặp, dùng `std::from_chars(..., double)` + `std::locale::classic()` độc lập locale, giới hạn `250,000` node và sửa truyền `outError` cho đầu vào rỗng.
+- **Dirty-State & Undo/Redo (`ProjectManager.cpp`, `RoomEditor.cpp`)**: So khớp chữ ký trạng thái chuẩn hóa (`captureSavedBaseline`/`syncDirtyWithState`) giúp Undo về đúng bản đã lưu tự xóa dấu `*` và luôn ghi nhận thay đổi ngoài `CommandHistory` (ánh sáng/phòng/render).
+- **Collision `Prevent Invalid` & Rug Policy (`CollisionSystem.cpp`, `RoomEditor.cpp`)**: Cho phép kéo vật đã vi phạm sẵn về hướng giảm vi phạm (chống kẹt) và chỉ miễn trừ asset thảm trải sàn thực sự.
+- **Unicode & Tiêu đề Windows (`Window.cpp`, `Application.cpp`, `EditorTheme.cpp`, `Texture.cpp`, `ModelLoader.cpp`)**: Sửa lỗi vỡ dấu `—` (`â€”`) trên thanh tiêu đề Windows bằng `SetWindowTextW`; dùng `GetModuleFileNameW` và nạp font/texture/OBJ an toàn trên đường dẫn Unicode + khoảng trắng; tắt tự sinh `imgui.ini`.
+
+### Verified
+- **Debug (`mingw-x64-debug`)**: `0` lỗi, `0` cảnh báo dự án, **`19/19` CTest PASS (`4.82 s`)**.
+- **Release (`mingw-x64-release`)**: `0` lỗi, `0` cảnh báo dự án, `7.59 MB`, **`19/19` CTest PASS (`3.56 s`)**, chỉ link 8 DLL Windows.
+- **Benchmark Release (`1280×720`, Intel UHD)**: `30 obj + Shadows 1024`: `2.73 ms` avg / `3.56 ms` p95 (**`366.5 FPS`**); `MSAA 4× + Shadows 1024`: `3.42 ms` (**`292.2 FPS`**); `250 obj Stress`: `9.04 ms` (**`110.6 FPS`**, tăng tốc **3.0×** so với Debug).
+- **Portable Isolated Test**: Chạy đạt tại thư mục Unicode + khoảng trắng ngoài PATH WinLibs (`OpenGL errors: NONE`).
+- Nghiệm thu tương tác thủ công & phê duyệt gắn thẻ `v1.0.0` giữ trạng thái chờ người dùng xác nhận (`RELEASE CANDIDATE`).
+
 ## [0.8.0] - 2026-11-28 (Milestone M8: Collision Detection & Project Persistence)
 ### Added
 - **Hệ thống Phát hiện Va chạm & Xác thực Biên phòng thuần CPU (`roomcraft_math` + `roomcraft_scene`)**:

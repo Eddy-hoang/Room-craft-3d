@@ -327,6 +327,9 @@ bool ProjectSerializer::toJsonString(const ProjectData& data,
     light.set("pointColor", encodeVec3(data.lighting.pointColor));
     light.set("pointIntensity", data.lighting.pointIntensity);
     light.set("pointAttenuation", encodeVec3(data.lighting.attenuation));
+    light.set("shadowsEnabled", data.lighting.shadowsEnabled);
+    light.set("shadowMapSize", data.lighting.shadowMapSize);
+    light.set("shadowBias", data.lighting.shadowBias);
     root.set("lighting", std::move(light));
 
     // 4. Render Settings
@@ -501,6 +504,28 @@ bool ProjectSerializer::fromJsonString(const std::string& jsonText,
     if (!lightPresetFromJsonString(presetStr, parsed.lightingPreset)) {
         if (outError != nullptr) *outError = "Invalid lighting preset: '" + presetStr + "'.";
         return false;
+    }
+    // Các trường mở rộng M9.4 (tương thích ngược hoàn toàn với tệp .roomcraft schema v1 từ M8)
+    if (const auto* shEn = lightObj->find("shadowsEnabled")) {
+        if (!shEn->isBool()) {
+            if (outError != nullptr) *outError = "Lighting section error: invalid 'shadowsEnabled'.";
+            return false;
+        }
+        parsed.lighting.shadowsEnabled = shEn->asBool();
+    }
+    if (const auto* shSz = lightObj->find("shadowMapSize")) {
+        if (!shSz->isInt64()) {
+            if (outError != nullptr) *outError = "Lighting section error: invalid 'shadowMapSize'.";
+            return false;
+        }
+        parsed.lighting.shadowMapSize = static_cast<int>(shSz->asInt64());
+    }
+    if (const auto* shBias = lightObj->find("shadowBias")) {
+        if (!shBias->isNumber()) {
+            if (outError != nullptr) *outError = "Lighting section error: invalid 'shadowBias'.";
+            return false;
+        }
+        parsed.lighting.shadowBias = static_cast<float>(shBias->asDouble());
     }
 
     // 4. Render Settings

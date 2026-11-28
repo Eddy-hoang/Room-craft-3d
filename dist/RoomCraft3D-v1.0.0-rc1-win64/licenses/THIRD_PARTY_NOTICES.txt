@@ -1,0 +1,79 @@
+================================================================================
+ROOMCRAFT 3D (v1.0.0-rc1) — THIRD-PARTY SOFTWARE & ASSET LICENSE NOTICES
+================================================================================
+
+RoomCraft 3D is an academic Computer Graphics desktop application developed in
+C++17 with Modern OpenGL 3.3 Core Profile. The following third-party libraries,
+fonts, and tools are used in building or distributing this software.
+
+--------------------------------------------------------------------------------
+1. FreeGLUT (v3.8.0, commit 3db1649ce1f5e42f1338b51e3fa14849be547d5d)
+--------------------------------------------------------------------------------
+License: X-Consortium / MIT-style License
+Source : https://github.com/FreeGLUTProject/freeglut
+Usage  : Window creation, OpenGL 3.3 Core context initialization, input events
+         (statically linked).
+
+--------------------------------------------------------------------------------
+2. GLAD (v0.1.36, commit 1ecd45775d96f35170458e6b148eb0708967e402)
+--------------------------------------------------------------------------------
+License: MIT License (generator) / Public Domain or CC0 (generated loader code)
+Source : https://github.com/Dav1dde/glad
+Usage  : OpenGL 3.3 Core Profile function loader (generated at build time).
+
+--------------------------------------------------------------------------------
+3. GLM — OpenGL Mathematics (v1.0.1, commit 0af55ccecd98d4e5a8d1fad7de25ba429d60e863)
+--------------------------------------------------------------------------------
+License: Happy Bunny License (Modified MIT) / MIT License
+Source : https://github.com/g-truc/glm
+Usage  : Vector, matrix, quaternion, and projection math (header-only).
+
+--------------------------------------------------------------------------------
+4. Dear ImGui (v1.93.0-docking, commit b916186e66aa3c02b72c6ca17455516512ed8049)
+--------------------------------------------------------------------------------
+License: MIT License
+Copyright (c) 2014-2026 Omar Cornut
+Source : https://github.com/ocornut/imgui
+Usage  : Immediate-mode GUI framework with imgui_impl_glut + imgui_impl_opengl3.
+
+--------------------------------------------------------------------------------
+5. Assimp — Open Asset Import Library (v6.0.6, tag a79ff6bbce54d3e01186a918dc6374ed55317426)
+--------------------------------------------------------------------------------
+License: 3-Clause BSD License
+Source : https://github.com/assimp/assimp
+Usage  : Wavefront OBJ/MTL 3D model importer (statically linked, OBJ-only).
+Note   : Includes bundled zlib (zlib License) built statically with Assimp.
+
+--------------------------------------------------------------------------------
+6. stb (stb_image.h v2.34 & stb_image_write.h, commit 6b5799bae8a1fe3792691ef4b72ae26434c3e799)
+--------------------------------------------------------------------------------
+License: Public Domain (Unlicense) or MIT License (dual-licensed)
+Author : Sean Barrett
+Source : https://github.com/nothings/stb
+Usage  : PNG/JPEG image decoding (stb_image) and PNG evidence writing
+         (stb_image_write).
+
+--------------------------------------------------------------------------------
+7. Roboto Font (assets/fonts/Roboto-Medium.ttf)
+--------------------------------------------------------------------------------
+License: Apache License, Version 2.0
+Copyright (c) Google LLC
+Source : https://github.com/googlefonts/roboto
+Usage  : Primary UI TrueType font with Vietnamese glyph support.
+
+--------------------------------------------------------------------------------
+8. MinGW-w64 / GCC C++ Standard Library Runtime (WinLibs x64 UCRT)
+--------------------------------------------------------------------------------
+License: GNU General Public License v3 with GCC Runtime Library Exception 3.1
+         (libgcc / libstdc++) and Zope Public License / MIT (MinGW-w64 / winpthreads).
+Usage  : Statically linked runtime inside RoomCraft3D.exe for zero external
+         MinGW DLL dependencies on Windows x64.
+
+--------------------------------------------------------------------------------
+9. 3D Furniture Assets (Original Project Assets)
+--------------------------------------------------------------------------------
+- 6 Procedural C++ Furniture Models: Generated algorithmically by RoomCraft 3D
+  (MIT / Project License).
+- 8 Blender Furniture Models (.obj, .mtl, 11 .png textures): Created specifically
+  for RoomCraft 3D using Blender 5.2.3 LTS Python scripts (original project
+  assets; no copyrighted third-party meshes redistributed). See docs/ASSET_LICENSES.md.

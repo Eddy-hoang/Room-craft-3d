@@ -5,7 +5,9 @@
 #include <cstdio>
 #include <iomanip>
 #include <limits>
+#include <locale>
 #include <sstream>
+#include <unordered_set>
 
 namespace roomcraft::persistence {
 
@@ -125,6 +127,7 @@ void dumpRecursive(const JsonValue& v, std::ostringstream& oss, int indentSpaces
             } else {
                 const double clean = (std::fabs(d) < 1e-12) ? 0.0 : d;
                 std::ostringstream num;
+                num.imbue(std::locale::classic());
                 num << std::setprecision(9) << clean;
                 std::string str = num.str();
                 if (str.find('.') == std::string::npos && str.find('e') == std::string::npos &&
@@ -208,8 +211,8 @@ void appendUtf8Codepoint(std::string& out, std::uint32_t cp)
 
 class StrictJsonParser {
 public:
-    StrictJsonParser(const std::string& text, int maxDepth)
-        : m_text(text), m_maxDepth(maxDepth)
+    StrictJsonParser(const std::string& text, int maxDepth, std::size_t maxNodes)
+        : m_text(text), m_maxDepth(maxDepth), m_maxNodes(maxNodes)
     {
     }
 
@@ -225,7 +228,7 @@ public:
 
         skipWhitespace();
         if (eof()) {
-            return fail("Empty JSON document.");
+            return fail("Empty JSON document.", outError);
         }
         if (!parseValue(outValue, 0)) {
             outError = m_error;
@@ -285,6 +288,9 @@ private:
         if (depth > m_maxDepth) {
             return fail("Maximum JSON nesting depth exceeded.");
         }
+        if (++m_nodeCount > m_maxNodes) {
+            return fail("Maximum JSON value/node count exceeded.");
+        }
         skipWhitespace();
         if (eof()) {
             return fail("Unexpected end of JSON input.");
@@ -334,6 +340,53 @@ private:
         return true;
     }
 
+    bool parseUtf8Multibyte(unsigned char lead, std::string& out)
+    {
+        int contBytes = 0;
+        std::uint32_t cp = 0;
+        std::uint32_t minCp = 0;
+
+        if ((lead & 0xE0u) == 0xC0u) {
+            contBytes = 1;
+            cp = lead & 0x1Fu;
+            minCp = 0x80u;
+        } else if ((lead & 0xF0u) == 0xE0u) {
+            contBytes = 2;
+            cp = lead & 0x0Fu;
+            minCp = 0x800u;
+        } else if ((lead & 0xF8u) == 0xF0u) {
+            contBytes = 3;
+            cp = lead & 0x07u;
+            minCp = 0x10000u;
+        } else {
+            return fail("Invalid UTF-8 lead byte inside string.");
+        }
+
+        out.push_back(static_cast<char>(lead));
+        for (int i = 0; i < contBytes; ++i) {
+            if (eof()) {
+                return fail("Truncated UTF-8 sequence inside string.");
+            }
+            const unsigned char cont = static_cast<unsigned char>(advance());
+            if ((cont & 0xC0u) != 0x80u) {
+                return fail("Invalid UTF-8 continuation byte inside string.");
+            }
+            cp = (cp << 6) | (cont & 0x3Fu);
+            out.push_back(static_cast<char>(cont));
+        }
+
+        if (cp < minCp) {
+            return fail("Overlong UTF-8 encoding inside string.");
+        }
+        if (cp > 0x10FFFFu) {
+            return fail("UTF-8 code point exceeds U+10FFFF.");
+        }
+        if (cp >= 0xD800u && cp <= 0xDFFFu) {
+            return fail("Invalid UTF-8 surrogate code point inside string.");
+        }
+        return true;
+    }
+
     bool parseString(std::string& out)
     {
         if (peek() != '"') return fail("Expected '\"'.");
@@ -363,6 +416,9 @@ private:
                     case 'u': {
                         std::uint32_t cp = 0;
                         if (!parseHex4(cp)) return false;
+                        if (cp >= 0xDC00u && cp <= 0xDFFFu) {
+                            return fail("Unexpected lone low surrogate code unit.");
+                        }
                         if (cp >= 0xD800u && cp <= 0xDBFFu) {
                             if (eof() || advance() != '\\' || eof() || advance() != 'u') {
                                 return fail("Expected low surrogate pair.");
@@ -378,6 +434,10 @@ private:
                     }
                     default:
                         return fail("Invalid escape character.");
+                }
+            } else if (uch >= 0x80u) {
+                if (!parseUtf8Multibyte(uch, out)) {
+                    return false;
                 }
             } else {
                 out.push_back(static_cast<char>(uch));
@@ -461,18 +521,15 @@ private:
             }
         }
 
-        const std::string token(first, last);
-        try {
-            std::size_t idx = 0;
-            const double dval = std::stod(token, &idx);
-            if (idx != token.size() || !std::isfinite(dval)) {
-                return fail("Numeric value out of finite double range.");
-            }
-            out = JsonValue(dval);
-            return true;
-        } catch (...) {
-            return fail("Failed to parse floating-point number.");
+        // Phân tích số thực hoàn toàn độc lập với locale hệ thống (C++17 std::from_chars cho double)
+        double dval = 0.0;
+        const auto fres = std::from_chars(first, last, dval, std::chars_format::general);
+        if (fres.ec == std::errc::result_out_of_range || fres.ec != std::errc() ||
+            fres.ptr != last || !std::isfinite(dval)) {
+            return fail("Numeric value out of finite double range.");
         }
+        out = JsonValue(dval);
+        return true;
     }
 
     bool parseArray(JsonValue& out, int depth)
@@ -507,6 +564,7 @@ private:
     {
         advance(); // '{'
         JsonValue obj = JsonValue::makeObject();
+        std::unordered_set<std::string> seenKeys;
         skipWhitespace();
         if (!eof() && peek() == '}') {
             advance();
@@ -517,6 +575,9 @@ private:
             skipWhitespace();
             std::string key;
             if (!parseString(key)) return false;
+            if (!seenKeys.insert(key).second) {
+                return fail("Duplicate JSON object key '" + key + "'.");
+            }
             skipWhitespace();
             if (eof() || peek() != ':') {
                 return fail("Expected ':' after object key.");
@@ -545,6 +606,8 @@ private:
     int m_line = 1;
     int m_col = 1;
     int m_maxDepth = JsonParseLimits::kMaxNestingDepth;
+    std::size_t m_maxNodes = JsonParseLimits::kMaxTotalNodes;
+    std::size_t m_nodeCount = 0;
     std::string m_error;
 };
 
@@ -553,6 +616,7 @@ private:
 std::string JsonValue::dump(int indentSpaces) const
 {
     std::ostringstream oss;
+    oss.imbue(std::locale::classic());
     dumpRecursive(*this, oss, indentSpaces, 0);
     if (indentSpaces > 0) {
         oss << '\n';
@@ -564,7 +628,8 @@ bool parseJson(const std::string& input,
                JsonValue& outValue,
                std::string* outError,
                std::size_t maxBytes,
-               int maxDepth)
+               int maxDepth,
+               std::size_t maxNodes)
 {
     if (input.size() > maxBytes) {
         if (outError != nullptr) {
@@ -574,7 +639,7 @@ bool parseJson(const std::string& input,
         return false;
     }
 
-    StrictJsonParser parser(input, maxDepth);
+    StrictJsonParser parser(input, maxDepth, maxNodes);
     std::string err;
     if (!parser.parse(outValue, err)) {
         if (outError != nullptr) *outError = err;

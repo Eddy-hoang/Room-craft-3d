@@ -1,0 +1,156 @@
+{
+  "format": "RoomCraft3D",
+  "schemaVersion": 1,
+  "projectName": "ModernBedroom",
+  "nextObjectId": "15",
+  "room": {
+    "width": 5.0,
+    "length": 6.0,
+    "height": 3.0,
+    "wallThickness": 0.150000006,
+    "floorThickness": 0.100000001,
+    "gridSpacing": 0.5,
+    "floorColor": [0.75, 0.649999976, 0.529999971, 1.0],
+    "wallColor": [0.899999976, 0.889999986, 0.860000014, 1.0],
+    "ceilingColor": [0.930000007, 0.930000007, 0.910000026, 1.0],
+    "wallVisibilityMode": "CutawayView",
+    "showNorthWall": true,
+    "showSouthWall": true,
+    "showEastWall": true,
+    "showWestWall": true,
+    "showCeiling": false,
+    "showGrid": true
+  },
+  "objects": [
+    {
+      "objectId": "8",
+      "assetId": "blender-carpet",
+      "name": "Bedroom Carpet",
+      "position": [-0.400000006, 0.00300000003, -0.5],
+      "rotationDegrees": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "9",
+      "assetId": "blender-modern-bed",
+      "name": "Modern Bed",
+      "position": [-0.699999988, 0.0, -1.75],
+      "rotationDegrees": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "10",
+      "assetId": "blender-wardrobe",
+      "name": "Wardrobe",
+      "position": [-2.0999999, 0.0, 1.20000005],
+      "rotationDegrees": [0.0, 90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "11",
+      "assetId": "procedural-desk",
+      "name": "Study Desk",
+      "position": [1.45000005, 0.0, -2.5],
+      "rotationDegrees": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "12",
+      "assetId": "procedural-desk-lamp",
+      "name": "Study Desk Lamp",
+      "position": [1.89999998, 0.75, -2.57999992],
+      "rotationDegrees": [0.0, -25.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "13",
+      "assetId": "blender-gaming-chair",
+      "name": "Study Chair",
+      "position": [1.45000005, 0.0, -1.72000003],
+      "rotationDegrees": [0.0, 180.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "14",
+      "assetId": "blender-indoor-plant",
+      "name": "Corner Plant",
+      "position": [1.85000002, 0.0, 2.1500001],
+      "rotationDegrees": [0.0, -30.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    }
+  ],
+  "lighting": {
+    "preset": "Daylight",
+    "ambient": 0.419999987,
+    "sunEnabled": true,
+    "sunDirection": [-0.600000024, -1.0, -0.449999988],
+    "sunColor": [1.0, 0.949999988, 0.860000014],
+    "sunIntensity": 0.720000029,
+    "pointEnabled": false,
+    "pointPosition": [-1.0, 2.29999995, 0.699999988],
+    "pointColor": [1.0, 0.680000007, 0.419999987],
+    "pointIntensity": 1.29999995,
+    "pointAttenuation": [1.0, 0.180000007, 0.119999997],
+    "shadowsEnabled": true,
+    "shadowMapSize": 1024,
+    "shadowBias": 0.00219999999
+  },
+  "renderSettings": {
+    "msaa": "4x",
+    "wireframe": false,
+    "showAxes": true,
+    "showSelectedBBox": true,
+    "showMoveGizmo": true
+  },
+  "camera": {
+    "projectionMode": "Perspective",
+    "position": [8.87729931, 7.5834074, 10.0071373],
+    "target": [0.0, 1.45000005, 0.0],
+    "up": [-0.276579916, 0.909008384, -0.311780989],
+    "fovDegrees": 45.0,
+    "nearPlane": 0.294324934,
+    "farPlane": 50.0,
+    "orthoHalfHeight": 3.5
+  },
+  "editorSettings": {
+    "showGrid": false,
+    "gridSnapEnabled": false,
+    "placementValidationMode": "WarningOnly",
+    "allowRugOverlap": true
+  }
+}

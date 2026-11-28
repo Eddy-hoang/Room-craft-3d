@@ -86,8 +86,20 @@ public:
     void toggleCeilingVisibility();
     void resetLayout();
     void setUiScale(float scale);
+    void setLibraryGridView(bool gridView) { m_libraryGridView = gridView; }
+    bool isLibraryGridView() const { return m_libraryGridView; }
     void setMsaaSampleIndex(int index) { m_sampleIndex = index; }
+    int getMsaaSampleIndex() const { return m_sampleIndex; }
     int getActiveSamples() const { return m_activeSamples; }
+    void setLightingPreset(graphics::LightingPreset preset);
+    graphics::LightingSettings& getLightingSettings() { return m_lighting; }
+    const graphics::LightingSettings& getLightingSettings() const { return m_lighting; }
+    void applyPresetImmediateForAutomation(scene::ScenePresetType preset,
+                                           assets::AssetManager& assetManager,
+                                           graphics::Camera& camera)
+    {
+        applyPresetImmediate(preset, assetManager, camera);
+    }
 
     // Cấu hình & truy vấn Collision Detection (M8)
     void setPlacementValidationMode(systems::PlacementValidationMode mode);
@@ -104,7 +116,7 @@ public:
     bool isDirty() const { return m_projectManager.isDirty(); }
     std::string getWindowTitleLabel() const;
 
-    // Render toàn bộ scene vào Framebuffer hiện tại
+    // Render toàn bộ scene vào Framebuffer hiện tại (tùy chọn kèm Directional Shadow Map M9.4)
     void renderSceneToFramebuffer(assets::AssetManager& assetManager,
                                   graphics::Camera& camera,
                                   graphics::Framebuffer& framebuffer,
@@ -115,7 +127,8 @@ public:
                                   const graphics::Mesh& axisYMesh,
                                   const graphics::Mesh& axisZMesh,
                                   const glm::vec4& clearColor,
-                                  float faceContrast);
+                                  float faceContrast,
+                                  graphics::Shader* shadowShader = nullptr);
 
     // Render giao diện Room Editor + định tuyến tương tác M5/M6 (trả về true nếu đã tiêu thụ Esc)
     bool renderUiAndProcessInput(int windowWidth,

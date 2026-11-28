@@ -16,7 +16,7 @@ namespace roomcraft::editor {
 void RoomEditor::initialize(assets::AssetManager& assetManager, graphics::Camera& camera)
 {
     applyPresetImmediate(scene::ScenePresetType::ModernBedroom, assetManager, camera);
-    m_projectManager.clearDirty();
+    m_projectManager.captureSavedBaseline(buildProjectData(camera));
     m_notifications.clear();
 }
 
@@ -47,7 +47,9 @@ std::string RoomEditor::getWindowTitleLabel() const
 
 void RoomEditor::markSceneModified(bool collisionAffected)
 {
-    m_projectManager.markDirty();
+    // Đồng bộ chính xác trạng thái dirty theo chữ ký dữ liệu chuẩn hóa của dự án (M9.1)
+    graphics::Camera dummyCam;
+    m_projectManager.syncDirtyWithState(buildProjectData(dummyCam));
     if (collisionAffected) {
         m_collisionDirty = true;
     }
@@ -143,6 +145,7 @@ void RoomEditor::applyLoadedProjectData(const persistence::ProjectData& data, gr
     m_interactionState.warningMessage.clear();
     m_cameraController.syncFromCamera(camera);
     m_collisionDirty = true;
+    m_projectManager.captureSavedBaseline(buildProjectData(camera));
 }
 
 void RoomEditor::applyPresetImmediate(scene::ScenePresetType preset,
@@ -180,6 +183,7 @@ void RoomEditor::applyPresetImmediate(scene::ScenePresetType preset,
     m_notifications.push(NotificationLevel::Success, "Loaded " + presetName);
 
     setPerspective3DCamera(camera);
+    m_projectManager.captureSavedBaseline(buildProjectData(camera));
 }
 
 void RoomEditor::createNewEmptyRoomImmediate(graphics::Camera& camera)
@@ -200,6 +204,7 @@ void RoomEditor::createNewEmptyRoomImmediate(graphics::Camera& camera)
     m_statusMessage = "New empty room ready";
     m_notifications.push(NotificationLevel::Info, "Created new project (5.0 x 6.0 x 3.0 m)");
     setPerspective3DCamera(camera);
+    m_projectManager.captureSavedBaseline(buildProjectData(camera));
 }
 
 void RoomEditor::requestNewEmptyRoom(graphics::Camera& camera)
@@ -518,6 +523,19 @@ void RoomEditor::setUiScale(float scale)
     m_layout.setUiScale(scale);
 }
 
+void RoomEditor::setLightingPreset(graphics::LightingPreset preset)
+{
+    m_lightPreset = static_cast<int>(preset);
+    const bool keepShadows = m_lighting.shadowsEnabled;
+    const int keepShadowSize = m_lighting.shadowMapSize;
+    const float keepShadowBias = m_lighting.shadowBias;
+    m_lighting = graphics::LightingSettings::preset(preset);
+    m_lighting.shadowsEnabled = keepShadows;
+    m_lighting.shadowMapSize = keepShadowSize;
+    m_lighting.shadowBias = keepShadowBias;
+    markSceneModified(false);
+}
+
 void RoomEditor::fitCameraToRoom(graphics::Camera& camera)
 {
     m_cameraController.fitBoundingBox(m_scene.getRoom().getExteriorBounds(), camera, 1.22f);
@@ -628,7 +646,8 @@ void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
                                           const graphics::Mesh& axisYMesh,
                                           const graphics::Mesh& axisZMesh,
                                           const glm::vec4& clearColor,
-                                          float faceContrast)
+                                          float faceContrast,
+                                          graphics::Shader* shadowShader)
 {
     if (!framebuffer.isComplete()) {
         return;
@@ -661,6 +680,15 @@ void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
         }
     }
 
+    // Pass 1 (M9.4): Directional Shadow Map depth pass trước khi bind FBO chính
+    glm::mat4 lightSpaceMatrix(1.0f);
+    bool shadowReady = false;
+    if (shadowShader != nullptr && shadowShader->isValid() &&
+        m_lighting.shadowsEnabled && m_lighting.sunEnabled && !wireframeMode) {
+        lightSpaceMatrix = m_sceneRenderer.renderShadowPass(m_scene, assetManager, *shadowShader, m_lighting);
+        shadowReady = true;
+    }
+
     m_activeSamples = framebuffer.bindMultisampled(1 << m_sampleIndex);
     m_sceneRenderer.renderScene(m_scene,
                                 assetManager,
@@ -675,7 +703,9 @@ void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
                                 framebuffer.getWidth(),
                                 framebuffer.getHeight(),
                                 clearColor,
-                                opts);
+                                opts,
+                                shadowReady ? &lightSpaceMatrix : nullptr,
+                                shadowReady);
     framebuffer.resolveMultisampled();
     framebuffer.unbind();
 }
@@ -771,10 +801,14 @@ bool RoomEditor::renderUiAndProcessInput(int windowWidth,
             if (actuallyChanged) {
                 bool blockedByPrevent = false;
                 if (m_placementMode == systems::PlacementValidationMode::PreventInvalid) {
+                    const auto boundsLookup = makeBoundsLookup(assetManager);
+                    const auto beforeSt = systems::CollisionSystem::validateCandidateObject(
+                        m_scene, movedObj->id, movedObj->assetId, outcome.transformBefore,
+                        boundsLookup, m_collisionOptions);
                     const auto st = systems::CollisionSystem::validateCandidateObject(
                         m_scene, movedObj->id, movedObj->assetId, movedObj->transform,
-                        makeBoundsLookup(assetManager), m_collisionOptions);
-                    if (st.hasAnyIssue()) {
+                        boundsLookup, m_collisionOptions);
+                    if (!systems::CollisionSystem::isPreventInvalidTransitionAllowed(beforeSt, st)) {
                         // Khôi phục nguyên trạng transform hợp lệ trước kéo mà không mở hộp thoại chặn chuột
                         m_scene.setObjectTransform(movedObj->id, outcome.transformBefore);
                         blockedByPrevent = true;
@@ -887,11 +921,13 @@ void RoomEditor::renderToolbar(const PanelRect& rect,
     // Nhóm 3: Snap, Gizmo & Focus
     if (EditorIcons::toolbarButton("tb_snap", EditorIcon::Snap, "Snap", nullptr, m_gridSnapEnabled, "Toggle Grid & 15 deg Angle Snapping")) {
         m_gridSnapEnabled = !m_gridSnapEnabled;
+        markSceneModified(false);
         m_notifications.push(NotificationLevel::Info, m_gridSnapEnabled ? "Grid Snapping enabled" : "Grid Snapping disabled", 2.0f);
     }
     ImGui::SameLine(0.0f, 4.0f);
     if (EditorIcons::toolbarButton("tb_gizmo", EditorIcon::Move, "Gizmo", nullptr, showMoveGizmo, "Toggle 3-Axis Move Gizmo")) {
         showMoveGizmo = !showMoveGizmo;
+        markSceneModified(false);
         m_notifications.push(NotificationLevel::Info, showMoveGizmo ? "3-Axis Move Gizmo enabled" : "3-Axis Move Gizmo hidden", 2.0f);
     }
     ImGui::SameLine(0.0f, 4.0f);
@@ -1233,6 +1269,7 @@ void RoomEditor::renderViewportOverlays(const PanelRect& rect, graphics::Camera&
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.14f, 0.16f, 0.21f, 0.86f));
     if (ImGui::Button(wireframeMode ? "Wireframe" : "Solid View", ImVec2(84.0f, 24.0f))) {
         wireframeMode = !wireframeMode;
+        markSceneModified(false);
     }
     if (ImGui::IsItemHovered()) {
         m_viewportInputCtx.viewportImageHovered = false;
@@ -1240,6 +1277,7 @@ void RoomEditor::renderViewportOverlays(const PanelRect& rect, graphics::Camera&
     ImGui::SameLine(0.0f, 6.0f);
     if (ImGui::Button(showGrid ? "Grid: On" : "Grid: Off", ImVec2(62.0f, 24.0f))) {
         showGrid = !showGrid;
+        markSceneModified(false);
     }
     if (ImGui::IsItemHovered()) {
         m_viewportInputCtx.viewportImageHovered = false;
@@ -1621,12 +1659,16 @@ void RoomEditor::renderPropertiesPanel(const PanelRect& rect,
                     if (m_inspectorTransformEditActive && (posDeactivated || rotDeactivated || sclDeactivated)) {
                         bool reverted = false;
                         if (m_placementMode == systems::PlacementValidationMode::PreventInvalid) {
+                            const auto boundsLookup = makeBoundsLookup(assetManager);
+                            const auto beforeSt = systems::CollisionSystem::validateCandidateObject(
+                                m_scene, obj->id, obj->assetId, m_inspectorLastValidTransform,
+                                boundsLookup, m_collisionOptions);
                             const auto st = systems::CollisionSystem::validateCandidateObject(
                                 m_scene, obj->id, obj->assetId, obj->transform,
-                                makeBoundsLookup(assetManager), m_collisionOptions);
-                            if (st.hasAnyIssue()) {
+                                boundsLookup, m_collisionOptions);
+                            if (!systems::CollisionSystem::isPreventInvalidTransitionAllowed(beforeSt, st)) {
                                 m_scene.setObjectTransform(obj->id, m_inspectorLastValidTransform);
-                                m_collisionDirty = true;
+                                markSceneModified(true);
                                 reverted = true;
                                 const std::string msg = st.hasBoundaryViolation()
                                                             ? ("Edit prevented: " + st.boundary.formatSummary())
@@ -1804,6 +1846,22 @@ void RoomEditor::renderRoomSettingsContent(assets::AssetManager& assetManager)
             markSceneModified(false);
         }
         ImGui::TextDisabled("Active samples: %d", m_activeSamples);
+
+        ImGui::Separator();
+        if (ImGui::Checkbox("Directional Shadows", &m_lighting.shadowsEnabled)) {
+            markSceneModified(false);
+        }
+        if (m_lighting.shadowsEnabled) {
+            static constexpr const char* kShadowSizes[] = {"512 (Fast)", "1024 (Balanced)", "2048 (High)"};
+            int shIdx = (m_lighting.shadowMapSize <= 512) ? 0 : ((m_lighting.shadowMapSize >= 2048) ? 2 : 1);
+            if (ImGui::Combo("Shadow Quality", &shIdx, kShadowSizes, 3)) {
+                m_lighting.shadowMapSize = (shIdx == 0) ? 512 : ((shIdx == 2) ? 2048 : 1024);
+                markSceneModified(false);
+            }
+            if (ImGui::SliderFloat("Shadow Bias", &m_lighting.shadowBias, 0.0005f, 0.010f, "%.4f")) {
+                markSceneModified(false);
+            }
+        }
     }
     ImGui::TextColored(tokens::kTextSecondary, "Interior Dimensions (meters)");
     ImGui::DragFloat("Width (X)", &m_roomDraft.width, 0.1f, scene::room_limits::kMinWidth, scene::room_limits::kMaxWidth, "%.2f m");

@@ -91,15 +91,17 @@ RoomBoundaryResult RoomBoundaryValidator::validateBounds(const math::BoundingBox
 
 bool CollisionSystem::isFloorCovering(const scene::SceneObject& obj, const math::BoundingBox& worldAabb)
 {
-    if (obj.assetId == "blender-carpet") {
-        return true;
-    }
-    if (!worldAabb.isValid()) {
+    // Chỉ miễn trừ tường minh các asset thảm trải sàn (không miễn trừ nhầm đồ nội thất bị thu nhỏ dẹt)
+    if (obj.assetId != "blender-carpet" &&
+        obj.assetId.find("carpet") == std::string::npos &&
+        obj.assetId.find("rug") == std::string::npos) {
         return false;
     }
+    if (!worldAabb.isValid()) {
+        return true;
+    }
     const glm::vec3 size = worldAabb.getSize();
-    // Vật phẳng sát sàn cao <= 4cm và đặt sát mặt sàn (y <= 2cm)
-    return (size.y <= 0.04f) && (worldAabb.min.y >= -0.01f) && (worldAabb.min.y <= 0.02f);
+    return (size.y <= 0.08f) && (worldAabb.min.y >= -0.02f) && (worldAabb.min.y <= 0.05f);
 }
 
 math::SATResult CollisionSystem::testObjectPair(const math::BoundingBox& aabbA,
@@ -288,6 +290,31 @@ ObjectCollisionStatus CollisionSystem::validateCandidateObject(const scene::Scen
     }
 
     return status;
+}
+
+bool CollisionSystem::isPreventInvalidTransitionAllowed(const ObjectCollisionStatus& beforeStatus,
+                                                        const ObjectCollisionStatus& afterStatus)
+{
+    if (!afterStatus.hasAnyIssue()) {
+        return true;
+    }
+    if (!beforeStatus.hasAnyIssue()) {
+        return false;
+    }
+
+    // Vật thể đã ở trạng thái không hợp lệ sẵn trước khi di chuyển:
+    // Cho phép nếu không tăng số va chạm/độ vượt biên và thực sự cải thiện ít nhất một tiêu chí.
+    const std::size_t beforeCols = beforeStatus.collidingObjectIds.size();
+    const std::size_t afterCols = afterStatus.collidingObjectIds.size();
+    const float beforeBound = beforeStatus.boundary.valid ? 0.0f : beforeStatus.boundary.maxViolationDepth;
+    const float afterBound = afterStatus.boundary.valid ? 0.0f : afterStatus.boundary.maxViolationDepth;
+
+    const bool noWorseCols = (afterCols <= beforeCols);
+    const bool noWorseBound = (afterBound <= beforeBound + 1e-4f);
+    const bool improvedCols = (afterCols < beforeCols);
+    const bool improvedBound = (afterBound + 1e-4f < beforeBound);
+
+    return noWorseCols && noWorseBound && (improvedCols || improvedBound);
 }
 
 } // namespace roomcraft::systems

@@ -1,19 +1,20 @@
-# Bàn giao Phiên làm việc — RoomCraft 3D (Milestone M8 · `v0.8.0`)
+# Bàn giao Dự án — RoomCraft 3D (Milestone M9 · `v1.0.0-rc1` Release Candidate)
 
 Cập nhật: **2026-11-28**
 
 ## 1. Trạng thái Hiện hành
-- **M8 (`v0.8.0`)**: **`IMPLEMENTED`** — toàn bộ kiểm thử tự động đạt **`17/17` CTest PASS** trong `6.65 s` (`0` build errors, `0` project warnings).
-- **Executable chuẩn**: `build/mingw-x64-debug/RoomCraft3D.exe` (chạy độc lập ngoài PATH WinLibs, chỉ link 8 DLL hệ thống Windows).
-- **Trạng thái các milestone trước (giữ nguyên trung thực)**:
-  - **M6**: `CONDITIONAL PASS` (chờ nghiệm thu thủ công/thị giác).
-  - **M7**: `IMPLEMENTED` (Final QA `CONDITIONAL PASS`, Shadow Mapping `DEFERRED`, Performance `CONDITIONAL PASS`, Manual/Visual `NOT VERIFIED`).
-- **Git**: Chưa tự động `git commit` hay `git tag`; working tree bao gồm thay đổi M7 + M8 chờ người dùng kiểm tra và commit theo ý muốn.
+- **Phiên bản ứng viên phát hành**: **`v1.0.0-rc1` (`RELEASE CANDIDATE`)** — phân biệt rõ với bản phát hành chính thức `v1.0.0` cho tới khi người dùng phê duyệt cổng nghiệm thu cuối.
+- **Build & CTest**:
+  - **Debug (`build/mingw-x64-debug/RoomCraft3D.exe`, `47.99 MB`)**: `0` lỗi, `0` cảnh báo dự án, **`19/19` CTest PASS (`4.82 s`)**.
+  - **Release (`build/mingw-x64-release/RoomCraft3D.exe`, `7.59 MB`)**: `0` lỗi, `0` cảnh báo dự án, **`19/19` CTest PASS (`3.56 s`)**, chỉ link `8` DLL hệ thống Windows.
+- **Gói Portable**: `dist/RoomCraft3D-v1.0.0-rc1-win64.zip` (`2,831,544` bytes, SHA-256 `23ef9d9596994e4fc0293ecf22c229a8c83c0a74e90b8bd041e18b680d496e79`), đã kiểm chứng chạy trong thư mục cô lập chứa dấu tiếng Việt & khoảng trắng ngoài PATH WinLibs.
+- **Bằng chứng & Tài liệu**:
+  - `12/12` ảnh GPU thật `1280×720` tại `docs/evidence/m9/`.
+  - `3` dự án mẫu tại `examples/` (`ModernBedroom.roomcraft`, `GamingWorkspace.roomcraft`, `MinimalistLivingRoom.roomcraft`).
+  - Báo cáo đầy đủ: `docs/M9_DELIVERY.md`, `docs/FINAL_QA_REPORT.md`, `docs/PERFORMANCE_REPORT.md`, `docs/PACKAGING_GUIDE.md`, `docs/RELEASE_CHECKLIST.md`, `docs/ACADEMIC_REPORT_GUIDE.md`, `licenses/THIRD_PARTY_NOTICES.txt`.
+- **Git**: Chưa tự động `git commit`, `git tag`, hay `git push`; toàn bộ thay đổi M7 + M8 + M9 được bảo toàn nguyên vẹn trong working tree chờ người dùng rà soát và phê duyệt.
 
-## 2. Việc cần Người dùng Nghiệm thu trước khi Mở cổng M9
-1. Chạy `.\build\mingw-x64-debug\RoomCraft3D.exe` và xác nhận checklist thủ công trong [`docs/M8_DELIVERY.md`](M8_DELIVERY.md) (`Warning Only`, `Prevent Invalid`, Room Resize, `.roomcraft` Save/Save As/Open/Recent, `Save / Discard / Cancel` khi bấm `X`, `Ctrl+Z`/`Ctrl+Y`).
-2. Xác nhận các mục manual/visual tồn đọng của M6–M7 trong [`docs/M7_DELIVERY.md`](M7_DELIVERY.md).
-
-## 3. Hạng mục Chuyển tiếp sang Milestone M9
-- Benchmark cô lập bản **`Release`** (`mingw-x64-release`), đo p95/p99 ổn định khi tắt cạnh tranh cửa sổ nền.
-- Xem xét triển khai các hạng mục tùy chọn còn mở: `UI Layout Persistence` (`M8-F18`), `Recent Projects` lưu giữa các phiên chạy, `Shadow Mapping` (M7 P2) nếu nằm trong ngân sách khung hình, tổng nghiệm thu và đóng gói phát hành **`v1.0.0`**.
+## 2. Hành động Cuối cùng cần Người dùng Thực hiện để Chốt `v1.0.0`
+1. Chạy thử bản portable `dist\RoomCraft3D-v1.0.0-rc1-win64\RoomCraft3D.exe` và đối chiếu checklist trong [`docs/RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
+2. Khi đã hài lòng, thực hiện `git commit` và gắn thẻ `git tag -a v1.0.0` theo lệnh gợi ý trong báo cáo bàn giao M9.
+3. Sử dụng [`docs/ACADEMIC_REPORT_GUIDE.md`](ACADEMIC_REPORT_GUIDE.md), ảnh `docs/evidence/m9/` và số liệu `docs/PERFORMANCE_REPORT.md` để hoàn thiện báo cáo & slide bảo vệ đồ án Đồ họa Máy tính.

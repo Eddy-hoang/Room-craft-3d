@@ -60,3 +60,9 @@ RoomEditor giữ LightingSettings theo phiên. Mỗi khung, SceneRenderOptions m
 - **`roomcraft_engine` (Win32 + ImGui + OpenGL)**:
   - `FileDialog` (`FileDialog.hpp/cpp`, Win32 `GetOpenFileNameW`/`GetSaveFileNameW` hỗ trợ Unicode + `OFN_NOCHANGEDIR`), `Window` (chặn `WM_CLOSE` gọi hộp thoại Save/Discard/Cancel khi dirty), `SceneRenderer` (tô khung cảnh báo va chạm hổ phách / vượt biên phòng đỏ san hô mà vẫn giữ nguyên viền cyan chọn đối tượng), `RoomEditor` & `Application` (File menu `New/Open/Save/Save As/Recent`, `Edit -> Undo/Redo`, `Room Settings -> Collision & Placement`).
 - Xem chi tiết tại [`docs/COLLISION_SYSTEM.md`](COLLISION_SYSTEM.md), [`docs/PROJECT_FORMAT.md`](PROJECT_FORMAT.md) và [`docs/PROJECT_PERSISTENCE.md`](PROJECT_PERSISTENCE.md).
+
+## Kiến trúc M9 — Reliability, Directional Shadows, Preferences & Packaging (`v1.0.0-rc1`)
+
+- **`roomcraft_scene`**: Bổ sung `PreferencesManager` (`PreferencesManager.hpp/cpp`) tách biệt tùy chọn người dùng (`%APPDATA%\RoomCraft3D\preferences.json`) khỏi `.roomcraft`; bổ sung chữ ký đối sánh dirty-state chính xác (`captureSavedBaseline`/`syncDirtyWithState`) và quy tắc chống kẹt `isPreventInvalidTransitionAllowed()`.
+- **`roomcraft_engine`**: Bổ sung `ShadowMap` (`ShadowMap.hpp/cpp`) và shader độ sâu `shadow_depth.vert/frag` tích hợp vào `SceneRenderer::renderShadowPass()`; sửa tiêu đề Unicode Windows (`SetWindowTextW`), tìm thư mục thực thi bằng `GetModuleFileNameW`, nạp font/texture/OBJ an toàn Unicode và nhúng biểu tượng + `VS_VERSION_INFO` qua `resources/roomcraft.rc`.
+- **Kiểm thử & Đóng gói**: Bổ sung `RoomCraft3D_ReliabilityUnitTests`, `--m9-smoke-test`, `--m9-benchmark`, `--m9-capture-evidence` và script đóng gói portable `scripts/package_portable.ps1` (xem [`docs/PACKAGING_GUIDE.md`](PACKAGING_GUIDE.md) và [`docs/ACADEMIC_REPORT_GUIDE.md`](ACADEMIC_REPORT_GUIDE.md)).

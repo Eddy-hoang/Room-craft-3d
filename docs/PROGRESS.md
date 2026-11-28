@@ -12,10 +12,10 @@ Cập nhật lần cuối: **2026-11-28**
 | **M3** | Blender Asset Pipeline | **VERIFIED** | 27/27 tự động PASS; đã đối chiếu `TC-M3-02` OBJ import; `TC-M3-MANUAL` giữ `NOT VERIFIED` |
 | **M4** | Scene Management & Room Editor | **VERIFIED** | 29/29 tự động PASS; benchmark 10/30/100 hoàn tất; `TC-M4-MANUAL` giữ `NOT VERIFIED` |
 | **M5** | Camera, Transformation & Object Picking | **VERIFIED** | 39/39 tự động PASS; `TC-M5-MANUAL` giữ `NOT VERIFIED` |
-| **M6** | Professional Editor UI/UX | **CONDITIONAL PASS** | 13/13 CTest PASS; `TC-M6-MANUAL` & kiểm tra thị giác giữ `NOT VERIFIED` |
-| **M7** | Lighting, Materials & Visual Quality | **IMPLEMENTED** | Final QA 14/14 PASS (`CONDITIONAL PASS`), Shadow Mapping `DEFERRED`, Manual/Visual `NOT VERIFIED` — [`M7_DELIVERY.md`](M7_DELIVERY.md) |
-| **M8** | Collision Detection & Project Persistence | **IMPLEMENTED** | **`17/17` CTest PASS (`6.65 s`)**; AABB/OBB SAT, Room Boundary, `.roomcraft` JSON v1, Safe Atomic Save, Transactional Load, Dirty-State, Recent Projects (P1), Undo/Redo (P2); `M8-T32` Manual/Visual giữ `NOT VERIFIED` — [`M8_DELIVERY.md`](M8_DELIVERY.md) |
-| **M9** | Testing, Optimization & Release | TODO | Chưa bắt đầu (dừng đúng cổng M8) |
+| **M6** | Professional Editor UI/UX | **CONDITIONAL PASS** | 13/13 CTest PASS; chờ nghiệm thu thủ công |
+| **M7** | Lighting, Materials & Visual Quality | **IMPLEMENTED** | Final QA 14/14 PASS (`CONDITIONAL PASS`), Shadow Mapping đã hoàn tất ở M9.4, Manual/Visual chờ ký duyệt — [`M7_DELIVERY.md`](M7_DELIVERY.md) |
+| **M8** | Collision Detection & Project Persistence | **IMPLEMENTED** | Final QA `CONDITIONAL PASS` (`17/17` CTest PASS); `M8-F18` (UI Layout Persistence) đã hoàn tất tại M9.3 — [`M8_DELIVERY.md`](M8_DELIVERY.md) |
+| **M9** | Testing, Optimization, Polish & Release Candidate | **RELEASE CANDIDATE (`v1.0.0-rc1`)** | **`19/19` CTest PASS** trên cả **Debug (`4.82 s`)** & **Release (`3.56 s`)**, kiểm toán an toàn M9.1, benchmark Intel UHD (`366.5 FPS` Release), Directional Shadow Mapping PCF, `PreferencesManager`, icon `.rc`, portable ZIP + SHA-256, `12/12` ảnh GPU thật & tài liệu học thuật; chờ người dùng nghiệm thu thủ công & phê duyệt `v1.0.0` — [`M9_DELIVERY.md`](M9_DELIVERY.md) |
 
 ---
 
@@ -40,4 +40,4 @@ Cập nhật lần cuối: **2026-11-28**
 | **M8-F15** | Project Data Validation | P0 | DONE | `ProjectValidator`: kiểm tra ID trùng/0/overflow, thiếu asset, giá trị NaN/out-of-range, giới hạn 16 MB & 5000 vật; `M8-T19..23` PASS |
 | **M8-F16** | Recent Projects | P1 | DONE | `File -> Recent Projects` (tối đa 8 tệp gần nhất); `M8-T26/27` PASS |
 | **M8-F17** | Undo / Redo | P2 | DONE | `CommandHistory` giới hạn 64 bước (`Ctrl+Z` / `Ctrl+Y`, 1 lần kéo = 1 bước); `M8-T31` PASS |
-| **M8-F18** | UI Layout Persistence | P2 | TODO | Hoãn sang M9 theo ưu tiên P2 để giữ tập trung vào độ ổn định Collision & Persistence |
+| **M8-F18** | UI Layout Persistence | P2 | DONE (M9.3) | Đã triển khai `PreferencesManager` lưu riêng tại `%APPDATA%\RoomCraft3D\preferences.json`; `M9-PREF-01` PASS |

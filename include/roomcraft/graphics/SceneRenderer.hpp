@@ -5,6 +5,7 @@
 #include "roomcraft/graphics/Mesh.hpp"
 #include "roomcraft/graphics/Renderer.hpp"
 #include "roomcraft/graphics/Shader.hpp"
+#include "roomcraft/graphics/ShadowMap.hpp"
 #include "roomcraft/scene/Scene.hpp"
 #include "roomcraft/systems/InteractionState.hpp"
 #include "roomcraft/systems/SelectionState.hpp"
@@ -63,6 +64,12 @@ public:
     // Đồng bộ mesh CPU của Room lên GPU CHỈ KHI geometryRevision thay đổi (không upload mỗi frame)
     bool syncRoomGpuMeshes(const scene::Room& room);
 
+    // Vẽ pass độ sâu cho Directional Shadow Mapping (M9.4) trước khi bind FBO chính
+    glm::mat4 renderShadowPass(const scene::Scene& scene,
+                               assets::AssetManager& assetManager,
+                               Shader& shadowShader,
+                               const LightingSettings& lighting);
+
     // Vẽ toàn bộ Scene vào Render Target hiện tại (FBO đã bind trước)
     SceneRenderMetrics renderScene(const scene::Scene& scene,
                                    assets::AssetManager& assetManager,
@@ -77,7 +84,9 @@ public:
                                    int viewportWidth,
                                    int viewportHeight,
                                    const glm::vec4& clearColor,
-                                   const SceneRenderOptions& options);
+                                   const SceneRenderOptions& options,
+                                   const glm::mat4* lightSpaceMatrix = nullptr,
+                                   bool shadowMapReady = false);
 
     const SceneRenderMetrics& getLastMetrics() const { return m_lastMetrics; }
 
@@ -104,6 +113,7 @@ private:
     Mesh m_roomGridMesh;
     Mesh m_gizmoShaftMesh;
     Mesh m_gizmoConeMesh;
+    ShadowMap m_shadowMap;
     std::uint64_t m_uploadedRoomRevision = 0;
     SceneRenderMetrics m_lastMetrics{};
 };

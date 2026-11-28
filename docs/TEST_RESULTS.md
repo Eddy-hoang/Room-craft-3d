@@ -2,6 +2,19 @@
 
 Cập nhật lần cuối: **2026-11-28**
 
+## Kết quả M9 ngày 28/11/2026 (`v1.0.0-rc1` — Release Candidate, Reliability, Shadows & Packaging)
+
+- **Debug Build (`mingw-x64-debug`)**: `0` lỗi, `0` cảnh báo dự án, **`19/19` CTest PASS (`4.82 s`)**.
+- **Release Build (`mingw-x64-release`)**: `0` lỗi, `0` cảnh báo dự án, `7,960,281` bytes, **`19/19` CTest PASS (`3.56 s`)**, chỉ link `8` DLL Windows (`ntldd`).
+- **M9_ReliabilityUnitTests (16/16 PASS)**: Kiểm toán JSON UTF-8 / surrogate / duplicate key / overflow / node cap + **1.500 ca fuzzing**, tiêm lỗi khóa tệp độc quyền Win32, tương thích ngược schema v1 M8, exact Undo/Redo + Lighting dirty-state, Prevent Invalid không kẹt, rug policy chính xác, `PreferencesManager` round-trip/clamping/corrupt fallback.
+- **M9_IntegrationSmokeTest (5/5 PASS)**: Directional Shadow Mapping (`512/1024/2048`) tạo hiệu ứng tối bóng đo được (`AvgLuma Off=55.74 → On(1024)=54.98`), tương thích MSAA 4×, `OpenGL errors: NONE`.
+- **Benchmark Release (`1280×720`, Intel UHD, `--m9-benchmark`)**: `30 obj + Shadows 1024` đạt **`366.5 FPS` (`2.73 ms` avg / `3.56 ms` p95)**; `MSAA 4× + Shadows 1024` đạt **`292.2 FPS` (`3.42 ms`)**; `250 obj Stress` đạt **`110.6 FPS` (`9.04 ms`)**. Chi tiết tại [`docs/PERFORMANCE_REPORT.md`](PERFORMANCE_REPORT.md) và [`docs/FINAL_QA_REPORT.md`](FINAL_QA_REPORT.md).
+- **Portable Isolated Test**: Giải nén `dist/RoomCraft3D-v1.0.0-rc1-win64.zip` vào đường dẫn Unicode + khoảng trắng ngoài `D:\CG` với `PATH=C:\Windows\System32;C:\Windows` → `--version`, `--m8-smoke-test`, `--m9-smoke-test` đều **PASS** (`Exit 0`).
+- **Ảnh chụp GPU thật**: `12/12` ảnh PNG `1280×720` tại `docs/evidence/m9/`.
+- **Kiểm thử thủ công tương tác**: Giữ `NOT VERIFIED` trong [`docs/RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) chờ người dùng duyệt `v1.0.0`.
+
+---
+
 ## Kết quả M8 ngày 28/11/2026 (`v0.8.0` — Collision Detection & Project Persistence)
 
 - **Build Debug (`mingw-x64-debug`)**: `cmake --preset mingw-x64-debug -DFETCHCONTENT_UPDATES_DISCONNECTED=ON` + `cmake --build --preset mingw-x64-debug` → **Exit `0`**, `0` compile errors, `0` project warnings dưới `-Wall -Wextra -Wpedantic`.

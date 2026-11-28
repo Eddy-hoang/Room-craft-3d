@@ -151,7 +151,7 @@ std::shared_ptr<GpuAsset> AssetManager::uploadCpuAssetToGpu(AssetData cpuData, s
         if (mat.hasDiffuseTexture && !mat.diffuseTexturePath.empty()) {
             bool usedFallback = false;
             gpuAsset->materialDiffuseTextures[i] =
-                m_textureManager.getOrLoadTexture(mat.diffuseTexturePath, &usedFallback);
+                m_textureManager.getOrLoadTexture(std::filesystem::u8path(mat.diffuseTexturePath), &usedFallback);
             if (usedFallback) {
                 gpuAsset->usedFallbackTexture = true;
             }

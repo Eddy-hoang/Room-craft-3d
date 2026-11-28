@@ -104,4 +104,12 @@ Chọn Off, 2x hoặc 4x ở MSAA. Active samples báo số mẫu thật của d
 - Khi dự án có thay đổi chưa lưu, dấu **`*`** xuất hiện cạnh tên dự án trên thanh tiêu đề cửa sổ và thanh menu. Nếu bạn thực hiện `New`, `Open`, `Load Preset` hoặc đóng cửa sổ (`File -> Exit` hay nút **`X`**), hộp thoại **`Unsaved Changes`** sẽ hỏi **`Save`** / **`Discard`** / **`Cancel`** để tránh mất dữ liệu.
 - Danh sách tối đa 8 dự án gần nhất nằm tại **`File -> Recent Projects`**.
 - Lưu dự án dùng cơ chế **ghi tệp tạm cùng thư mục rồi thay thế nguyên tử (`MoveFileExW`)**; mở dự án dùng cơ chế **transactional** — nếu tệp hỏng hoặc sai schema, dự án hiện đang mở vẫn được giữ nguyên vẹn.
-- **`Edit -> Undo (Ctrl+Z)`** và **`Edit -> Redo (Ctrl+Y)`** hỗ trợ hoàn tác/làm lại cho các thao tác thêm, xóa, nhân bản, biến đổi (1 lần kéo = 1 bước Undo), đổi tên, ẩn/hiện, khóa/mở khóa, đổi độ bóng vật liệu và đổi thiết lập phòng.
+- **`Edit -> Undo (Ctrl+Z)`** và **`Edit -> Redo (Ctrl+Y)`** hỗ trợ hoàn tác/làm lại cho các thao tác thêm, xóa, nhân bản, biến đổi (1 lần kéo = 1 bước Undo), đổi tên, ẩn/hiện, khóa/mở khóa, đổi độ bóng vật liệu và đổi thiết lập phòng. Khi Undo trở về đúng trạng thái đã lưu, dấu `*` tự động biến mất.
+
+---
+
+## 7. Đổ bóng Hướng, Lưu Bố cục Giao diện & Dự án Mẫu (M9 · `v1.0.0-rc1`)
+
+- **Directional Shadow Mapping**: Trong **Room Settings → Lighting Settings**, bật/tắt **`Directional Shadows`**, chọn chất lượng **`512 (Fast)` / `1024 (Balanced)` / `2048 (High)`** và tinh chỉnh **`Shadow Bias`**. Khi tắt lưới (`Grid: Off`) cùng đổ bóng bật, sàn gỗ hiển thị vân ghép ván gỗ tinh tế và bóng đổ mềm PCF từ nội thất và tường.
+- **Lưu Bố cục Giao diện (`UI Layout Persistence`)**: Độ rộng hai cột panel, tỷ lệ chia Hierarchy/Inspector, mức `UI Scale`, chế độ `Grid/List` của Furniture Library và tối đa 8 `Recent Projects` được tự động lưu riêng tại `%APPDATA%\RoomCraft3D\preferences.json` khi thoát và khôi phục khi mở lại (dùng `View -> Reset Workspace Layout` để đặt lại mặc định).
+- **Dự án Mẫu**: Mở trực tiếp 3 bản thiết kế mẫu trong thư mục `examples/` (`ModernBedroom.roomcraft`, `GamingWorkspace.roomcraft`, `MinimalistLivingRoom.roomcraft`) qua `File -> Open Project... (Ctrl+O)`.

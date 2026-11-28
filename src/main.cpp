@@ -38,19 +38,42 @@ int main(int argc, char** argv)
         } else if (arg == "--m8-smoke-test") {
             config.mode = roomcraft::core::ApplicationMode::SmokeTestM8;
             config.title = "RoomCraft 3D - M8 Collision & Project Persistence GPU Smoke Test";
+        } else if (arg == "--m9-smoke-test") {
+            config.mode = roomcraft::core::ApplicationMode::SmokeTestM9;
+            config.title = "RoomCraft 3D - M9 Shadow Mapping & Release Candidate GPU Smoke Test";
+        } else if (arg == "--m9-benchmark") {
+            config.mode = roomcraft::core::ApplicationMode::BenchmarkM9;
+            config.width = 1280;
+            config.height = 720;
+            config.title = "RoomCraft 3D - M9 Performance Benchmark (1280x720)";
+        } else if (arg == "--m9-capture-evidence") {
+            config.mode = roomcraft::core::ApplicationMode::CaptureEvidenceM9;
+            config.width = 1280;
+            config.height = 720;
+            config.title = "RoomCraft 3D — 3D Interior Design Studio";
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                config.outputDir = std::filesystem::u8path(argv[++i]);
+            }
+        } else if (arg == "--version" || arg == "-v") {
+            std::cout << "RoomCraft 3D v1.0.0-rc1 (OpenGL 3.3 Core Profile)\n";
+            return 0;
         } else if (arg == "--help" || arg == "-h") {
-            std::cout << "RoomCraft 3D v0.8.0 — 3D Interior Design Studio\n"
+            std::cout << "RoomCraft 3D v1.0.0-rc1 — 3D Interior Design Studio\n"
                       << "Usage: RoomCraft3D [option]\n"
-                      << "  (no option)      Launch RoomCraft 3D Interactive Editor\n"
-                      << "  --smoke-test     Run M0 regression smoke test\n"
-                      << "  --m1-smoke-test  Run M1 regression GPU integration smoke test\n"
-                      << "  --m2-smoke-test  Run M2 regression GPU integration smoke test\n"
-                      << "  --m3-smoke-test  Run M3 regression GPU integration smoke test\n"
-                      << "  --m4-smoke-test  Run M4 regression GPU integration smoke test\n"
-                      << "  --m4-benchmark   Run M4 10/30/100 furniture object GPU performance benchmark\n"
-                      << "  --m5-smoke-test  Run M5 regression GPU integration smoke test\n"
-                      << "  --m6-smoke-test  Run M6 UI/UX, Thumbnails, Move Gizmo & Performance smoke test\n"
-                      << "  --m8-smoke-test  Run M8 Collision & Project Persistence GPU integration smoke test\n";
+                      << "  (no option)              Launch RoomCraft 3D Interactive Editor\n"
+                      << "  --version                Print application version\n"
+                      << "  --smoke-test             Run M0 regression smoke test\n"
+                      << "  --m1-smoke-test          Run M1 regression GPU integration smoke test\n"
+                      << "  --m2-smoke-test          Run M2 regression GPU integration smoke test\n"
+                      << "  --m3-smoke-test          Run M3 regression GPU integration smoke test\n"
+                      << "  --m4-smoke-test          Run M4 regression GPU integration smoke test\n"
+                      << "  --m4-benchmark           Run M4 10/30/100 furniture object GPU performance benchmark\n"
+                      << "  --m5-smoke-test          Run M5 regression GPU integration smoke test\n"
+                      << "  --m6-smoke-test          Run M6 UI/UX, Thumbnails, Move Gizmo & Performance smoke test\n"
+                      << "  --m8-smoke-test          Run M8 Collision & Project Persistence GPU integration smoke test\n"
+                      << "  --m9-smoke-test          Run M9 Shadow Mapping & Release Candidate GPU smoke test\n"
+                      << "  --m9-benchmark           Run M9 reproducible CPU/GPU/Wall-clock benchmark suite\n"
+                      << "  --m9-capture-evidence    Capture real GPU PNG screenshots & generate example projects\n";
             return 0;
         }
     }

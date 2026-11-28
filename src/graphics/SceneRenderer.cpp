@@ -59,6 +59,61 @@ bool SceneRenderer::syncRoomGpuMeshes(const scene::Room& room)
     return true;
 }
 
+glm::mat4 SceneRenderer::renderShadowPass(const scene::Scene& scene,
+                                          assets::AssetManager& assetManager,
+                                          Shader& shadowShader,
+                                          const LightingSettings& lighting)
+{
+    const auto& room = scene.getRoom();
+    const auto& rs = room.getSettings();
+    syncRoomGpuMeshes(room);
+
+    const glm::mat4 lightSpace = ShadowMap::computeDirectionalLightSpaceMatrix(
+        lighting.direction, room.getExteriorBounds());
+
+    if (!lighting.shadowsEnabled || !lighting.sunEnabled || !shadowShader.isValid()) {
+        return lightSpace;
+    }
+
+    if (!m_shadowMap.create(lighting.shadowMapSize)) {
+        return lightSpace;
+    }
+
+    m_shadowMap.bindForWriting();
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    shadowShader.bind();
+    shadowShader.setMat4("uLightSpaceMatrix", lightSpace);
+
+    const glm::mat4 identity(1.0f);
+    shadowShader.setMat4("uModel", identity);
+
+    // Các bức tường đang hiển thị đổ bóng xuống sàn (không vẽ sàn trong pass bóng để tránh self-acne sàn)
+    if (rs.isNorthWallVisible() && m_northWallMesh.isValid()) m_northWallMesh.draw();
+    if (rs.isSouthWallVisible() && m_southWallMesh.isValid()) m_southWallMesh.draw();
+    if (rs.isWestWallVisible() && m_westWallMesh.isValid()) m_westWallMesh.draw();
+    if (rs.isEastWallVisible() && m_eastWallMesh.isValid()) m_eastWallMesh.draw();
+
+    // Toàn bộ nội thất đang hiển thị đổ bóng lên sàn và các đồ nội thất khác
+    for (const auto& obj : scene.getObjects()) {
+        if (!obj.visible) {
+            continue;
+        }
+        auto gpuAsset = assetManager.getOrLoadAsset(obj.assetId, nullptr);
+        if (!gpuAsset) {
+            continue;
+        }
+        const glm::mat4 objectMatrix = obj.getModelMatrix();
+        for (const auto& sub : gpuAsset->subMeshes) {
+            shadowShader.setMat4("uModel", objectMatrix * sub.localTransform.getModelMatrix());
+            sub.mesh.draw();
+        }
+    }
+
+    Shader::unbind();
+    ShadowMap::unbind();
+    return lightSpace;
+}
+
 SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
                                               assets::AssetManager& assetManager,
                                               const systems::SelectionState& selection,
@@ -72,7 +127,9 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
                                               int viewportWidth,
                                               int viewportHeight,
                                               const glm::vec4& clearColor,
-                                              const SceneRenderOptions& options)
+                                              const SceneRenderOptions& options,
+                                              const glm::mat4* lightSpaceMatrix,
+                                              bool shadowMapReady)
 {
     SceneRenderMetrics metrics{};
     metrics.totalObjects = scene.getObjectCount();
@@ -88,6 +145,20 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
 
     // 1. Vẽ cấu trúc căn phòng (Sàn, 4 tường theo WallVisibilityMode, Trần tùy chọn)
     renderer.applyLighting(meshShader, camera, options.lighting);
+    const bool useShadows = shadowMapReady && (lightSpaceMatrix != nullptr) &&
+                            options.lighting.shadowsEnabled && options.lighting.sunEnabled &&
+                            !options.wireframe && m_shadowMap.isValid();
+    if (useShadows) {
+        m_shadowMap.bindDepthTexture(1);
+        meshShader.setInt("uShadowMap", 1);
+        meshShader.setInt("uShadowEnabled", 1);
+        meshShader.setFloat("uShadowBias", options.lighting.shadowBias);
+        meshShader.setMat4("uLightSpaceMatrix", *lightSpaceMatrix);
+        meshShader.setVec3("uRoomHalfSize", {rs.width * 0.5f, rs.height, rs.length * 0.5f});
+    } else {
+        meshShader.setInt("uShadowEnabled", 0);
+        meshShader.setVec3("uRoomHalfSize", glm::vec3(0.0f));
+    }
     if (m_floorMesh.isValid()) {
         meshShader.setInt("uFloor", 1);
         meshShader.setVec3("uGrid", {rs.width * 0.5f, rs.length * 0.5f,
@@ -178,6 +249,15 @@ SceneRenderMetrics SceneRenderer::renderScene(const scene::Scene& scene,
     }
 
     metrics.uniqueAssetsUsed = seenAssets.size();
+
+    if (useShadows) {
+        meshShader.bind();
+        meshShader.setInt("uShadowEnabled", 0);
+        meshShader.setVec3("uRoomHalfSize", glm::vec3(0.0f));
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glActiveTexture(GL_TEXTURE0);
+    }
 
     // 3. Vẽ lưới sàn, trục tọa độ và hộp bao nổi bật của đối tượng đang chọn (luôn ở chế độ GL_FILL)
     renderer.setWireframeMode(false);
@@ -317,6 +397,7 @@ void SceneRenderer::destroyGpuResources()
     m_roomGridMesh.destroy();
     m_gizmoShaftMesh.destroy();
     m_gizmoConeMesh.destroy();
+    m_shadowMap.destroy();
     m_uploadedRoomRevision = 0;
 }
 

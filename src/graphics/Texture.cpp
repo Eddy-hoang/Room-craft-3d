@@ -5,6 +5,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <fstream>
 #include <iostream>
 #include <utility>
 #include <vector>
@@ -46,10 +47,37 @@ Texture& Texture::operator=(Texture&& other) noexcept
 
 bool Texture::loadFromFile(const std::filesystem::path& filePath, std::string* outError)
 {
+    const auto pathU8 = filePath.u8string();
+    const std::string displayPath(pathU8.begin(), pathU8.end());
+
     std::error_code ec;
     if (filePath.empty() || !std::filesystem::exists(filePath, ec)) {
         if (outError != nullptr) {
-            *outError = "Texture file does not exist: " + filePath.string();
+            *outError = "Texture file does not exist: " + displayPath;
+        }
+        return false;
+    }
+
+    // Đọc byte bằng std::ifstream(std::filesystem::path) để giải mã ổn định trên đường dẫn Unicode (Windows)
+    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        if (outError != nullptr) {
+            *outError = "Unable to open texture file: " + displayPath;
+        }
+        return false;
+    }
+    const std::streamsize fileSize = file.tellg();
+    if (fileSize <= 0 || fileSize > 64 * 1024 * 1024) {
+        if (outError != nullptr) {
+            *outError = "Invalid texture file size: " + displayPath;
+        }
+        return false;
+    }
+    std::vector<unsigned char> encodedBytes(static_cast<std::size_t>(fileSize));
+    file.seekg(0, std::ios::beg);
+    if (!file.read(reinterpret_cast<char*>(encodedBytes.data()), fileSize)) {
+        if (outError != nullptr) {
+            *outError = "Failed to read texture bytes: " + displayPath;
         }
         return false;
     }
@@ -61,10 +89,11 @@ bool Texture::loadFromFile(const std::filesystem::path& filePath, std::string* o
     int width = 0;
     int height = 0;
     int channels = 0;
-    unsigned char* data = stbi_load(filePath.string().c_str(), &width, &height, &channels, 0);
+    unsigned char* data = stbi_load_from_memory(
+        encodedBytes.data(), static_cast<int>(encodedBytes.size()), &width, &height, &channels, 0);
     if (data == nullptr) {
         if (outError != nullptr) {
-            *outError = std::string("stb_image failed to decode '") + filePath.string() +
+            *outError = std::string("stb_image failed to decode '") + displayPath +
                         "': " + (stbi_failure_reason() ? stbi_failure_reason() : "unknown error");
         }
         return false;
@@ -75,7 +104,7 @@ bool Texture::loadFromFile(const std::filesystem::path& filePath, std::string* o
 
     if (ok) {
         m_isFallback = false;
-        m_sourcePath = filePath.string();
+        m_sourcePath = displayPath;
     }
     return ok;
 }

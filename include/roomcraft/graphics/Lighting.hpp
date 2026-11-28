@@ -17,6 +17,11 @@ struct LightingSettings {
     float pointIntensity = 1.3f;
     glm::vec3 attenuation{1.0f, 0.18f, 0.12f};
 
+    // Directional Shadow Mapping (M9.4 — tùy chọn bật/tắt & độ phân giải 512/1024/2048)
+    bool shadowsEnabled = true;
+    int shadowMapSize = 1024;
+    float shadowBias = 0.0022f;
+
     static LightingSettings preset(LightingPreset preset)
     {
         LightingSettings s;

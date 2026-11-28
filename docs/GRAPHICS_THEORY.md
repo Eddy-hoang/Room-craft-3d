@@ -162,3 +162,16 @@ Với tiếp tuyến t vuông góc pháp tuyến n, sau khi nhân t với phần
 Hai hình hộp lồi 3D $A, B$ **không giao nhau** khi và chỉ khi tồn tại ít nhất một trục đơn vị $\mathbf{L}$ trong tập **15 trục ứng viên** ($\mathbf{u}_{A,0..2}$, $\mathbf{u}_{B,0..2}$, và 9 tích có hướng $\mathbf{u}_{A,i} \times \mathbf{u}_{B,j}$) thỏa mãn:
 $$|(\mathbf{C}_B - \mathbf{C}_A) \cdot \mathbf{L}| > r_A(\mathbf{L}) + r_B(\mathbf{L}), \qquad r_X(\mathbf{L}) = \sum_{k=0}^{2} |\mathbf{L}\cdot \mathbf{u}_{X,k}|\, h_{X,k}$$
 Nếu hai cạnh gần song song ($\|\mathbf{u}_{A,i}\times \mathbf{u}_{B,j}\| \le 10^{-5}$), trục tích có hướng bị suy biến và được bỏ qua an toàn vì mặt phẳng phân tách đã được phủ bởi 6 trục mặt. Kết hợp **AABB Broad-Phase** lọc nhanh các cặp xa nhau rồi mới chạy **15-axis OBB SAT Narrow-Phase** đạt độ chính xác cao với chi phí dưới `1 ms` cho 100 đối tượng. Xem chi tiết tại [`docs/COLLISION_SYSTEM.md`](COLLISION_SYSTEM.md).
+
+---
+
+## 10. Đổ bóng Thời gian thực — Directional Shadow Mapping & PCF 3×3 (M9.4)
+
+1. **Pass 1 — Light-Space Depth Pass (`ShadowMap` + `shadow_depth.vert/frag`)**:
+   - Dựng ma trận chiếu trực giao bao khít 8 đỉnh của `room.getExteriorBounds()` theo hướng đèn chính: $\mathbf{M}_{light} = \mathbf{P}_{ortho} \cdot \mathbf{V}_{light}$.
+   - Vẽ toàn bộ tường hiển thị và nội thất vào texture độ sâu `GL_DEPTH_COMPONENT24` (`512² / 1024² / 2048²`) với `GL_CLAMP_TO_BORDER` màu biên `(1,1,1,1)`.
+2. **Pass 2 — Slope-Scaled Bias & 3×3 PCF (`mesh.vert/frag`)**:
+   - Chiếu điểm thế giới sang không gian đèn: $\mathbf{p}_{ndc} = \frac{\mathbf{p}_{light}.xyz}{\mathbf{p}_{light}.w}$, chuyển sang $[0,1]^3$.
+   - Tính độ lệch góc chống shadow acne mà vẫn hạn chế peter-panning:
+     $$\text{bias} = \max\big(b_0 (1 - \max(\mathbf{n}\cdot\mathbf{l}, 0)) \cdot 2.2,\; 0.45\,b_0\big)$$
+   - Lấy trung bình 9 mẫu lân cận 3×3 quanh tọa độ texel (**Percentage-Closer Filtering**) để thu hệ số thấy sáng $s \in [0, 1]$, chỉ nhân lên thành phần ánh sáng hướng $\mathbf{L}_{sun}$ nhằm giữ nguyên ánh sáng môi trường (ambient + corner AO).

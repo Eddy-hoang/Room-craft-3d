@@ -73,7 +73,10 @@ Tài liệu này đặc tả chính thức định dạng tệp dự án **`.roo
     "pointPosition": [-1.0, 2.3, 0.7],
     "pointColor": [1.0, 0.68, 0.42],
     "pointIntensity": 1.3,
-    "pointAttenuation": [1.0, 0.18, 0.12]
+    "pointAttenuation": [1.0, 0.18, 0.12],
+    "shadowsEnabled": true,
+    "shadowMapSize": 1024,
+    "shadowBias": 0.0022
   },
   "renderSettings": {
     "msaa": "Off",
@@ -115,4 +118,5 @@ Tài liệu này đặc tả chính thức định dạng tệp dự án **`.roo
 
 ### Chính sách Tiến hóa Schema (Forward-Compatibility & Migration)
 - Schema v1 không cho phép các bản ứng dụng cũ mở tệp schema cao hơn (`schemaVersion > 1`) để tránh mất dữ liệu khi lưu đè lại.
-- Khi có schema v2 trong tương lai (ví dụ thêm Shadow Mapping hoặc nhiều Point Lights ở M9), sẽ triển khai bộ chuyển đổi `migrateV1ToV2()` tách biệt trước khi gọi `ProjectValidator`, giữ nguyên khả năng mở mọi tệp v1 cũ.
+- Các trường mở rộng M9.4 (`shadowsEnabled`, `shadowMapSize` ∈ `{512, 1024, 2048}`, `shadowBias` ∈ `[0.0, 0.05]`) là **tùy chọn và tương thích ngược hoàn toàn** với các tệp `.roomcraft` schema v1 được tạo từ M8.
+- Tùy chọn bố cục giao diện cá nhân (`leftPanelWidth`, `rightPanelWidth`, `hierarchyHeightRatio`, `uiScale`, `libraryGridView`, `recentProjects`) được lưu **tách biệt** trong `%APPDATA%\RoomCraft3D\preferences.json` (`PreferencesManager`) và không lẫn vào tệp dự án `.roomcraft`.

@@ -103,3 +103,17 @@ Tổng số bộ CTest nâng lên **17 suites** (thêm `M8_CollisionUnitTests`, 
 | **M8-T30** | Auto-GPU | Repeated Save/Load & GPU Lifetime | Nạp lại 5 lần liên tiếp, tái dùng GPU cache, `OpenGL errors: NONE` |
 | **M8-T31** | Auto-CPU | Undo / Redo (P2) | `CommandHistory`: Add/Move/Rotate/Scale/Delete, xóa Redo khi sửa mới, giới hạn 64 bước |
 | **M8-T32** | Manual-Visual | UI Integration & Manual Acceptance | Kiểm thử thủ công File Dialog, `Save/Discard/Cancel` khi bấm X, kéo đồ ở `Warning`/`Prevent` |
+
+## 7. Kế hoạch Kiểm thử Milestone M9 — Reliability, Shadow Mapping, Benchmarks & Packaging (`v1.0.0-rc1`)
+
+| Test ID | Tầng | Hạng mục kiểm thử | Tiêu chí đạt |
+|---|---|---|---|
+| **M9-JSON-01..08** | Auto-CPU | Kiểm toán JSON Parser & 1.500-case Fuzzing | UTF-8 strict, từ chối lone surrogate/duplicate key/overflow/node cap, 1.500 ca fuzz không crash |
+| **M9-PERS-01..03** | Auto-CPU | Tương thích ngược & Tiêm lỗi khóa tệp Win32 | Mở tệp M8 không có trường shadow; lưu vào tệp bị khóa giữ nguyên byte cũ & dọn tệp tạm |
+| **M9-DIRTY-01..02** | Auto-CPU | Chính xác Dirty-State + Undo/Redo + Lighting | Undo về bản lưu trả `dirty=false`; Redo trả `dirty=true`; sửa ánh sáng giữ `dirty=true` qua Undo |
+| **M9-COLL-01..02** | Auto-CPU | Prevent Invalid không kẹt & Rug Policy | Vật vi phạm sẵn kéo được về vùng hợp lệ; đồ thu nhỏ dẹt không bị miễn trừ nhầm là thảm |
+| **M9-PREF-01** | Auto-CPU | `PreferencesManager` (UI Layout Persistence) | Round-trip Unicode Recent Projects, clamp giá trị ngoài miền, fallback khi thiếu/hỏng |
+| **M9-GPU-01..05** | Auto-GPU | Directional Shadow Mapping & MSAA 4× | Shader độ sâu compile, bóng làm tối vùng che khuất đo được, chuyển `512/1024/2048` & MSAA 4× `0` lỗi GL |
+| **M9-BENCH** | Auto-GPU | Benchmark Debug vs Release (`1280×720`) | Đo CPU / `GL_TIME_ELAPSED` GPU / Wall `avg/med/p95/p99` trên 30/100/250 obj, MSAA, Orbit, Gizmo, 240-frame stability |
+| **M9-PACK** | Isolated Runtime | Gói Portable ZIP (Unicode + khoảng trắng + PATH sạch) | Giải nén ngoài `D:\CG`, `PATH=System32`, xác minh 8 DLL Windows, SHA-256 & 14 assets |
+| **M9-MANUAL** | Manual-Visual | Nghiệm thu cuối trước thẻ `v1.0.0` | Checklist người dùng tại [`docs/RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) |

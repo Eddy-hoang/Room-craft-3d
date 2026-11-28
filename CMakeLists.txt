@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(RoomCraft3D
-    VERSION 0.8.0
+    VERSION 1.0.0
     DESCRIPTION "RoomCraft 3D - Desktop 3D Interior Design and Room Planner"
     LANGUAGES C CXX
 )
@@ -298,6 +298,7 @@ add_library(roomcraft_scene STATIC
     src/persistence/ProjectValidator.cpp
     src/persistence/ProjectSerializer.cpp
     src/persistence/ProjectManager.cpp
+    src/persistence/PreferencesManager.cpp
     src/core/InputManager.cpp
     src/editor/EditorLayout.cpp
     src/editor/ViewportInteraction.cpp
@@ -317,6 +318,7 @@ add_library(roomcraft_engine STATIC
     src/core/FileDialog.cpp
     src/core/Application.cpp
     src/graphics/Shader.cpp
+    src/graphics/ShadowMap.cpp
     src/graphics/Mesh.cpp
     src/graphics/Framebuffer.cpp
     src/graphics/Renderer.cpp
@@ -360,10 +362,17 @@ else()
     target_compile_options(roomcraft_engine PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Executable chính RoomCraft3D
-add_executable(RoomCraft3D
-    src/main.cpp
-)
+# Executable chính RoomCraft3D (nhúng biểu tượng & VERSIONINFO trên Windows)
+if(WIN32)
+    add_executable(RoomCraft3D
+        src/main.cpp
+        resources/roomcraft.rc
+    )
+else()
+    add_executable(RoomCraft3D
+        src/main.cpp
+    )
+endif()
 target_link_libraries(RoomCraft3D PRIVATE roomcraft_engine)
 
 if(MSVC)
@@ -379,6 +388,8 @@ endif()
 set_property(TARGET RoomCraft3D APPEND PROPERTY LINK_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/mesh.vert"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/mesh.frag"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/shadow_depth.vert"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/shadow_depth.frag"
 )
 add_custom_command(TARGET RoomCraft3D POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -527,3 +538,20 @@ endif()
 add_test(NAME M8_CollisionUnitTests    COMMAND $<TARGET_FILE:RoomCraft3D_CollisionUnitTests>)
 add_test(NAME M8_PersistenceUnitTests  COMMAND $<TARGET_FILE:RoomCraft3D_PersistenceUnitTests>)
 add_test(NAME M8_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m8-smoke-test)
+
+# 9. M9 Reliability, Fuzzing, Dirty-State, Prevent-Invalid Recovery & Preferences Unit Tests (CPU-only)
+add_executable(RoomCraft3D_ReliabilityUnitTests
+    tests/unit/ReliabilityTests.cpp
+)
+target_link_libraries(RoomCraft3D_ReliabilityUnitTests PRIVATE roomcraft_scene)
+if(MSVC)
+    target_compile_options(RoomCraft3D_ReliabilityUnitTests PRIVATE /W4 /permissive- /utf-8)
+else()
+    target_compile_options(RoomCraft3D_ReliabilityUnitTests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(MINGW)
+    target_link_options(RoomCraft3D_ReliabilityUnitTests PRIVATE -static)
+endif()
+
+add_test(NAME M9_ReliabilityUnitTests  COMMAND $<TARGET_FILE:RoomCraft3D_ReliabilityUnitTests>)
+add_test(NAME M9_IntegrationSmokeTest  COMMAND $<TARGET_FILE:RoomCraft3D> --m9-smoke-test)

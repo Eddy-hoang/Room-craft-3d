@@ -141,6 +141,12 @@ bool ProjectValidator::validate(const ProjectData& data,
         l.attenuation.z < 0.0f || l.attenuation.z > 20.0f) {
         return fail("Point light attenuation factors must be finite (constant > 0, linear/quadratic >= 0).");
     }
+    if (l.shadowMapSize != 512 && l.shadowMapSize != 1024 && l.shadowMapSize != 2048) {
+        return fail("Shadow map size must be 512, 1024, or 2048.");
+    }
+    if (!std::isfinite(l.shadowBias) || l.shadowBias < 0.0f || l.shadowBias > 0.05f) {
+        return fail("Shadow bias must be finite and in [0.0, 0.05].");
+    }
 
     // 4. Kiểm tra Render Settings & Editor Settings
     if (data.renderSettings.msaaSampleIndex < 0 || data.renderSettings.msaaSampleIndex > 2) {

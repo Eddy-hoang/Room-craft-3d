@@ -63,8 +63,14 @@ public:
     void markDirty() { m_dirty = true; }
     void clearDirty() { m_dirty = false; }
 
+    // Ghi nhận chữ ký trạng thái chuẩn hóa sau khi khởi tạo / mở / lưu để theo dõi dirty chính xác khi Undo/Redo
+    void captureSavedBaseline(const ProjectData& baselineData);
+    bool syncDirtyWithState(const ProjectData& currentData);
+    static std::string computeComparableStateSignature(const ProjectData& data);
+
     const std::vector<std::filesystem::path>& getRecentProjects() const { return m_recentProjects; }
     void recordRecentProject(const std::filesystem::path& path);
+    void setRecentProjects(const std::vector<std::filesystem::path>& paths);
 
     // Helper lấy tên hiển thị từ đường dẫn tệp (không kèm đuôi .roomcraft)
     static std::string deriveProjectNameFromPath(const std::filesystem::path& path);
@@ -73,6 +79,7 @@ private:
     std::filesystem::path m_currentFilePath;
     std::string m_projectName = "Modern Bedroom";
     bool m_dirty = false;
+    std::string m_savedBaselineSignature;
     std::vector<std::filesystem::path> m_recentProjects;
 };
 

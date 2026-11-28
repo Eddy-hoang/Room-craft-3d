@@ -85,13 +85,15 @@ private:
 struct JsonParseLimits {
     static constexpr std::size_t kMaxInputBytes = 16u * 1024u * 1024u; // 16 MB
     static constexpr int kMaxNestingDepth = 64;
+    static constexpr std::size_t kMaxTotalNodes = 250000u;
 };
 
-// Phân tích chuỗi JSON chặt chẽ theo RFC 8259
+// Phân tích chuỗi JSON chặt chẽ theo RFC 8259 (từ chối UTF-8 lỗi, surrogate lẻ, khóa trùng, NaN/Inf, rác cuối)
 bool parseJson(const std::string& input,
                JsonValue& outValue,
                std::string* outError = nullptr,
                std::size_t maxBytes = JsonParseLimits::kMaxInputBytes,
-               int maxDepth = JsonParseLimits::kMaxNestingDepth);
+               int maxDepth = JsonParseLimits::kMaxNestingDepth,
+               std::size_t maxNodes = JsonParseLimits::kMaxTotalNodes);
 
 } // namespace roomcraft::persistence

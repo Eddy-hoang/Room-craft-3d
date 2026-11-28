@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <fstream>
 #include <iostream>
+#include <vector>
 
 namespace roomcraft::editor {
 
@@ -115,26 +118,59 @@ FontLoadInfo EditorTheme::loadFonts(const std::filesystem::path& fontFilePath,
 
     std::error_code ec;
     if (!fontFilePath.empty() && std::filesystem::exists(fontFilePath, ec) && !ec) {
-        const std::string pathStr = fontFilePath.string();
-        ImFontConfig cfg;
-        cfg.OversampleH = 2;
-        cfg.OversampleV = 2;
-        cfg.PixelSnapH = true;
+        // Đọc tệp font qua std::ifstream(std::filesystem::path) để hỗ trợ tuyệt đối đường dẫn Unicode & khoảng trắng trên Windows
+        std::ifstream fontStream(fontFilePath, std::ios::binary | std::ios::ate);
+        if (fontStream.is_open()) {
+            const std::streamsize byteSize = fontStream.tellg();
+            if (byteSize > 0 && byteSize <= 32 * 1024 * 1024) {
+                std::vector<unsigned char> fontBytes(static_cast<std::size_t>(byteSize));
+                fontStream.seekg(0, std::ios::beg);
+                if (fontStream.read(reinterpret_cast<char*>(fontBytes.data()), byteSize)) {
+                    const auto makeOwnedCopy = [&]() -> void* {
+                        void* buf = IM_ALLOC(fontBytes.size());
+                        if (buf != nullptr) {
+                            std::memcpy(buf, fontBytes.data(), fontBytes.size());
+                        }
+                        return buf;
+                    };
 
-        // Nạp cùng dải Latin mở rộng + tiếng Việt khi font hỗ trợ (Roboto-Medium.ttf, Apache 2.0)
-        const ImWchar* glyphRanges = io.Fonts->GetGlyphRangesVietnamese();
-        ImFont* regular = io.Fonts->AddFontFromFileTTF(pathStr.c_str(), info.baseSizePx, &cfg, glyphRanges);
-        if (regular != nullptr) {
-            info.regularFont = regular;
-            info.headingFont = io.Fonts->AddFontFromFileTTF(pathStr.c_str(), info.baseSizePx + 2.0f, &cfg, glyphRanges);
-            info.smallFont = io.Fonts->AddFontFromFileTTF(pathStr.c_str(), std::max(12.0f, info.baseSizePx - 2.0f), &cfg, glyphRanges);
-            info.loadedCustomFont = true;
-            info.fontName = fontFilePath.filename().string() + " (Apache 2.0)";
-            info.resolvedPath = pathStr;
-            io.FontDefault = regular;
-            std::cout << "[RoomCraft3D] Loaded UI font: " << pathStr
-                      << " (" << info.baseSizePx << " px)" << std::endl;
-            return info;
+                    ImFontConfig cfg;
+                    cfg.OversampleH = 2;
+                    cfg.OversampleV = 2;
+                    cfg.PixelSnapH = true;
+                    cfg.FontDataOwnedByAtlas = true;
+
+                    // Nạp cùng dải Latin mở rộng + tiếng Việt khi font hỗ trợ (Roboto-Medium.ttf, Apache 2.0)
+                    const ImWchar* glyphRanges = io.Fonts->GetGlyphRangesVietnamese();
+                    void* regBuf = makeOwnedCopy();
+                    ImFont* regular = (regBuf != nullptr)
+                                          ? io.Fonts->AddFontFromMemoryTTF(regBuf, static_cast<int>(fontBytes.size()),
+                                                                           info.baseSizePx, &cfg, glyphRanges)
+                                          : nullptr;
+                    if (regular != nullptr) {
+                        void* headBuf = makeOwnedCopy();
+                        void* smallBuf = makeOwnedCopy();
+                        info.regularFont = regular;
+                        info.headingFont = (headBuf != nullptr)
+                                               ? io.Fonts->AddFontFromMemoryTTF(headBuf, static_cast<int>(fontBytes.size()),
+                                                                                info.baseSizePx + 2.0f, &cfg, glyphRanges)
+                                               : regular;
+                        info.smallFont = (smallBuf != nullptr)
+                                             ? io.Fonts->AddFontFromMemoryTTF(smallBuf, static_cast<int>(fontBytes.size()),
+                                                                              std::max(12.0f, info.baseSizePx - 2.0f), &cfg, glyphRanges)
+                                             : regular;
+                        info.loadedCustomFont = true;
+                        const auto fnameU8 = fontFilePath.filename().u8string();
+                        const auto fullU8 = fontFilePath.u8string();
+                        info.fontName = std::string(fnameU8.begin(), fnameU8.end()) + " (Apache 2.0)";
+                        info.resolvedPath = std::string(fullU8.begin(), fullU8.end());
+                        io.FontDefault = regular;
+                        std::cout << "[RoomCraft3D] Loaded UI font: " << info.resolvedPath
+                                  << " (" << info.baseSizePx << " px)" << std::endl;
+                        return info;
+                    }
+                }
+            }
         }
     }
 
@@ -147,7 +183,8 @@ FontLoadInfo EditorTheme::loadFonts(const std::filesystem::path& fontFilePath,
     io.FontDefault = info.regularFont;
     info.loadedCustomFont = false;
     info.fontName = "ImGui Default Fallback (ProggyClean)";
-    std::cout << "[RoomCraft3D][WARN] Custom UI font not found at '" << fontFilePath.string()
+    const auto warnU8 = fontFilePath.u8string();
+    std::cout << "[RoomCraft3D][WARN] Custom UI font not found at '" << std::string(warnU8.begin(), warnU8.end())
               << "'; using ImGui default fallback font." << std::endl;
     return info;
 }

@@ -39,5 +39,12 @@ Cập nhật lần cuối: **2026-11-28**
 ## M8
 
 - **KI-M8-01 (Giới hạn hình học hộp bao)**: Hệ thống va chạm M8 dùng **World OBB + 15-axis SAT** làm xấp xỉ hình học lồi cho nội thất (không phải triangle-level mesh collision hay Physics Engine). Các vật có khoang rỗng (như gầm bàn) có thể báo giao OBB khi đặt ghế sát gầm → giữ `Warning Only` làm mặc định.
-- **KI-M8-02 (Hạng mục P2 hoãn sang M9)**: `UI Layout Persistence` (`M8-F18`) và `Rotate/Scale Visual Gizmos` (`M6-T22`) tiếp tục giữ `TODO` cho M9; `Recent Projects` lưu trong phiên chạy (chưa ghi tệp cấu hình người dùng toàn cục ở `%APPDATA%`).
-- **KI-M8-03 (Kiểm thử thủ công & thị giác `M8-T32`)**: Các thao tác hộp thoại tệp Windows, `Save / Discard / Cancel` khi bấm nút `X` cửa sổ, và trải nghiệm kéo đồ ở chế độ `Warning Only` / `Prevent Invalid` chưa được người dùng xác nhận trực tiếp (`NOT VERIFIED`), cùng với nợ manual/visual của M6–M7 và benchmark cô lập Release Build cho M9.
+- **KI-M8-02 (Hạng mục P2)**: `UI Layout Persistence` (`M8-F18`) và lưu `Recent Projects` giữa các phiên chạy đã hoàn tất trong **M9.3** (`PreferencesManager` tại `%APPDATA%\RoomCraft3D\preferences.json`); chỉ còn `Rotate/Scale Visual Gizmos` (`M6-T22` / `M9-F18`) giữ trạng thái `DEFERRED` (thao tác `R`/`S` + trục `X/Y/Z` + Inspector hoạt động đầy đủ).
+- **KI-M8-03 (Kiểm thử thủ công)**: Đã chụp `12/12` ảnh GPU thật `1280×720` (`docs/evidence/m9/`) và hoàn tất benchmark Release (`docs/PERFORMANCE_REPORT.md`); nghiệm thu thao tác thủ công cuối cùng trên cửa sổ tương tác vẫn chờ người dùng xác nhận trong [`docs/RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) trước khi gắn thẻ `v1.0.0`.
+
+## M9 (`v1.0.0-rc1` — Release Candidate)
+
+- **KI-M9-01 (Kiểm thử Clean Machine)**: Bản portable ZIP đã kiểm chứng chạy trong thư mục cô lập chứa dấu tiếng Việt & khoảng trắng với `PATH` sạch (`C:\Windows\System32;C:\Windows`) trên máy phát triển; chưa chạy thử trên một máy tính Windows vật lý thứ hai hoàn toàn mới.
+- **KI-M9-02 (Cảnh báo nhẹ trong Preset M4 `Gaming Workspace`)**: Ảnh chụp `02_gaming_workspace.png` ghi nhận chậu cây góc tường & đèn trên bàn gaming có chạm nhẹ biên/vật khác theo bộ kiểm tra OBB nghiêm ngặt (`Warnings: 1 overlap, 1 bounds`). Giữ nguyên tọa độ preset M4 để bảo toàn tương thích test M4; người dùng có thể dịch nhẹ hoặc bật `Off` nếu muốn.
+- **KI-M9-03 (Giới hạn số Draw Call ở cảnh rất đông >500 vật thể)**: Ở cảnh stress `250` vật thể (`2,896` draw calls), bản Release vẫn đạt `110.6 FPS` (`9.04 ms`), nhưng nếu tương lai mở rộng lên `500+` vật thể cần cân nhắc instanced rendering.
+- **KI-M9-04 (Phạm vi hoãn chính thức)**: `Rotate/Scale Visual Gizmos` (`M9-F18`), đa nguồn bóng đổ (multi-light shadows) và Physics Engine được ghi nhận hoãn ngoài phạm vi `v1.0.0`.

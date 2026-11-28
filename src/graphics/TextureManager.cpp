@@ -15,7 +15,8 @@ std::string TextureManager::makeCacheKey(const std::filesystem::path& filePath)
 {
     std::error_code ec;
     const auto canonicalPath = std::filesystem::weakly_canonical(filePath, ec);
-    std::string key = ec ? filePath.lexically_normal().generic_string() : canonicalPath.generic_string();
+    const auto rawU8 = ec ? filePath.lexically_normal().generic_u8string() : canonicalPath.generic_u8string();
+    std::string key(rawU8.begin(), rawU8.end());
 #ifdef _WIN32
     // Windows filesystem không phân biệt hoa thường nên chuẩn hóa khóa cache về chữ thường
     std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) {
@@ -48,7 +49,8 @@ std::shared_ptr<Texture> TextureManager::getOrLoadTexture(const std::filesystem:
     auto tex = std::make_shared<Texture>();
     std::string err;
     if (!tex->loadFromFile(filePath, &err)) {
-        std::cerr << "[RoomCraft3D][WARN] Texture fallback activated for '" << filePath.string()
+        const auto u8 = filePath.u8string();
+        std::cerr << "[RoomCraft3D][WARN] Texture fallback activated for '" << std::string(u8.begin(), u8.end())
                   << "' (" << err << ")" << std::endl;
         if (outUsedFallback != nullptr) {
             *outUsedFallback = true;

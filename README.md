@@ -2,9 +2,9 @@
 
 **RoomCraft 3D** là ứng dụng desktop thiết kế và bố trí nội thất 3D viết bằng **C++17**, **Modern OpenGL 3.3 Core Profile**, **FreeGLUT**, **GLAD**, **GLM**, **GLSL**, **Dear ImGui**, **Assimp** và **stb_image**, kết hợp **Hybrid Modeling** (Procedural C++ + Blender Assets), **Scene Management**, **Interactive 3D Editing**, **Blinn–Phong Lighting**, **3D OBB SAT Collision Detection** và **`.roomcraft` Project Persistence**.
 
-**M8 v0.8.0 đã triển khai (`IMPLEMENTED` — 17/17 CTest PASS).** Bổ sung hệ thống kiểm tra va chạm 3D OBB SAT (15 trục) & biên phòng 6 mặt phẳng, định dạng dự án `.roomcraft` JSON (schema v1) với mở giao dịch (transactional load) và lưu nguyên tử (atomic save), hộp thoại tệp Windows native, theo dõi trạng thái chưa lưu (`Save / Discard / Cancel`), danh sách `Recent Projects` và `Undo/Redo`. M6 giữ `CONDITIONAL PASS`, M7 giữ `IMPLEMENTED` (hiệu năng `CONDITIONAL PASS`, Shadow Mapping `DEFERRED`). Xem [báo cáo nghiệm thu M8](docs/M8_DELIVERY.md) và [báo cáo M7](docs/M7_DELIVERY.md) để đối chiếu kết quả kiểm thử tự động và các mục kiểm chứng thủ công (`NOT VERIFIED`) còn mở.
+**M9 `v1.0.0-rc1` (Release Candidate) đã hoàn tất kiểm thử tự động & đóng gói portable (`19/19` CTest PASS trên cả Debug và Release).** Bổ sung **Directional Shadow Mapping (`512/1024/2048` + 3×3 PCF)**, lưu bố cục UI (`PreferencesManager`), kiểm toán an toàn JSON/Persistence/Undo-Redo/Collision (kèm 1.500 ca fuzzing), biểu tượng ứng dụng Windows, 3 dự án mẫu `examples/*.roomcraft`, `12/12` ảnh GPU thật (`docs/evidence/m9/`), bộ tài liệu học thuật và gói phát hành portable `dist/RoomCraft3D-v1.0.0-rc1-win64.zip`. Chờ người dùng nghiệm thu thủ công cuối cùng trước khi gắn thẻ `v1.0.0` (xem [báo cáo M9](docs/M9_DELIVERY.md) và [Release Checklist](docs/RELEASE_CHECKLIST.md)).
 
-## Tính năng hiện có (M0–M8)
+## Tính năng hiện có (M0–M9)
 
 - **Core Graphics Engine (M0–M1)**: `Window`, `Shader`, `Vertex`, `Mesh` (VAO/VBO/EBO), `Transform`, `Camera` (Perspective/Orthographic + `fitBoundingBox()`), `Framebuffer` (`RGBA8 + DEPTH24_STENCIL8`), `Renderer`.
 - **Procedural Geometry Engine (`roomcraft_geometry` — M2)**: 7 Primitives, 3 Parametric Generators (`BezierCurve`, `BezierSurface`, `RevolutionSurface`) và 6 mẫu nội thất Procedural thuần CPU.
@@ -25,6 +25,10 @@
 - **Collision Detection & Project Persistence (M8)**:
   - **Collision System (CPU-only)**: World AABB + World OBB từ TRS, **3D OBB SAT 15 trục** ổn định với góc song song, phân biệt `Touching` và `Penetrating`, kiểm tra biên phòng 6 mặt phẳng (hỗ trợ đặt nội thất trên mặt bàn và đổi kích thước phòng không phá hủy), 3 chế độ (`Off` / `Warning Only` / `Prevent Invalid`), quy tắc thảm (`Allow Rug Overlap`) và khung cảnh báo trực quan tách biệt màu selection.
   - **Project Persistence (`.roomcraft` JSON v1)**: Bộ phân tích JSON RFC-8259 nội bộ nghiêm ngặt, lưu/tải đầy đủ Phòng + Nội thất + ID `uint64_t` không mất độ chính xác + Ánh sáng M7 + MSAA + Camera + Cài đặt Editor, **Transactional Load** không phá dự án hiện tại khi lỗi, **Atomic Save** qua tệp tạm cùng thư mục + `MoveFileExW`, hộp thoại Win32 native (`comdlg32`, hỗ trợ Unicode/khoảng trắng, `OFN_NOCHANGEDIR`), theo dõi trạng thái Dirty (`*` + `Save / Discard / Cancel` kể cả khi đóng cửa sổ `WM_CLOSE`), **`Recent Projects`** (P1) và **`Undo/Redo`** tối đa 64 bước (P2).
+- **Testing, Optimization, Shadow Mapping & Portable Packaging (M9 — `v1.0.0-rc1`)**:
+  - **Directional Shadow Mapping (`ShadowMap` + `shadow_depth` GLSL 330)**: Độ phân giải `512 / 1024 / 2048`, lọc mềm 3×3 PCF, slope-scaled bias, mạch ván gỗ tinh tế & Corner AO (chỉ `+0.61 ms` trên Intel UHD Release, giữ `366.5 FPS` ở 30 vật thể).
+  - **UI Layout Persistence & Polish**: `PreferencesManager` lưu bố cục panel, UI Scale, Grid/List và Recent Projects riêng tại `%APPDATA%\RoomCraft3D\preferences.json`; biểu tượng Windows `.ico`/`.rc`, sửa tiêu đề UTF-8 (`SetWindowTextW`), nạp Unicode toàn diện và 3 dự án mẫu `examples/*.roomcraft`.
+  - **Release Build & Portable Distribution**: Preset `mingw-x64-release` (`7.59 MB`, `19/19` CTest PASS trong `3.56 s`), đóng gói `dist/RoomCraft3D-v1.0.0-rc1-win64.zip` kèm `SHA256SUMS.txt` và `licenses/THIRD_PARTY_NOTICES.txt`.
 
 ## Build và chạy nhanh trên Windows x64
 
@@ -33,23 +37,27 @@
 $winlibsBin = (Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\BrechtSanders.WinLibs*" -Directory | Select-Object -First 1).FullName + "\mingw64\bin"
 $env:PATH = "$winlibsBin;$env:PATH"
 
-# Configure & Build Debug
-cmake --preset mingw-x64-debug
-cmake --build --preset mingw-x64-debug
+# Configure & Build Release (hoặc mingw-x64-debug)
+cmake --preset mingw-x64-release
+cmake --build --preset mingw-x64-release
 
-# Chạy toàn bộ 17 bộ kiểm thử tự động (M0–M8)
-ctest --test-dir build\mingw-x64-debug --output-on-failure -V
+# Chạy toàn bộ 19 bộ kiểm thử tự động (M0–M9)
+ctest --test-dir build\mingw-x64-release --output-on-failure -V
 
 # Chạy ứng dụng tương tác RoomCraft 3D (chạy độc lập, không cần PATH WinLibs)
-.\build\mingw-x64-debug\RoomCraft3D.exe
+.\build\mingw-x64-release\RoomCraft3D.exe
+
+# Đóng gói bản Portable Windows x64 (.zip + SHA256SUMS.txt)
+powershell -ExecutionPolicy Bypass -File scripts\package_portable.ps1
 ```
 
 ## Tài liệu dự án
 
 - [`AGENTS.md`](AGENTS.md) — Quy tắc kỹ thuật và chuẩn phát triển dự án
-- [`docs/COLLISION_SYSTEM.md`](docs/COLLISION_SYSTEM.md) — Hệ thống va chạm World AABB, 3D OBB SAT & Room Boundary (M8)
-- [`docs/PROJECT_FORMAT.md`](docs/PROJECT_FORMAT.md) — Đặc tả định dạng dự án `.roomcraft` JSON Schema v1 (M8)
-- [`docs/PROJECT_PERSISTENCE.md`](docs/PROJECT_PERSISTENCE.md) — Kiến trúc lưu nguyên tử, tải giao dịch, Dirty-State & Undo/Redo (M8)
+- [`docs/M9_DELIVERY.md`](docs/M9_DELIVERY.md), [`docs/FINAL_QA_REPORT.md`](docs/FINAL_QA_REPORT.md), [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) — Báo cáo M9 Release Candidate (`v1.0.0-rc1`), QA & Checklist phát hành
+- [`docs/PERFORMANCE_REPORT.md`](docs/PERFORMANCE_REPORT.md) & [`docs/PACKAGING_GUIDE.md`](docs/PACKAGING_GUIDE.md) — Benchmark Debug/Release trên Intel UHD & Hướng dẫn đóng gói Portable
+- [`docs/ACADEMIC_REPORT_GUIDE.md`](docs/ACADEMIC_REPORT_GUIDE.md) & [`licenses/THIRD_PARTY_NOTICES.txt`](licenses/THIRD_PARTY_NOTICES.txt) — Tài liệu báo cáo/slide/demo bảo vệ đồ án & Giấy phép thư viện bên thứ ba
+- [`docs/COLLISION_SYSTEM.md`](docs/COLLISION_SYSTEM.md), [`docs/PROJECT_FORMAT.md`](docs/PROJECT_FORMAT.md), [`docs/PROJECT_PERSISTENCE.md`](docs/PROJECT_PERSISTENCE.md) — Hệ thống Va chạm 3D OBB SAT & Định dạng `.roomcraft` (M8)
 - [`docs/M8_DELIVERY.md`](docs/M8_DELIVERY.md) — Báo cáo nghiệm thu Milestone M8 (`v0.8.0`)
 - [`docs/M7_DELIVERY.md`](docs/M7_DELIVERY.md) — Báo cáo nghiệm thu Milestone M7 (`v0.7.0`)
 - [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) — Hệ thống màu sắc Dark CAD, Typography & Vector Icons (M6)

@@ -23,6 +23,20 @@ Window* Window::s_activeInstance = nullptr;
 #ifdef _WIN32
 namespace {
 
+std::wstring utf8ToWide(const std::string& utf8)
+{
+    if (utf8.empty()) {
+        return {};
+    }
+    const int needed = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), nullptr, 0);
+    if (needed <= 0) {
+        return std::wstring(utf8.begin(), utf8.end());
+    }
+    std::wstring wide(static_cast<std::size_t>(needed), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), wide.data(), needed);
+    return wide;
+}
+
 LRESULT CALLBACK roomcraftWindowCloseSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     WNDPROC origProc = reinterpret_cast<WNDPROC>(GetPropW(hwnd, L"RoomCraftPrevWndProc"));
@@ -131,6 +145,22 @@ bool Window::initialize(int& argc, char** argv)
         hwnd = GetActiveWindow();
     }
     if (hwnd != nullptr) {
+        // Đặt tiêu đề UTF-8 chuẩn Unicode (tránh vỡ dấu — và tên tệp tiếng Việt của glutCreateWindow ANSI)
+        SetWindowTextW(hwnd, utf8ToWide(m_currentTitle).c_str());
+
+        // Gắn biểu tượng ứng dụng từ tài nguyên Win32 (IDI_ICON1 = 101) nếu có
+        HINSTANCE hInst = GetModuleHandleW(nullptr);
+        if (hInst != nullptr) {
+            HICON bigIcon = static_cast<HICON>(LoadImageW(hInst, MAKEINTRESOURCEW(101), IMAGE_ICON, 32, 32, LR_DEFAULTCOLOR));
+            HICON smallIcon = static_cast<HICON>(LoadImageW(hInst, MAKEINTRESOURCEW(101), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR));
+            if (bigIcon != nullptr) {
+                SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(bigIcon));
+            }
+            if (smallIcon != nullptr) {
+                SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
+            }
+        }
+
         WNDPROC prev = reinterpret_cast<WNDPROC>(
             SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&roomcraftWindowCloseSubclassProc)));
         if (prev != nullptr) {
@@ -221,6 +251,12 @@ void Window::setTitle(const std::string& title)
 {
     if (m_initialized && title != m_currentTitle) {
         m_currentTitle = title;
+#ifdef _WIN32
+        if (m_nativeHwnd != nullptr && IsWindow(static_cast<HWND>(m_nativeHwnd))) {
+            SetWindowTextW(static_cast<HWND>(m_nativeHwnd), utf8ToWide(title).c_str());
+            return;
+        }
+#endif
         glutSetWindowTitle(title.c_str());
     }
 }

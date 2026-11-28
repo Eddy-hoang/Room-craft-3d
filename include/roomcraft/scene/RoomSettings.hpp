@@ -67,6 +67,7 @@ struct RoomSettings {
     bool showWestWall = true;   // Tường -X
     bool showCeiling = false;   // Trần Y = height
     bool showGrid = true;
+    bool showWindow = true;     // Cửa sổ kiến trúc trang trí trên tường Bắc (RC2.5)
 
     float getFloorArea() const { return width * length; }
     float getVolume() const { return width * length * height; }

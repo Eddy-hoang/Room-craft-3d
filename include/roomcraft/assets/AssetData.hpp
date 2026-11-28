@@ -185,17 +185,36 @@ struct AssetData {
             graphics::MaterialData mat;
             mat.name = part.name + "_Mat";
             mat.baseColor = part.baseColor;
-            mat.specularColor = glm::vec3(0.12f);
-            mat.shininess = 26.0f;
+            // Phân tách vật liệu có chủ đích cho nội thất Procedural (RC2.4):
+            // vải/sách mờ < gỗ satin < gốm men < kim loại (bảo toàn bất biến M7-T08)
+            mat.specularColor = glm::vec3(0.10f, 0.095f, 0.088f);
+            mat.shininess = 36.0f;
             if (part.name == "SeatCushion") {
-                mat.specularColor = glm::vec3(0.025f);
-                mat.shininess = 8.0f;
+                mat.specularColor = glm::vec3(0.028f);
+                mat.shininess = 10.0f;
+            } else if (part.name.rfind("Book_", 0) == 0 || part.name.rfind("DecorBox", 0) == 0) {
+                mat.specularColor = glm::vec3(0.035f);
+                mat.shininess = 14.0f;
+            } else if (part.name.rfind("Leg_", 0) == 0 ||
+                       part.name == "RearSupportBeam" ||
+                       part.name.rfind("Apron", 0) == 0 ||
+                       part.name.rfind("FootCap", 0) == 0) {
+                mat.specularColor = glm::vec3(0.20f, 0.21f, 0.24f);
+                mat.shininess = 58.0f;
+            } else if (part.name.rfind("DrawerHandle", 0) == 0) {
+                mat.specularColor = glm::vec3(0.60f, 0.50f, 0.28f);
+                mat.shininess = 180.0f;
             } else if (part.name == "VaseBody_Revolution") {
-                mat.specularColor = glm::vec3(0.48f);
-                mat.shininess = 72.0f;
+                mat.specularColor = glm::vec3(0.32f, 0.33f, 0.34f);
+                mat.shininess = 96.0f;
             } else if (part.name.rfind("Lamp", 0) == 0) {
-                mat.specularColor = glm::vec3(part.name == "LampShade" ? 0.10f : 0.56f);
-                mat.shininess = part.name == "LampShade" ? 24.0f : 90.0f;
+                if (part.name == "LampShade") {
+                    mat.specularColor = glm::vec3(0.04f);
+                    mat.shininess = 16.0f;
+                } else {
+                    mat.specularColor = glm::vec3(0.58f, 0.50f, 0.34f);
+                    mat.shininess = 160.0f;
+                }
             }
             asset.materials.push_back(std::move(mat));
 

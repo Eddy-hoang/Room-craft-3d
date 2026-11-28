@@ -137,7 +137,7 @@ ViewportInteractionOutcome ViewportInteraction::processInput(const core::InputMa
                 cameraController.setIsometricPreset(scene.getRoom().getExteriorBounds(), camera);
                 out.statusMessage = "Camera: Isometric View (3)";
             } else if (input.isSpecialKeyPressed(core::SpecialKey::Home)) {
-                cameraController.fitBoundingBox(scene.getRoom().getExteriorBounds(), camera, 1.22f);
+                cameraController.fitRoomView(scene.getRoom(), camera, 1.07f);
                 out.statusMessage = "Camera: Fit Room (Home)";
             } else if (input.isKeyPressed('f')) {
                 if (selection.hasSelection()) {

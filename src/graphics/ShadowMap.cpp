@@ -38,8 +38,13 @@ bool ShadowMap::create(int resolution)
                  GL_DEPTH_COMPONENT,
                  GL_FLOAT,
                  nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    // Bật phần cứng so sánh độ sâu GL_COMPARE_REF_TO_TEXTURE + lọc tuyến tính GL_LINEAR
+    // để sampler2DShadow thực hiện bilinear PCF 2x2 ngay tại mỗi điểm lấy mẫu trên GPU.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     const float borderColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -108,13 +113,14 @@ void ShadowMap::bindDepthTexture(unsigned int textureUnit) const
     glBindTexture(GL_TEXTURE_2D, m_depthTexture);
 }
 
-glm::mat4 ShadowMap::computeDirectionalLightSpaceMatrix(const glm::vec3& lightDirection,
-                                                        const math::BoundingBox& sceneBounds)
+ShadowMap::FrustumInfo ShadowMap::computeDirectionalLightFrustum(const glm::vec3& lightDirection,
+                                                                 const math::BoundingBox& sceneBounds,
+                                                                 int shadowResolution)
 {
     glm::vec3 dir = lightDirection;
     const float lenSq = glm::dot(dir, dir);
     if (!std::isfinite(lenSq) || lenSq < 1e-8f) {
-        dir = glm::normalize(glm::vec3(-0.6f, -1.0f, -0.45f));
+        dir = glm::normalize(glm::vec3(-0.58f, -0.95f, -0.42f));
     } else {
         dir = glm::normalize(dir);
     }
@@ -125,15 +131,16 @@ glm::mat4 ShadowMap::computeDirectionalLightSpaceMatrix(const glm::vec3& lightDi
         bounds.max = glm::vec3(3.0f, 3.0f, 3.0f);
     }
 
+    const int res = std::clamp(shadowResolution, 256, 2048);
     const glm::vec3 center = bounds.getCenter();
-    const float radius = std::max(1.5f, glm::length(bounds.getHalfExtents()) + 0.5f);
+    const float radius = std::max(1.5f, glm::length(bounds.getHalfExtents()) + 0.4f);
 
     // Chọn vector Up không song song với hướng ánh sáng
     const glm::vec3 up = (std::fabs(dir.y) > 0.96f) ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
-    const glm::vec3 lightPos = center - dir * (radius * 2.2f);
+    const glm::vec3 lightPos = center - dir * (radius * 2.0f);
     const glm::mat4 lightView = glm::lookAt(lightPos, center, up);
 
-    // Chiếu 8 đỉnh của hộp bao cảnh sang không gian đèn để dựng hộp chiếu trực giao khít nhất
+    // Chiếu 8 đỉnh hộp bao sang không gian đèn để dựng vùng chiếu trực giao khít và đẳng hướng (vuông)
     const std::array<glm::vec3, 8> corners = {
         glm::vec3(bounds.min.x, bounds.min.y, bounds.min.z),
         glm::vec3(bounds.max.x, bounds.min.y, bounds.min.z),
@@ -162,13 +169,36 @@ glm::mat4 ShadowMap::computeDirectionalLightSpaceMatrix(const glm::vec3& lightDi
         maxZ = std::max(maxZ, ls.z);
     }
 
-    constexpr float padXY = 0.35f;
-    const float nearPlane = std::max(0.1f, -maxZ - 2.0f);
-    const float farPlane = std::max(nearPlane + 1.0f, -minZ + 2.0f);
-    const glm::mat4 lightProj = glm::ortho(minX - padXY, maxX + padXY,
-                                           minY - padXY, maxY + padXY,
-                                           nearPlane, farPlane);
-    return lightProj * lightView;
+    // Dựng frustum vuông để mật độ texel X/Y đồng nhất, rồi căn lưới (texel-snapping) chống rung bóng
+    constexpr float padXY = 0.25f;
+    const float spanX = (maxX - minX) + 2.0f * padXY;
+    const float spanY = (maxY - minY) + 2.0f * padXY;
+    const float squareSpan = std::max(1.0f, std::max(spanX, spanY));
+    const float texelWorldSize = squareSpan / static_cast<float>(res);
+
+    float cx = 0.5f * (minX + maxX);
+    float cy = 0.5f * (minY + maxY);
+    cx = std::floor(cx / texelWorldSize) * texelWorldSize;
+    cy = std::floor(cy / texelWorldSize) * texelWorldSize;
+    const float halfSpan = 0.5f * squareSpan;
+
+    // Thu gọn khoảng near/far sát cảnh để tối đa hóa độ chính xác bộ đệm độ sâu 24-bit
+    const float nearPlane = std::max(0.1f, -maxZ - 0.8f);
+    const float farPlane = std::max(nearPlane + 1.0f, -minZ + 0.8f);
+
+    FrustumInfo info;
+    info.lightSpaceMatrix = glm::ortho(cx - halfSpan, cx + halfSpan,
+                                       cy - halfSpan, cy + halfSpan,
+                                       nearPlane, farPlane) * lightView;
+    info.texelWorldSize = texelWorldSize;
+    info.depthSpan = farPlane - nearPlane;
+    return info;
+}
+
+glm::mat4 ShadowMap::computeDirectionalLightSpaceMatrix(const glm::vec3& lightDirection,
+                                                        const math::BoundingBox& sceneBounds)
+{
+    return computeDirectionalLightFrustum(lightDirection, sceneBounds, 1024).lightSpaceMatrix;
 }
 
 } // namespace roomcraft::graphics

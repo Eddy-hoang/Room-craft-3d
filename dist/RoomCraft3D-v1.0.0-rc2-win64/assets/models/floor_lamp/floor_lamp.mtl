@@ -1,0 +1,42 @@
+# Blender 5.2.3 LTS MTL File: 'floor_lamp.blend' (RC2.4 Material Palette Calibrated)
+# www.blender.org
+
+newmtl FloorLampBrass
+Ns 220.000000
+Ka 0.800000 0.800000 0.800000
+Kd 0.780000 0.640000 0.360000
+Ks 0.620000 0.520000 0.300000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3
+
+newmtl FloorLampBulb
+Ns 160.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.960000 0.920000 0.780000
+Ks 0.300000 0.300000 0.280000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl FloorLampLinenShade
+Ns 12.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.030000 0.030000 0.030000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd lamp_linen_cream.png
+
+newmtl FloorLampOak
+Ns 42.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.110000 0.100000 0.090000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd lamp_oak.png

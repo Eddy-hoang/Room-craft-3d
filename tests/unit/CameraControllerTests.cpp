@@ -102,5 +102,65 @@ int runCameraControllerTests()
     check(focused && glm::length(tgtRightAfterFit - deskBox.getCenter()) < 1e-3f && jumpDist < 0.25f,
           "TC-M5-24/25 Camera preset & Focus Selected sync prevents orbit jump", failures);
 
+    // RC2.3 P0 Regression: fitRoomView căn khung đối xứng sát biên không cắt phòng ở nhiều tỷ lệ khung hình
+    {
+        roomcraft::scene::Room room;
+        const float aspects[3] = {16.0f / 9.0f, 4.0f / 3.0f, 676.0f / 550.0f};
+        bool framingOk = true;
+        for (float ar : aspects) {
+            cam.setAspectRatio(ar);
+            ctrl.setPerspectiveRoomPreset(room, cam);
+            const glm::mat4 vp = cam.getProjectionMatrix() * cam.getViewMatrix();
+            float minNdcX = 1e9f, maxNdcX = -1e9f;
+            float minNdcY = 1e9f, maxNdcY = -1e9f;
+            for (const auto& pt : room.collectVisibleCornerPoints()) {
+                const glm::vec4 clip = vp * glm::vec4(pt, 1.0f);
+                if (clip.w <= 0.0f) {
+                    framingOk = false;
+                    continue;
+                }
+                const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                minNdcX = std::min(minNdcX, ndc.x);
+                maxNdcX = std::max(maxNdcX, ndc.x);
+                minNdcY = std::min(minNdcY, ndc.y);
+                maxNdcY = std::max(maxNdcY, ndc.y);
+            }
+            const float maxAbsX = std::max(std::fabs(minNdcX), std::fabs(maxNdcX));
+            const float maxAbsY = std::max(std::fabs(minNdcY), std::fabs(maxNdcY));
+            const bool perspCentered = std::fabs(minNdcX + maxNdcX) < 0.10f && std::fabs(minNdcY + maxNdcY) < 0.10f;
+            const bool perspOk = (maxAbsX <= 0.98f) && (maxAbsY <= 0.98f) &&
+                                 (std::max(maxAbsX, maxAbsY) >= 0.88f) && perspCentered;
+            if (!perspOk) {
+                std::cout << "    [DIAG] ar=" << ar << " ndcX=[" << minNdcX << "," << maxNdcX
+                          << "] ndcY=[" << minNdcY << "," << maxNdcY << "]" << std::endl;
+            }
+            framingOk &= perspOk;
+
+            // Kiểm tra tương tự với Isometric Orthographic
+            ctrl.setIsometricRoomPreset(room, cam);
+            const glm::mat4 isoVp = cam.getProjectionMatrix() * cam.getViewMatrix();
+            float isoMinX = 1e9f, isoMaxX = -1e9f;
+            float isoMinY = 1e9f, isoMaxY = -1e9f;
+            for (const auto& pt : room.collectVisibleCornerPoints()) {
+                const glm::vec4 clip = isoVp * glm::vec4(pt, 1.0f);
+                isoMinX = std::min(isoMinX, clip.x);
+                isoMaxX = std::max(isoMaxX, clip.x);
+                isoMinY = std::min(isoMinY, clip.y);
+                isoMaxY = std::max(isoMaxY, clip.y);
+            }
+            const float isoAbsX = std::max(std::fabs(isoMinX), std::fabs(isoMaxX));
+            const float isoAbsY = std::max(std::fabs(isoMinY), std::fabs(isoMaxY));
+            const bool isoOk = (isoAbsX <= 0.98f) && (isoAbsY <= 0.98f) &&
+                               (std::max(isoAbsX, isoAbsY) >= 0.88f) &&
+                               std::fabs(isoMinX + isoMaxX) < 0.05f && std::fabs(isoMinY + isoMaxY) < 0.05f;
+            if (!isoOk) {
+                std::cout << "    [DIAG] ISO ar=" << ar << " isoX=[" << isoMinX << "," << isoMaxX
+                          << "] isoY=[" << isoMinY << "," << isoMaxY << "]" << std::endl;
+            }
+            framingOk &= isoOk;
+        }
+        check(framingOk, "RC2-P0-CAM fitRoomView frames visible room tightly without clipping across aspect ratios", failures);
+    }
+
     return failures;
 }

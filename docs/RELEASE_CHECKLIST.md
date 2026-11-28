@@ -1,27 +1,26 @@
-# Danh sách Kiểm tra Phát hành (Release Checklist — `v1.0.0-rc1` → `v1.0.0`)
+# Danh sách Kiểm tra Phát hành (Release Checklist — `v1.0.0-rc2` → `v1.0.0`)
 
-Trạng thái hiện tại: **`RELEASE CANDIDATE (v1.0.0-rc1)`** — chưa gắn thẻ `v1.0.0` chính thức cho tới khi người dùng xác nhận các mục nghiệm thu thủ công bên dưới.
+Trạng thái hiện tại: **`RELEASE CANDIDATE 2 (v1.0.0-rc2)`** — hoàn tất giai đoạn tinh chỉnh chất lượng thị giác (P0 + P1), chưa gắn thẻ `v1.0.0` chính thức cho tới khi hoàn tất **Independent QA lần 2** và **Product Owner Manual & Visual Acceptance**.
 
-## A. Các Cổng Tự động & Đóng gói (ĐÃ ĐẠT)
+## A. Các Cổng Tự động, Thị giác & Đóng gói RC2 (ĐÃ ĐẠT)
 
-- [x] **Debug Build (`mingw-x64-debug`)**: Thành công, `0` lỗi, `0` cảnh báo dự án (`-Wall -Wextra -Wpedantic`).
-- [x] **Release Build (`mingw-x64-release`)**: Thành công, `0` lỗi, `0` cảnh báo dự án, `7.59 MB`.
-- [x] **Full Automated Regression**: **`19/19` CTest PASS** trên cả Debug (`4.82 s`) và Release (`3.56 s`).
-- [x] **Reliability & Safety Audit (M9.1)**: `M9_ReliabilityUnitTests` (JSON UTF-8/duplicate-key/1500-case fuzzing, locked-file failure injection, exact Undo/Redo dirty-state, non-trapping Prevent Invalid, PreferencesManager) — **PASS**.
-- [x] **Performance Benchmark (M9.2)**: Đạt mục tiêu >60 FPS (`366.5 FPS` tiêu chuẩn 30 obj + Shadows 1024; `292.2 FPS` với MSAA 4×; `110.6 FPS` ở stress 250 obj trên Intel UHD Release).
-- [x] **Optional Graphics (M9.4)**: Directional Shadow Mapping (512/1024/2048 + 3×3 PCF + toggle) đã triển khai & kiểm chứng; Rotate/Scale Gizmo được ghi nhận `DEFERRED`.
-- [x] **Portable Packaging (M9.6)**: `dist/RoomCraft3D-v1.0.0-rc1-win64.zip` kèm `SHA256SUMS.txt`, chỉ link 8 DLL Windows, đã test giải nén tại đường dẫn Unicode + khoảng trắng với `PATH` sạch.
-- [x] **Visual Evidence (GPU thật)**: `12/12` ảnh PNG `1280×720` tại `docs/evidence/m9/` + 3 dự án mẫu `examples/*.roomcraft`.
-- [x] **Licenses & Academic Docs**: `licenses/THIRD_PARTY_NOTICES.txt`, `docs/ACADEMIC_REPORT_GUIDE.md`, `docs/EDITOR_USER_GUIDE.md`, `docs/FINAL_QA_REPORT.md`, `docs/PERFORMANCE_REPORT.md`, `docs/PACKAGING_GUIDE.md`.
+- [x] **Debug & Release Builds (`mingw-x64-debug`, `mingw-x64-release`)**: Thành công, `0` lỗi, `0` cảnh báo dự án.
+- [x] **Full Automated Regression**: **`19/19` CTest PASS** trên cả **Release (`5.95 s`)** và **Debug (`6.62 s`)**, kèm đầy đủ kiểm thử hồi quy RC2 (`RC2-P0-PRESET`, `RC2-P0-CAM`, `RC2-P0-DIM`, `RC2-P1-MAT`, `RC2-P1-ARCH`, `RC2-GPU-01..03`).
+- [x] **Quality Gate A (P0 Visual & Preset Fixes)**:
+  - Wall Shadow Acne đã triệt tiêu (`UpperWestWall meanDiff = 0.938 < 1.5`, ảnh diff 4× sạch).
+  - Cháy sáng `Warm Interior` & `Gaming Workspace` giảm từ `8.47% / 5.98%` xuống **`0.00%`**.
+  - `3/3` phòng mẫu mặc định đạt **`0 overlaps, 0 bounds`**; đồng bộ kích thước `Indoor Plant` & 8 Blender assets.
+  - Camera Framing tăng độ phủ silhouette lên **`45.8%–55.4%`** (BBox `81.7%–89.2%`), 0 cắt phòng; nền Studio Gradient; tắt mặc định Grid & Axes.
+- [x] **Quality Gate B (P1 Material, Architecture, Modeling & Editor Polish)**:
+  - Hiệu chỉnh vật liệu 8 file `.mtl` + vật liệu Procedural + Energy-Aware Fresnel + Anisotropic Filtering + Soft Floor Contact Grounding.
+  - Bổ sung Baseboards 4 tường, Cửa sổ trang trí tường Bắc (`showWindow`, tương thích ngược M8/RC1), sàn gỗ chống moiré `fwidth()`, nâng cấp `Procedural Desk` & `Procedural Bookshelf`.
+  - Tên thẻ C++ hết cắt chữ (giữ nguyên 14 `assetId`), thumbnail framing `1.16f`, Hierarchy `0.43`, sửa `Validation Mode`, thêm Passive 3D Orientation Indicator.
+- [x] **Intel UHD Performance Benchmark (300-frame Release)**: `30 obj + Shadows 1024`: `126.6 FPS` (`7.90 ms`); `MSAA 4× + Shadows 1024`: `99.5 FPS` (`10.05 ms`); **Complete Editor Frame**: **`112.0 FPS` (`8.93 ms` avg / `11.78 ms` p95)**.
+- [x] **Visual Evidence (`docs/evidence/rc2/`)**: Đủ `18/18` ảnh GPU thật `1280×720` (gồm `512/1024/2048`, `Iso`, `Room Settings`, `Close-up`) + `4` bảng so sánh RC1 vs RC2 + bảo lưu toàn bộ baseline RC1.
+- [x] **Portable Packaging (`v1.0.0-rc2`)**: `dist/RoomCraft3D-v1.0.0-rc2-win64.zip` kèm `SHA256SUMS.txt` (giữ nguyên gói `v1.0.0-rc1` để đối chiếu), đã kiểm chứng thực thi từ thư mục ngoài repo có dấu tiếng Việt (`PORTABLE_CLEAN_EXIT=0`, `OpenGL errors: NONE`).
 
-## B. Các Cổng Nghiệm thu Thủ công & Phê duyệt Người dùng (CHỜ XÁC NHẬN — `NOT VERIFIED`)
+## B. Các Cổng Nghiệm thu Độc lập & Thủ công (CHỜ XÁC NHẬN — `NOT VERIFIED`)
 
-Chạy trực tiếp từ gói portable (`dist\RoomCraft3D-v1.0.0-rc1-win64\RoomCraft3D.exe`) hoặc `build\mingw-x64-release\RoomCraft3D.exe`:
-
-- [ ] **Giao diện & Tiêu đề**: Kiểm tra thanh tiêu đề Windows hiển thị đúng `RoomCraft 3D — Modern Bedroom` (không vỡ `â€”`), có biểu tượng 3D trên cửa sổ/taskbar.
-- [ ] **UI Layout Persistence**: Kéo đổi độ rộng panel trái/phải, đổi sang List View hoặc UI Scale 125% → đóng ứng dụng → mở lại xác nhận bố cục được giữ nguyên; thử `View -> Reset Workspace Layout`.
-- [ ] **Đồ họa & Ánh sáng**: Thử bật/tắt `Directional Shadows`, đổi `512/1024/2048`, thử cả 4 preset ánh sáng (`Daylight`, `Warm Interior`, `Neutral Studio`, `Evening`), bật/tắt `Grid` và `MSAA 4x`.
-- [ ] **Tương tác M5–M6**: Orbit/Pan/Zoom, chọn bằng chuột (picking), kéo Move Gizmo 3 trục, xoay (`R`), phóng to/thu nhỏ (`S`), `Esc` hủy, mở `Tools -> Geometry Lab` & `Asset Inspector` rồi quay lại giữ nguyên cảnh.
-- [ ] **Va chạm M8**: Kiểm tra `Warning Only` (chồng đồ hiện hổ phách, vượt tường hiện đỏ san hô, viền cyan vẫn rõ, đồ trên thảm/đèn trên bàn không báo sai) và `Prevent Invalid` (chặn đặt mới lỗi, cho phép kéo vật lỗi sẵn về vùng hợp lệ).
-- [ ] **Lưu/Mở & Undo/Redo M8–M9**: Mở `examples\ModernBedroom.roomcraft`, sửa phòng/đồ → thấy dấu `*`, bấm `Ctrl+Z` về đúng bản lưu thấy mất dấu `*`; `Save As` tên tiếng Việt có khoảng trắng; thử mở file hỏng không mất cảnh; bấm nút `X` cửa sổ kiểm tra `Save / Discard / Cancel`.
-- [ ] **Phê duyệt phát hành `v1.0.0`**: Người dùng xác nhận đạt yêu cầu để gắn thẻ `git tag -a v1.0.0` và phát hành bản cuối.
+- [ ] **Independent QA lần 2**: Tái kiểm tra độc lập `BUG-01`..`BUG-08` và chấm điểm thẩm mỹ RC2 (mục tiêu `≥ 8.0/10`).
+- [ ] **Manual Desktop Interaction Acceptance**: Chạy trực tiếp `dist\RoomCraft3D-v1.0.0-rc2-win64\RoomCraft3D.exe` và kiểm chứng Orbit/Pan/Zoom, Picking, Move Gizmo, `R/S/Esc`, Win32 native Open/Save dialog, `WM_CLOSE` modal, Preferences persistence và UI Scale `100%/125%/150%`.
+- [ ] **Product Owner Final Approval**: Phê duyệt thẩm mỹ thực tế để gắn thẻ `v1.0.0` chính thức.

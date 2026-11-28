@@ -25,6 +25,8 @@ struct SceneRenderOptions {
     bool showAxes = true;
     bool showSelectedBoundingBox = true;
     bool showMoveGizmo = false;
+    bool useStudioBackground = false;
+    bool useToneMapping = true;
     systems::AxisConstraint activeGizmoAxis = systems::AxisConstraint::None;
     systems::AxisConstraint hoveredGizmoAxis = systems::AxisConstraint::None;
     LightingSettings lighting;
@@ -44,6 +46,7 @@ struct SceneRenderMetrics {
     std::uint32_t uniqueGpuIndices = 0;
     std::uint32_t uniqueGpuTriangles = 0;
     std::uint32_t roomDrawCalls = 0;
+    std::uint32_t architecturalDrawCalls = 0;
     std::uint32_t objectDrawCalls = 0;
     std::uint32_t submittedDrawCalls = 0;
     std::uint32_t submittedVertices = 0;
@@ -64,7 +67,7 @@ public:
     // Đồng bộ mesh CPU của Room lên GPU CHỈ KHI geometryRevision thay đổi (không upload mỗi frame)
     bool syncRoomGpuMeshes(const scene::Room& room);
 
-    // Vẽ pass độ sâu cho Directional Shadow Mapping (M9.4) trước khi bind FBO chính
+    // Vẽ pass độ sâu cho Directional Shadow Mapping (M9.4 / RC2.1) trước khi bind FBO chính
     glm::mat4 renderShadowPass(const scene::Scene& scene,
                                assets::AssetManager& assetManager,
                                Shader& shadowShader,
@@ -89,6 +92,8 @@ public:
                                    bool shadowMapReady = false);
 
     const SceneRenderMetrics& getLastMetrics() const { return m_lastMetrics; }
+    const ShadowMap& getShadowMap() const { return m_shadowMap; }
+    float getLastShadowTexelWorldSize() const { return m_lastShadowTexelSize; }
 
     // Giải phóng toàn bộ GPU mesh của Room trước khi OpenGL context bị hủy
     void destroyGpuResources();
@@ -96,6 +101,8 @@ public:
 private:
     static bool uploadMeshData(const geometry::MeshData& src, Mesh& dst);
     bool ensureGizmoMeshes();
+    bool ensureStudioBackground();
+    void renderStudioBackground();
     void renderMoveGizmo(const glm::vec3& origin,
                          bool locked,
                          const Camera& camera,
@@ -111,9 +118,19 @@ private:
     Mesh m_westWallMesh;
     Mesh m_ceilingMesh;
     Mesh m_roomGridMesh;
+    Mesh m_northBaseboardMesh;
+    Mesh m_southBaseboardMesh;
+    Mesh m_eastBaseboardMesh;
+    Mesh m_westBaseboardMesh;
+    Mesh m_windowFrameMesh;
+    Mesh m_windowGlassMesh;
     Mesh m_gizmoShaftMesh;
     Mesh m_gizmoConeMesh;
     ShadowMap m_shadowMap;
+    Shader m_studioBgShader;
+    unsigned int m_studioBgVao = 0;
+    bool m_studioBgAttempted = false;
+    float m_lastShadowTexelSize = 0.008f;
     std::uint64_t m_uploadedRoomRevision = 0;
     SceneRenderMetrics m_lastMetrics{};
 };

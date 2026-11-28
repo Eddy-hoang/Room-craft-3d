@@ -84,20 +84,25 @@ bool ThumbnailRenderer::renderAssetIntoTexture(const assets::GpuAsset& asset,
 
     const bool complete = (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
     if (complete) {
-        // Camera studio riêng biệt (góc nhìn 3/4 nhất quán, auto-fit đúng tỷ lệ thực của nội thất)
+        // Camera studio riêng biệt (góc nhìn 3/4 nhất quán, auto-fit sát đẹp cho từng món nội thất)
         Camera thumbCam;
         thumbCam.setProjectionMode(ProjectionMode::Perspective);
         thumbCam.setAspectRatio(1.0f);
         thumbCam.lookAt(glm::vec3(2.6f, 1.85f, 2.8f),
                         glm::vec3(0.0f, 0.45f, 0.0f),
                         glm::vec3(0.0f, 1.0f, 0.0f));
-        thumbCam.fitBoundingBox(asset.cpuData.localBounds, 1.32f);
+        thumbCam.fitBoundingBox(asset.cpuData.localBounds, 1.16f);
 
         // Dùng Renderer cục bộ để không ghi đè RenderStats của Room Editor
         Renderer thumbRenderer;
         const glm::vec4 neutralStudioBg(0.165f, 0.188f, 0.232f, 1.0f); // #2A303B
         thumbRenderer.beginFrame(size, size, neutralStudioBg, true);
         thumbRenderer.applyLighting(meshShader, thumbCam, LightingSettings::preset(LightingPreset::NeutralStudio));
+        meshShader.setInt("uShadowEnabled", 0);
+        meshShader.setInt("uToneMapEnabled", 1);
+        meshShader.setFloat("uExposure", 0.92f);
+        meshShader.setInt("uIsRoomSurface", 0);
+        meshShader.setInt("uContactCount", 0);
 
         for (const auto& sub : asset.subMeshes) {
             const glm::mat4 worldMat = sub.localTransform.getModelMatrix();
@@ -114,6 +119,8 @@ bool ThumbnailRenderer::renderAssetIntoTexture(const assets::GpuAsset& asset,
                                           &asset.cpuData.materials[sub.materialIndex]);
         }
 
+        meshShader.bind();
+        meshShader.setInt("uToneMapEnabled", 0);
         thumbRenderer.endFrame();
     }
 

@@ -226,10 +226,17 @@ void testPersistenceSafetyAndBackwardCompatibility(const assets::FurnitureCatalo
         }
         return text;
     };
-    // Remove trailing comma after pointAttenuation if shadow fields are stripped
+    // Strip optional M9/RC2 fields (shadows + showWindow) to verify 100% M8/RC1 backward compatibility
     std::string m8Compat = stripLineContaining(m9Json, "\"shadowBias\"");
     m8Compat = stripLineContaining(m8Compat, "\"shadowMapSize\"");
     m8Compat = stripLineContaining(m8Compat, "\"shadowsEnabled\"");
+    m8Compat = stripLineContaining(m8Compat, "\"showWindow\"");
+    if (const auto sgPos = m8Compat.find("\"showGrid\""); sgPos != std::string::npos) {
+        const auto lineEnd = m8Compat.find('\n', sgPos);
+        if (lineEnd != std::string::npos && lineEnd > 0 && m8Compat[lineEnd - 1] == ',') {
+            m8Compat.erase(lineEnd - 1, 1);
+        }
+    }
     if (const auto paPos = m8Compat.find("\"pointAttenuation\""); paPos != std::string::npos) {
         const auto lineEnd = m8Compat.find('\n', paPos);
         if (lineEnd != std::string::npos && lineEnd > 0 && m8Compat[lineEnd - 1] == ',') {
@@ -240,8 +247,9 @@ void testPersistenceSafetyAndBackwardCompatibility(const assets::FurnitureCatalo
     std::string compatErr;
     const bool compatOk = ProjectSerializer::fromJsonString(m8Compat, loadedCompat, &compatErr) &&
                           ProjectValidator::validate(loadedCompat, catalog, &compatErr);
-    check("M9-PERS-01", "Backward compatibility with M8 schema v1 files without M9 shadow fields",
-          compatOk && loadedCompat.lighting.shadowsEnabled && loadedCompat.lighting.shadowMapSize == 1024);
+    check("M9-PERS-01", "Backward compatibility with M8/RC1 schema v1 files without optional shadow/window fields",
+          compatOk && loadedCompat.lighting.shadowsEnabled && loadedCompat.lighting.shadowMapSize == 1024 &&
+          loadedCompat.room.showWindow);
 
     // 2. Invalid shadow map size & shadow bias rejected by ProjectValidator
     ProjectData badShadow = base;

@@ -5,6 +5,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <utility>
@@ -175,6 +176,31 @@ bool Texture::createFromMemory(int width,
     if (generateMipmaps) {
         glGenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
+        // Bật Anisotropic Filtering an toàn theo chuẩn OpenGL 3.3 Core nếu phần cứng hỗ trợ (RC2.4)
+        static const float kAnisoLevel = []() -> float {
+            GLint extCount = 0;
+            glGetIntegerv(GL_NUM_EXTENSIONS, &extCount);
+            bool supported = false;
+            for (GLint i = 0; i < extCount; ++i) {
+                const auto* ext = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+                if (ext != nullptr &&
+                    (std::string(ext) == "GL_EXT_texture_filter_anisotropic" ||
+                     std::string(ext) == "GL_ARB_texture_filter_anisotropic")) {
+                    supported = true;
+                    break;
+                }
+            }
+            if (!supported) return 1.0f;
+            GLfloat maxAniso = 1.0f;
+            constexpr GLenum kMaxTextureMaxAnisotropyExt = 0x84FF;
+            glGetFloatv(kMaxTextureMaxAnisotropyExt, &maxAniso);
+            return std::clamp(static_cast<float>(maxAniso), 1.0f, 8.0f);
+        }();
+        if (kAnisoLevel > 1.0f) {
+            constexpr GLenum kTextureMaxAnisotropyExt = 0x84FE;
+            glTexParameterf(GL_TEXTURE_2D, kTextureMaxAnisotropyExt, kAnisoLevel);
+        }
     } else {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     }

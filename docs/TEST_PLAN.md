@@ -117,3 +117,20 @@ Tổng số bộ CTest nâng lên **17 suites** (thêm `M8_CollisionUnitTests`, 
 | **M9-BENCH** | Auto-GPU | Benchmark Debug vs Release (`1280×720`) | Đo CPU / `GL_TIME_ELAPSED` GPU / Wall `avg/med/p95/p99` trên 30/100/250 obj, MSAA, Orbit, Gizmo, 240-frame stability |
 | **M9-PACK** | Isolated Runtime | Gói Portable ZIP (Unicode + khoảng trắng + PATH sạch) | Giải nén ngoài `D:\CG`, `PATH=System32`, xác minh 8 DLL Windows, SHA-256 & 14 assets |
 | **M9-MANUAL** | Manual-Visual | Nghiệm thu cuối trước thẻ `v1.0.0` | Checklist người dùng tại [`docs/RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) |
+
+
+---
+
+## Kiểm thử Bổ sung — M9 Visual Quality Refinement (`v1.0.0-rc2`)
+
+| Test ID | Bộ kiểm thử | Mô tả & Bất biến kiểm chứng |
+|---|---|---|
+| `RC2-P0-PRESET` | `M8_CollisionUnitTests` | Cả 3 phòng mẫu mặc định (`Modern Bedroom`, `Gaming Workspace`, `Minimalist Living Room`) phải đạt `0 collisions` & `0 outOfBounds` |
+| `RC2-P0-CAM` | `M5_InteractionUnitTests` | `CameraController::fitRoomView` căn đối xứng NDC, không cắt bất kỳ góc phòng nào trên 3 tỷ lệ `16:9`, `4:3`, `676:550` (Perspective & Isometric) |
+| `RC2-P0-DIM` | `M3_AssetUnitTests` | Sai số giữa `FurnitureCatalog::defaultDimensions` và bounding box OBJ thực tế `≤ 0.03 m` cho cả 8 tài sản Blender |
+| `RC2-P1-MAT` | `M3_AssetUnitTests` | Kiểm chứng phân tách `Ks/Ns` rõ ràng giữa thảm/đất/vải mờ/gỗ/đồng thau/nhôm trên 8 `.mtl` (không `Ks = 0.50` đồng loạt) |
+| `RC2-P1-ARCH` | `M4_SceneUnitTests` | Baseboards 4 tường & khung/kính cửa sổ hợp lệ và bảo toàn tuyệt đối `Room::getInteriorBounds()` |
+| `RC2-GPU-01` | `M9_IntegrationSmokeTest` | Xác nhận `ShadowMap` bật `GL_TEXTURE_COMPARE_MODE = GL_COMPARE_REF_TO_TEXTURE` & `GL_LINEAR` |
+| `RC2-GPU-02` | `M9_IntegrationSmokeTest` | Tỷ lệ pixel cháy sáng (`≥ 248`) trên `Warm Interior` phải `< 0.5%` (đo thực tế `0.000%`) |
+| `RC2-GPU-03` | `M9_IntegrationSmokeTest` | Sai khác trung bình giữa `Shadows Off` và `Shadows 1024` trên tường Tây trống `< 1.5` (đo thực tế `0.938`) |
+| `M9-PERS-01` (mở rộng) | `M9_ReliabilityUnitTests` | Tương thích ngược tệp M8/RC1 thiếu cả trường shadow và `room.showWindow` |

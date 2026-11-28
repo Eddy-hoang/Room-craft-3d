@@ -30,7 +30,7 @@ void FurnitureCatalog::registerDefaultEntries()
     // ==================== 6 MẪU NỘI THẤT PROCEDURAL (M2 - C++) ====================
     registerEntry({
         "procedural-desk",
-        "Procedural Desk",
+        "Desk",
         AssetCategory::Tables,
         AssetSourceType::Procedural,
         "",
@@ -46,7 +46,7 @@ void FurnitureCatalog::registerDefaultEntries()
 
     registerEntry({
         "procedural-chair",
-        "Procedural Chair",
+        "Dining Chair",
         AssetCategory::Seating,
         AssetSourceType::Procedural,
         "",
@@ -62,7 +62,7 @@ void FurnitureCatalog::registerDefaultEntries()
 
     registerEntry({
         "procedural-bookshelf",
-        "Procedural Bookshelf",
+        "Bookshelf",
         AssetCategory::Storage,
         AssetSourceType::Procedural,
         "",
@@ -78,7 +78,7 @@ void FurnitureCatalog::registerDefaultEntries()
 
     registerEntry({
         "procedural-desk-lamp",
-        "Procedural Desk Lamp",
+        "Desk Lamp",
         AssetCategory::Lighting,
         AssetSourceType::Procedural,
         "",
@@ -94,7 +94,7 @@ void FurnitureCatalog::registerDefaultEntries()
 
     registerEntry({
         "procedural-vase",
-        "Procedural Ceramic Vase",
+        "Ceramic Vase",
         AssetCategory::Decor,
         AssetSourceType::Procedural,
         "",
@@ -110,7 +110,7 @@ void FurnitureCatalog::registerDefaultEntries()
 
     registerEntry({
         "procedural-curved-chair",
-        "Procedural Curved Chair",
+        "Curved Chair",
         AssetCategory::Seating,
         AssetSourceType::Procedural,
         "",
@@ -133,7 +133,7 @@ void FurnitureCatalog::registerDefaultEntries()
         "assets/models/sofa/modern_sofa.obj",
         1.0f,
         "Blender OBJ export (Up Y, Forward -Z, meters)",
-        {2.10f, 0.85f, 0.92f},
+        {2.08f, 0.88f, 0.86f},
         "",
         "RoomCraft 3D (Blender bpy script)",
         "MIT",
@@ -149,7 +149,7 @@ void FurnitureCatalog::registerDefaultEntries()
         "assets/models/bed/modern_bed.obj",
         1.0f,
         "Blender OBJ export (Up Y, Forward -Z, meters)",
-        {1.75f, 1.05f, 2.15f},
+        {1.74f, 1.06f, 2.12f},
         "",
         "RoomCraft 3D (Blender bpy script)",
         "MIT",
@@ -165,7 +165,7 @@ void FurnitureCatalog::registerDefaultEntries()
         "assets/models/gaming_chair/gaming_chair.obj",
         1.0f,
         "Blender OBJ export (Up Y, Forward -Z, meters)",
-        {0.68f, 1.26f, 0.68f},
+        {0.70f, 1.24f, 0.65f},
         "",
         "RoomCraft 3D (Blender bpy script)",
         "MIT",
@@ -181,7 +181,7 @@ void FurnitureCatalog::registerDefaultEntries()
         "assets/models/computer/computer_setup.obj",
         1.0f,
         "Blender OBJ export (Up Y, Forward -Z, meters)",
-        {0.92f, 0.48f, 0.48f},
+        {0.91f, 0.49f, 0.50f},
         "",
         "RoomCraft 3D (Blender bpy script)",
         "MIT",
@@ -197,7 +197,7 @@ void FurnitureCatalog::registerDefaultEntries()
         "assets/models/plant/indoor_plant.obj",
         1.0f,
         "Blender OBJ export (Up Y, Forward -Z, meters)",
-        {0.58f, 1.15f, 0.58f},
+        {0.89f, 1.08f, 0.87f},
         "",
         "RoomCraft 3D (Blender bpy script)",
         "MIT",
@@ -213,7 +213,7 @@ void FurnitureCatalog::registerDefaultEntries()
         "assets/models/floor_lamp/floor_lamp.obj",
         1.0f,
         "Blender OBJ export (Up Y, Forward -Z, meters)",
-        {0.48f, 1.62f, 0.48f},
+        {0.46f, 1.66f, 0.48f},
         "",
         "RoomCraft 3D (Blender bpy script)",
         "MIT",
@@ -229,7 +229,7 @@ void FurnitureCatalog::registerDefaultEntries()
         "assets/models/wardrobe/wardrobe.obj",
         1.0f,
         "Blender OBJ export (Up Y, Forward -Z, meters)",
-        {1.40f, 2.05f, 0.60f},
+        {1.42f, 2.04f, 0.60f},
         "",
         "RoomCraft 3D (Blender bpy script)",
         "MIT",

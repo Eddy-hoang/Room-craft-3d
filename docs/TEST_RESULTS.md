@@ -121,3 +121,14 @@ Tại M5, **39 test case định nghĩa trong `TEST_PLAN.md`** (`TC-M5-01`..`TC-
 ## Final QA M7
 
 Bản M7 chuẩn đạt 14/14 CTest trong 11,81 s. Benchmark kiểm số mẫu thật 1/2/4 và ghi đủ chín lượt, p95 11,71–49,84 ms theo cấu hình và vòng đo. [CTest](evidence/m7/qa-ctest.txt) · [Benchmark](evidence/m7/qa-bench.txt) · [Ma trận truy vết](M7_DELIVERY.md#kiểm-toán-kỹ-thuật-cuối-m7)
+
+
+---
+
+## Kết quả Kiểm thử Thực tế — M9 Visual Quality Refinement (`v1.0.0-rc2`)
+
+- **Release (`mingw-x64-release`)**: `ctest --test-dir build/mingw-x64-release --output-on-failure` → **`19/19 PASS` (`5.95 s`, exit `0`, 0 errors, 0 project warnings)**.
+- **Debug (`mingw-x64-debug`)**: `ctest --test-dir build/mingw-x64-debug --output-on-failure` → **`19/19 PASS` (`6.62 s`, exit `0`, 0 errors, 0 project warnings)**.
+- **Kiểm chứng Portable ngoài repo có đường dẫn Unicode (`%TEMP%\RoomCraft3D_RC2_Phòng 3D\RoomCraft3D.exe --m9-smoke-test`)**: **`PASS` (`exit 0`, `OpenGL errors: NONE`, `WarmInterior Clipped=0.000%`, `UpperWestWall ShadowAcneMeanDiff=0.938`)**.
+- **Chụp bằng chứng GPU (`--m9-capture-evidence docs/evidence/rc2`)**: **`18/18 ảnh PASS` (`OpenGL errors: NONE`)** + 4 bảng so sánh RC1 vs RC2.
+- **Manual Desktop Acceptance & Independent QA lần 2**: `NOT VERIFIED / PENDING`.

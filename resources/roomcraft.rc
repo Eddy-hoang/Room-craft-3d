@@ -17,12 +17,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "RoomCraft 3D Project"
             VALUE "FileDescription", "RoomCraft 3D - Desktop 3D Interior Design and Room Planner"
-            VALUE "FileVersion", "1.0.0-rc1"
+            VALUE "FileVersion", "1.0.0-rc2"
             VALUE "InternalName", "RoomCraft3D"
             VALUE "LegalCopyright", "RoomCraft 3D Academic Computer Graphics Project"
             VALUE "OriginalFilename", "RoomCraft3D.exe"
             VALUE "ProductName", "RoomCraft 3D"
-            VALUE "ProductVersion", "1.0.0-rc1"
+            VALUE "ProductVersion", "1.0.0-rc2"
         END
     END
     BLOCK "VarFileInfo"

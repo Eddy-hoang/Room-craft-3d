@@ -1,10 +1,10 @@
-# Blender 5.2.3 LTS MTL File: 'minimalist_carpet.blend'
+# Blender 5.2.3 LTS MTL File: 'minimalist_carpet.blend' (RC2.4 Material Palette Calibrated)
 # www.blender.org
 
 newmtl ScandiRugWeave
-Ns 6.399997
+Ns 8.000000
 Ka 1.000000 1.000000 1.000000
-Ks 0.500000 0.500000 0.500000
+Ks 0.020000 0.020000 0.020000
 Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000

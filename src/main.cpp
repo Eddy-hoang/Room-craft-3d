@@ -55,10 +55,10 @@ int main(int argc, char** argv)
                 config.outputDir = std::filesystem::u8path(argv[++i]);
             }
         } else if (arg == "--version" || arg == "-v") {
-            std::cout << "RoomCraft 3D v1.0.0-rc1 (OpenGL 3.3 Core Profile)\n";
+            std::cout << "RoomCraft 3D v1.0.0-rc2 (OpenGL 3.3 Core Profile)\n";
             return 0;
         } else if (arg == "--help" || arg == "-h") {
-            std::cout << "RoomCraft 3D v1.0.0-rc1 — 3D Interior Design Studio\n"
+            std::cout << "RoomCraft 3D v1.0.0-rc2 — 3D Interior Design Studio\n"
                       << "Usage: RoomCraft3D [option]\n"
                       << "  (no option)              Launch RoomCraft 3D Interactive Editor\n"
                       << "  --version                Print application version\n"

@@ -111,5 +111,21 @@ int runRoomTests()
                           approx(room.getInteriorBounds().max.x, 3.5f);
     check(cutawayOk && manualOk, "TC-M4-08 Wall visibility modes & manual toggles preserve interior bounds", failures);
 
+    // RC2.5: Baseboards & Decorative Architectural Window geometry validate cleanly without altering interior bounds
+    {
+        roomcraft::scene::Room archRoom;
+        const bool archOk = archRoom.getNorthBaseboardMesh().validate() &&
+                            archRoom.getSouthBaseboardMesh().validate() &&
+                            archRoom.getEastBaseboardMesh().validate() &&
+                            archRoom.getWestBaseboardMesh().validate() &&
+                            archRoom.getWindowFrameMesh().validate() &&
+                            archRoom.getWindowGlassMesh().validate() &&
+                            approx(archRoom.getNorthBaseboardMesh().boundingBox.min.y, 0.0f) &&
+                            archRoom.getNorthBaseboardMesh().boundingBox.max.y <= 0.12f &&
+                            approx(archRoom.getInteriorBounds().min.x, -2.5f) &&
+                            approx(archRoom.getInteriorBounds().max.x,  2.5f);
+        check(archOk, "RC2-P1-ARCH Baseboards & decorative window geometry valid & preserve interior bounds", failures);
+    }
+
     return failures;
 }

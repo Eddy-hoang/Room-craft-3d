@@ -1,6 +1,7 @@
 #include "roomcraft/assets/FurnitureCatalog.hpp"
 #include "roomcraft/scene/Scene.hpp"
 #include "roomcraft/scene/ScenePresets.hpp"
+#include "roomcraft/systems/CollisionSystem.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -74,6 +75,37 @@ int runScenePresetTests()
           approx(scene.getRoom().getSettings().length, 7.0f) &&
           scene.getObjectCount() == 7 && vaseOnTable,
           "TC-M4-24 Minimalist Living Room preset valid (6x7x3m, 7 objects, vase on coffee table y=0.45)", failures);
+
+    // 3b. RC2 P0: All 3 built-in presets must have zero unintended overlaps or boundary violations
+    {
+        const auto boundsLookup = [&catalog](const std::string& assetId) -> roomcraft::math::BoundingBox {
+            const auto* e = catalog.findById(assetId);
+            if (e == nullptr) return {};
+            const glm::vec3 d = e->defaultDimensions;
+            roomcraft::math::BoundingBox b;
+            b.expand({-d.x * 0.5f, 0.0f, -d.z * 0.5f});
+            b.expand({ d.x * 0.5f, d.y,   d.z * 0.5f});
+            return b;
+        };
+        const roomcraft::scene::ScenePresetType allPresets[3] = {
+            roomcraft::scene::ScenePresetType::ModernBedroom,
+            roomcraft::scene::ScenePresetType::GamingWorkspace,
+            roomcraft::scene::ScenePresetType::MinimalistLivingRoom
+        };
+        bool allClean = true;
+        for (const auto p : allPresets) {
+            roomcraft::scene::Scene pScene;
+            if (!roomcraft::scene::ScenePresets::applyPreset(p, pScene, catalog, &err)) {
+                allClean = false;
+                continue;
+            }
+            const auto report = roomcraft::systems::CollisionSystem::validateScene(pScene, boundsLookup);
+            if (!report.collisions.empty() || !report.outOfBoundsObjectIds.empty()) {
+                allClean = false;
+            }
+        }
+        check(allClean, "RC2-P0 All 3 built-in presets pass CollisionSystem with 0 overlaps & 0 bounds violations", failures);
+    }
 
     // 4. Benchmark scene builder (10 / 30 / 100 objects)
     const bool b10 = roomcraft::scene::ScenePresets::buildBenchmarkScene(10, scene, catalog, &err) &&

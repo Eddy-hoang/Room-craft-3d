@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "roomcraft/assets/AssetManager.hpp"
 #include "roomcraft/core/InputManager.hpp"
@@ -31,16 +31,16 @@
 
 namespace roomcraft::editor {
 
-// Lớp RoomEditor là không gian làm việc mặc định của RoomCraft 3D (M6 Professional CAD UI/UX).
-// Kết hợp Furniture Library có thumbnail FBO thật, 3D Viewport + Move Gizmo, Scene Hierarchy có Context Menu,
-// Properties Inspector phân nhóm, Resizable Splitters, Notifications và Confirmation Dialogs.
+// Lá»›p RoomEditor lÃ  khÃ´ng gian lÃ m viá»‡c máº·c Ä‘á»‹nh cá»§a RoomCraft 3D (M6 Professional CAD UI/UX).
+// Káº¿t há»£p Furniture Library cÃ³ thumbnail FBO tháº­t, 3D Viewport + Move Gizmo, Scene Hierarchy cÃ³ Context Menu,
+// Properties Inspector phÃ¢n nhÃ³m, Resizable Splitters, Notifications vÃ  Confirmation Dialogs.
 class RoomEditor {
 public:
     RoomEditor() = default;
 
     void initialize(assets::AssetManager& assetManager, graphics::Camera& camera);
 
-    // Điều khiển góc nhìn Camera (luôn đồng bộ CameraController)
+    // Äiá»u khiá»ƒn gÃ³c nhÃ¬n Camera (luÃ´n Ä‘á»“ng bá»™ CameraController)
     void fitCameraToRoom(graphics::Camera& camera);
     void fitCameraToSelected(assets::AssetManager& assetManager, graphics::Camera& camera);
     void setIsometricCamera(graphics::Camera& camera);
@@ -48,7 +48,7 @@ public:
     void setFrontViewCamera(graphics::Camera& camera);
     void setPerspective3DCamera(graphics::Camera& camera);
 
-    // Các hành động gọi được trực tiếp từ Main Menu Bar (File / Edit / View / Room)
+    // CÃ¡c hÃ nh Ä‘á»™ng gá»i Ä‘Æ°á»£c trá»±c tiáº¿p tá»« Main Menu Bar (File / Edit / View / Room)
     void requestNewEmptyRoom(graphics::Camera& camera);
     void requestPresetChange(scene::ScenePresetType preset,
                              assets::AssetManager& assetManager,
@@ -67,7 +67,7 @@ public:
                                     assets::AssetManager& assetManager,
                                     const graphics::Camera& camera,
                                     std::string* outError = nullptr);
-    // Trả về true nếu an toàn đóng ngay; trả về false nếu đang dirty và đã mở hộp thoại Save/Discard/Cancel
+    // Tráº£ vá» true náº¿u an toÃ n Ä‘Ã³ng ngay; tráº£ vá» false náº¿u Ä‘ang dirty vÃ  Ä‘Ã£ má»Ÿ há»™p thoáº¡i Save/Discard/Cancel
     bool requestApplicationClose();
     bool shouldExitApplication() const { return m_shouldExitApplication; }
 
@@ -101,7 +101,7 @@ public:
         applyPresetImmediate(preset, assetManager, camera);
     }
 
-    // Cấu hình & truy vấn Collision Detection (M8)
+    // Cáº¥u hÃ¬nh & truy váº¥n Collision Detection (M8)
     void setPlacementValidationMode(systems::PlacementValidationMode mode);
     systems::PlacementValidationMode getPlacementValidationMode() const { return m_placementMode; }
     void setCollisionOptions(const systems::CollisionOptions& opts);
@@ -109,14 +109,14 @@ public:
     const systems::SceneCollisionReport& getCollisionReport() const { return m_collisionReport; }
     void refreshCollisionReport(assets::AssetManager& assetManager);
 
-    // Đóng gói & khôi phục dữ liệu dự án (M8.5 - M8.8)
+    // ÄÃ³ng gÃ³i & khÃ´i phá»¥c dá»¯ liá»‡u dá»± Ã¡n (M8.5 - M8.8)
     persistence::ProjectData buildProjectData(const graphics::Camera& camera) const;
     persistence::ProjectManager& getProjectManager() { return m_projectManager; }
     const persistence::ProjectManager& getProjectManager() const { return m_projectManager; }
     bool isDirty() const { return m_projectManager.isDirty(); }
     std::string getWindowTitleLabel() const;
 
-    // Render toàn bộ scene vào Framebuffer hiện tại (tùy chọn kèm Directional Shadow Map M9.4)
+    // Render toÃ n bá»™ scene vÃ o Framebuffer hiá»‡n táº¡i (tÃ¹y chá»n kÃ¨m Directional Shadow Map M9.4)
     void renderSceneToFramebuffer(assets::AssetManager& assetManager,
                                   graphics::Camera& camera,
                                   graphics::Framebuffer& framebuffer,
@@ -130,7 +130,7 @@ public:
                                   float faceContrast,
                                   graphics::Shader* shadowShader = nullptr);
 
-    // Render giao diện Room Editor + định tuyến tương tác M5/M6 (trả về true nếu đã tiêu thụ Esc)
+    // Render giao diá»‡n Room Editor + Ä‘á»‹nh tuyáº¿n tÆ°Æ¡ng tÃ¡c M5/M6 (tráº£ vá» true náº¿u Ä‘Ã£ tiÃªu thá»¥ Esc)
     bool renderUiAndProcessInput(int windowWidth,
                                  int windowHeight,
                                  float menuBarHeight,
@@ -146,7 +146,7 @@ public:
 
     void shutdownGpuResources();
 
-    // Truy cập trạng thái phục vụ Main Menu, Diagnostics & Unit/Integration Tests
+    // Truy cáº­p tráº¡ng thÃ¡i phá»¥c vá»¥ Main Menu, Diagnostics & Unit/Integration Tests
     scene::Scene& getScene() { return m_scene; }
     const scene::Scene& getScene() const { return m_scene; }
     systems::SelectionState& getSelection() { return m_selection; }
@@ -162,9 +162,9 @@ public:
     graphics::SceneRenderer& getSceneRenderer() { return m_sceneRenderer; }
     std::string getActiveSceneDisplayName() const;
 
-    // Cờ hiển thị dùng chung với menu View
-    bool showGrid = true;
-    bool showAxes = true;
+    // Cá» hiá»ƒn thá»‹ dÃ¹ng chung vá»›i menu View (táº¯t lÆ°á»›i & trá»¥c debug máº·c Ä‘á»‹nh Ä‘á»ƒ trÃ¬nh bÃ y sáº¡ch)
+    bool showGrid = false;
+    bool showAxes = false;
     bool wireframeMode = false;
     bool showSelectedBBox = true;
     bool showMoveGizmo = true;
@@ -243,7 +243,7 @@ private:
     scene::ScenePresetType m_activePreset = scene::ScenePresetType::ModernBedroom;
     bool m_isCustomEmptyRoom = false;
 
-    // Trạng thái Dự án, Lưu/Mở & Lịch sử Undo/Redo (M8)
+    // Tráº¡ng thÃ¡i Dá»± Ã¡n, LÆ°u/Má»Ÿ & Lá»‹ch sá»­ Undo/Redo (M8)
     persistence::ProjectManager m_projectManager;
     systems::CommandHistory m_commandHistory;
     systems::PlacementValidationMode m_placementMode = systems::PlacementValidationMode::WarningOnly;
@@ -251,7 +251,7 @@ private:
     systems::SceneCollisionReport m_collisionReport;
     bool m_collisionDirty = true;
 
-    // Hộp thoại xác nhận (Save / Discard / Cancel cho mọi hành động phá hủy khi dirty)
+    // Há»™p thoáº¡i xÃ¡c nháº­n (Save / Discard / Cancel cho má»i hÃ nh Ä‘á»™ng phÃ¡ há»§y khi dirty)
     PendingDirtyAction m_pendingDirtyAction = PendingDirtyAction::None;
     scene::ScenePresetType m_pendingPreset = scene::ScenePresetType::ModernBedroom;
     std::filesystem::path m_pendingOpenPath;
@@ -260,13 +260,13 @@ private:
     scene::ObjectId m_pendingDeleteObjectId = scene::kInvalidObjectId;
     bool m_shouldExitApplication = false;
 
-    // Theo dõi sửa thuộc tính Inspector để gộp thành 1 mục Undo khi nhả chuột
+    // Theo dÃµi sá»­a thuá»™c tÃ­nh Inspector Ä‘á»ƒ gá»™p thÃ nh 1 má»¥c Undo khi nháº£ chuá»™t
     bool m_inspectorTransformEditActive = false;
     systems::SceneHistorySnapshot m_inspectorBeforeEdit;
     scene::Transform m_inspectorLastValidTransform;
     scene::ObjectId m_inspectorLastValidObjectId = scene::kInvalidObjectId;
 
-    // Trạng thái Furniture Library & Inspector
+    // Tráº¡ng thÃ¡i Furniture Library & Inspector
     int m_librarySourceFilter = 0;   // 0=All, 1=Procedural, 2=Blender
     int m_libraryCategoryFilter = 0; // 0=All, 1..7
     bool m_libraryGridView = true;

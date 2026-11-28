@@ -2,8 +2,10 @@
 
 #include "roomcraft/graphics/Camera.hpp"
 #include "roomcraft/math/BoundingBox.hpp"
+#include "roomcraft/scene/Room.hpp"
 
 #include <glm/vec3.hpp>
+#include <vector>
 
 namespace roomcraft::systems {
 
@@ -41,6 +43,12 @@ public:
     void setTopViewPreset(const math::BoundingBox& roomBounds, graphics::Camera& camera);
     void setFrontViewPreset(const math::BoundingBox& roomBounds, graphics::Camera& camera);
     bool fitBoundingBox(const math::BoundingBox& bounds, graphics::Camera& camera, float paddingFactor = 1.25f);
+
+    // RC2.3: Căn khung chính xác theo đỉnh thực tế của các bề mặt phòng đang hiển thị (không cắt phòng, ~52-62% viewport)
+    bool fitRoomView(const scene::Room& room, graphics::Camera& camera, float marginFactor = 1.07f);
+    void setPerspectiveRoomPreset(const scene::Room& room, graphics::Camera& camera);
+    void setIsometricRoomPreset(const scene::Room& room, graphics::Camera& camera);
+
     void reset(const math::BoundingBox& roomBounds, graphics::Camera& camera);
 
     // Getters / Setters phục vụ unit tests & Inspector

@@ -1,0 +1,157 @@
+{
+  "format": "RoomCraft3D",
+  "schemaVersion": 1,
+  "projectName": "MinimalistLivingRoom",
+  "nextObjectId": "29",
+  "room": {
+    "width": 6.0,
+    "length": 7.0,
+    "height": 3.0,
+    "wallThickness": 0.150000006,
+    "floorThickness": 0.100000001,
+    "gridSpacing": 0.5,
+    "floorColor": [0.75, 0.620000005, 0.460000008, 1.0],
+    "wallColor": [0.870000005, 0.850000024, 0.810000002, 1.0],
+    "ceilingColor": [0.930000007, 0.930000007, 0.910000026, 1.0],
+    "wallVisibilityMode": "CutawayView",
+    "showNorthWall": true,
+    "showSouthWall": true,
+    "showEastWall": true,
+    "showWestWall": true,
+    "showCeiling": false,
+    "showGrid": true,
+    "showWindow": true
+  },
+  "objects": [
+    {
+      "objectId": "22",
+      "assetId": "blender-carpet",
+      "name": "Living Room Carpet",
+      "position": [0.100000001, 0.00300000003, -0.150000006],
+      "rotationDegrees": [0.0, 0.0, 0.0],
+      "scale": [1.45000005, 1.0, 1.45000005],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "23",
+      "assetId": "blender-modern-sofa",
+      "name": "Modern Sofa",
+      "position": [0.150000006, 0.0, -2.54999995],
+      "rotationDegrees": [0.0, 0.0, 0.0],
+      "scale": [1.04999995, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "24",
+      "assetId": "procedural-desk",
+      "name": "Coffee Table",
+      "position": [0.150000006, 0.0, -0.699999988],
+      "rotationDegrees": [0.0, 0.0, 0.0],
+      "scale": [0.899999976, 0.600000024, 0.819999993],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "25",
+      "assetId": "procedural-vase",
+      "name": "Ceramic Vase",
+      "position": [0.300000012, 0.449999988, -0.720000029],
+      "rotationDegrees": [0.0, 0.0, 0.0],
+      "scale": [1.10000002, 1.10000002, 1.10000002],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "26",
+      "assetId": "blender-floor-lamp",
+      "name": "Floor Lamp",
+      "position": [1.75, 0.0, -2.51999998],
+      "rotationDegrees": [0.0, -20.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "27",
+      "assetId": "procedural-bookshelf",
+      "name": "Living Bookshelf",
+      "position": [-2.75999999, 0.0, 0.150000006],
+      "rotationDegrees": [0.0, 90.0, 0.0],
+      "scale": [1.14999998, 1.0, 1.0],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    },
+    {
+      "objectId": "28",
+      "assetId": "blender-indoor-plant",
+      "name": "Living Room Plant",
+      "position": [-2.1500001, 0.0, -2.54999995],
+      "rotationDegrees": [0.0, 18.0, 0.0],
+      "scale": [1.04999995, 1.04999995, 1.04999995],
+      "visible": true,
+      "locked": false,
+      "materialOverrides": {
+        "shininessScale": 1.0
+      }
+    }
+  ],
+  "lighting": {
+    "preset": "Daylight",
+    "ambient": 0.300000012,
+    "sunEnabled": true,
+    "sunDirection": [-0.579999983, -0.949999988, -0.419999987],
+    "sunColor": [1.0, 0.959999979, 0.899999976],
+    "sunIntensity": 0.920000017,
+    "pointEnabled": false,
+    "pointPosition": [0.25, 2.4000001, 0.200000003],
+    "pointColor": [1.0, 0.779999971, 0.560000002],
+    "pointIntensity": 1.25,
+    "pointAttenuation": [1.0, 0.340000004, 0.239999995],
+    "shadowsEnabled": true,
+    "shadowMapSize": 1024,
+    "shadowBias": 0.00120000006
+  },
+  "renderSettings": {
+    "msaa": "4x",
+    "wireframe": false,
+    "showAxes": false,
+    "showSelectedBBox": true,
+    "showMoveGizmo": true
+  },
+  "camera": {
+    "projectionMode": "Perspective",
+    "position": [7.71694803, 5.05534506, 8.73990822],
+    "target": [-0.200865075, 0.277354628, 0.00301204831],
+    "up": [-0.25219804, 0.926796794, -0.2782875],
+    "fovDegrees": 45.0,
+    "nearPlane": 0.190832973,
+    "farPlane": 60.0,
+    "orthoHalfHeight": 3.5
+  },
+  "editorSettings": {
+    "showGrid": false,
+    "gridSnapEnabled": false,
+    "placementValidationMode": "WarningOnly",
+    "allowRugOverlap": true
+  }
+}

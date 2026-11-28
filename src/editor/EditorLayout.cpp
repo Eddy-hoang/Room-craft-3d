@@ -9,7 +9,7 @@ void EditorLayout::resetDefaults()
 {
     m_leftWidth = 272.0f;
     m_rightWidth = 316.0f;
-    m_hierarchyRatio = 0.36f;
+    m_hierarchyRatio = 0.43f;
     showLeftPanel = true;
     showRightPanel = true;
 }

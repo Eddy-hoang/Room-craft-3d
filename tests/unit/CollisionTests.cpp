@@ -281,6 +281,37 @@ int main()
         check("M8-PERF Collision benchmark (30 / 100 / 250 objects + incremental single-object check)", b30 && b100 && b250);
     }
 
+    // RC2.3 P0 Regression: Toàn bộ 3 phòng mẫu mặc định phải đạt 0 va chạm và 0 vượt biên (BUG-04)
+    {
+        assets::FurnitureCatalog catalog;
+        const auto boundsLookup = [&catalog](const std::string& id) -> math::BoundingBox {
+            const auto* e = catalog.findById(id);
+            if (!e) return {};
+            return makeLocalBox(e->defaultDimensions.x, e->defaultDimensions.y, e->defaultDimensions.z);
+        };
+        const scene::ScenePresetType presets[3] = {
+            scene::ScenePresetType::ModernBedroom,
+            scene::ScenePresetType::GamingWorkspace,
+            scene::ScenePresetType::MinimalistLivingRoom
+        };
+        bool allPresetsClean = true;
+        for (const auto p : presets) {
+            scene::Scene s;
+            std::string err;
+            const bool loaded = scene::ScenePresets::applyPreset(p, s, catalog, &err);
+            systems::CollisionOptions opts;
+            const auto rep = systems::CollisionSystem::validateScene(s, boundsLookup, opts);
+            if (!loaded || !rep.collisions.empty() || !rep.outOfBoundsObjectIds.empty()) {
+                allPresetsClean = false;
+                std::cout << "    [FAIL] Preset " << static_cast<int>(p)
+                          << " collisions=" << rep.collisions.size()
+                          << " outOfBounds=" << rep.outOfBoundsObjectIds.size() << std::endl;
+            }
+        }
+        check("RC2-P0-PRESET All 3 default room presets pass collision & room boundary validation (0 warnings)",
+              allPresetsClean);
+    }
+
     std::cout << "==============================================================================" << std::endl;
     if (g_failures == 0) {
         std::cout << "[M8-COLLISION-TESTS] ALL PASSED (0 failures)." << std::endl;

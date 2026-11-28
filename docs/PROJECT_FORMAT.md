@@ -120,3 +120,11 @@ Tài liệu này đặc tả chính thức định dạng tệp dự án **`.roo
 - Schema v1 không cho phép các bản ứng dụng cũ mở tệp schema cao hơn (`schemaVersion > 1`) để tránh mất dữ liệu khi lưu đè lại.
 - Các trường mở rộng M9.4 (`shadowsEnabled`, `shadowMapSize` ∈ `{512, 1024, 2048}`, `shadowBias` ∈ `[0.0, 0.05]`) là **tùy chọn và tương thích ngược hoàn toàn** với các tệp `.roomcraft` schema v1 được tạo từ M8.
 - Tùy chọn bố cục giao diện cá nhân (`leftPanelWidth`, `rightPanelWidth`, `hierarchyHeightRatio`, `uiScale`, `libraryGridView`, `recentProjects`) được lưu **tách biệt** trong `%APPDATA%\RoomCraft3D\preferences.json` (`PreferencesManager`) và không lẫn vào tệp dự án `.roomcraft`.
+
+
+---
+
+## Trường Tùy chọn Mở rộng tại `v1.0.0-rc2` (Schema `v1` — Tương thích Ngược 100%)
+
+- **`room.showWindow`** (`boolean`, tùy chọn, mặc định `true`): Bật/tắt cửa sổ kiến trúc trang trí trên tường Bắc (`-Z`).
+- **Tương thích ngược M8 / RC1**: Khi nạp tệp `.roomcraft` cũ không chứa `room.showWindow` (hoặc không chứa các trường shadow M9), `ProjectSerializer::fromJsonString()` tự động điền giá trị mặc định hợp lệ (`showWindow = true`, `shadowsEnabled = true`, `shadowMapSize = 1024`, `shadowBias = 0.0012`) mà không báo lỗi. Toàn bộ 14 `assetId` giữ nguyên không đổi.

@@ -77,3 +77,12 @@ Thay vì dùng ký tự emoji Unicode (thường hiển thị thành ô vuông v
 2. **Secondary Action** (`Duplicate`, `Reset Transform`, nút toolbar): Nền `kElevatedSurface` (`#292E38`), viền `kBorder`, nổi bật bằng `kPrimary` khi đang kích hoạt (ví dụ `Move`, `Snap`, `Grid`).
 3. **Destructive Action** (`Delete`, `Confirm Replace`): Viền/nhãn sắc `kDanger` (`#DF7878`) và luôn đi kèm hộp thoại xác nhận khi có nguy cơ mất dữ liệu hoặc xóa đối tượng.
 4. **Transform Inputs**: Ba ô độc lập màu đỏ (`X`), xanh lá (`Y`), xanh dương (`Z`), căn thẳng hàng, nhập số chính xác hoặc kéo giá trị trực tiếp.
+
+
+---
+
+## Tinh chỉnh Design System & Visual Identity — `v1.0.0-rc2`
+
+- **Visual DNA cảnh 3D**: *Scandinavian Modern × Stylized Real-time Rendering* với bảng màu Warm White `#DAD5CA`, Natural Oak `#B58D60`, Soft Taupe `#827A6E`, Slate Blue `#465A6E`, Sage Green `#70866B`, Charcoal `#25282E`.
+- **Trình bày Viewport 3D**: Nền Studio Radial Gradient trung tính (có dither 1/255 chống banding), tắt mặc định trục tọa độ tâm phòng & lưới sàn khi trình bày (giữ đầy đủ nút bật lại trên Viewport & menu `View`), bổ sung **Passive 3D Orientation Indicator** (44×44 px) ở góc trên-phải viewport.
+- **Furniture Library & Inspector**: Rút gọn tiền tố thừa `"Procedural "` trên 6 thẻ C++ (`Desk`, `Dining Chair`, `Bookshelf`, `Desk Lamp`, `Ceramic Vase`, `Curved Chair` — giữ nguyên badge `[C++]`, metadata đầy đủ trong tooltip và `assetId`), tối ưu framing thumbnail (`1.16f` + studio tone map), tăng tỷ lệ mặc định `Scene Hierarchy` lên `0.43`, căn lại độ rộng `Validation Mode` tránh cắt chữ.

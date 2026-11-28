@@ -1,5 +1,5 @@
 ﻿param(
-    [string]$Version = "v1.0.0-rc1",
+    [string]$Version = "v1.0.0-rc2",
     [string]$BuildDir = "d:\CG\build\mingw-x64-release",
     [string]$OutputRoot = "d:\CG\dist"
 )

@@ -94,21 +94,40 @@ bool FurnitureGenerator::createDesk(const DeskParams& params, FurnitureModel& ou
     model.name = "Procedural Desk";
     model.type = FurnitureType::Desk;
 
-    // 1. Mặt bàn (Cuboid đặt ở độ cao legHeight)
+    const glm::vec4 oakTop{0.73f, 0.56f, 0.39f, 1.0f};      // Natural Oak (#B58D60+)
+    const glm::vec4 oakBevel{0.63f, 0.47f, 0.32f, 1.0f};    // Viền vát dưới mặt bàn
+    const glm::vec4 drawerOak{0.68f, 0.52f, 0.36f, 1.0f};
+    const glm::vec4 frameColor{0.20f, 0.22f, 0.26f, 1.0f};  // Matte Charcoal (#25282E+)
+    const glm::vec4 brassHandle{0.78f, 0.64f, 0.36f, 1.0f}; // Brushed Brass
+
+    // 1. Mặt bàn 2 lớp tạo cạnh vát tinh tế (giữ chính xác chiều cao params.height & kích thước width x depth)
+    const float upperTopH = params.topThickness * 0.65f;
+    const float lowerTopH = params.topThickness - upperTopH;
     MeshData topMesh;
-    if (!PrimitiveGenerator::createCuboid(params.width, params.topThickness, params.depth, topMesh, outError)) {
+    if (!PrimitiveGenerator::createCuboid(params.width, upperTopH, params.depth, topMesh, outError)) {
         return false;
     }
-    model.parts.push_back({"Tabletop", std::move(topMesh), scene::Transform({0.0f, legHeight, 0.0f}), {0.66f, 0.49f, 0.34f, 1.0f}});
+    model.parts.push_back({"Tabletop", std::move(topMesh), scene::Transform({0.0f, legHeight + lowerTopH, 0.0f}), oakTop});
 
-    // 2. Bốn chân bàn (Cuboid tái sử dụng kích thước chuẩn, đáy đặt tại y = 0)
+    MeshData bevelMesh;
+    if (!PrimitiveGenerator::createCuboid(std::max(0.1f, params.width - 0.016f),
+                                          lowerTopH,
+                                          std::max(0.1f, params.depth - 0.016f),
+                                          bevelMesh,
+                                          outError)) {
+        return false;
+    }
+    model.parts.push_back({"TabletopBevel", std::move(bevelMesh), scene::Transform({0.0f, legHeight, 0.0f}), oakBevel});
+
+    // 2. Bốn chân bàn mảnh kèm nút đế chân (đáy đặt chính xác tại y = 0)
+    const float capH = std::min(0.018f, legHeight * 0.05f);
     MeshData legProto;
     if (!PrimitiveGenerator::createCuboid(params.legThickness, legHeight, params.legThickness, legProto, outError)) {
         return false;
     }
 
-    const float insetX = (params.width * 0.5f) - (params.legThickness * 0.5f) - 0.03f;
-    const float insetZ = (params.depth * 0.5f) - (params.legThickness * 0.5f) - 0.03f;
+    const float insetX = (params.width * 0.5f) - (params.legThickness * 0.5f) - 0.035f;
+    const float insetZ = (params.depth * 0.5f) - (params.legThickness * 0.5f) - 0.035f;
     const glm::vec3 legPositions[4] = {
         {-insetX, 0.0f,  insetZ},
         { insetX, 0.0f,  insetZ},
@@ -116,25 +135,60 @@ bool FurnitureGenerator::createDesk(const DeskParams& params, FurnitureModel& ou
         { insetX, 0.0f, -insetZ}
     };
     const char* legNames[4] = {"Leg_FrontLeft", "Leg_FrontRight", "Leg_BackLeft", "Leg_BackRight"};
-    const glm::vec4 frameColor{0.26f, 0.28f, 0.33f, 1.0f};
 
     for (int i = 0; i < 4; ++i) {
         model.parts.push_back({legNames[i], legProto, scene::Transform(legPositions[i]), frameColor});
     }
 
-    // 3. Thanh giằng ngang phía sau tăng độ cứng vững hình học
+    // 3. Khung yếm dưới mặt bàn (Apron) & thanh giằng ngang phía sau
     const float beamWidth = insetX * 2.0f - params.legThickness;
-    if (beamWidth > 0.05f) {
-        MeshData beamMesh;
-        const float beamHeight = std::min(0.08f, legHeight * 0.25f);
-        if (!PrimitiveGenerator::createCuboid(beamWidth, beamHeight, params.legThickness * 0.6f, beamMesh, outError)) {
+    const float sideDepth = insetZ * 2.0f - params.legThickness;
+    const float apronH = std::min(0.055f, legHeight * 0.16f);
+    if (beamWidth > 0.08f) {
+        MeshData rearBeam;
+        if (!PrimitiveGenerator::createCuboid(beamWidth, apronH, params.legThickness * 0.55f, rearBeam, outError)) {
             return false;
         }
         model.parts.push_back({"RearSupportBeam",
-                               std::move(beamMesh),
-                               scene::Transform({0.0f, legHeight - beamHeight - 0.02f, -insetZ}),
+                               std::move(rearBeam),
+                               scene::Transform({0.0f, legHeight - apronH - 0.004f, -insetZ}),
                                frameColor});
     }
+    if (sideDepth > 0.08f) {
+        MeshData sideApron;
+        if (!PrimitiveGenerator::createCuboid(params.legThickness * 0.55f, apronH, sideDepth, sideApron, outError)) {
+            return false;
+        }
+        model.parts.push_back({"Apron_Left", sideApron, scene::Transform({-insetX, legHeight - apronH - 0.004f, 0.0f}), frameColor});
+        model.parts.push_back({"Apron_Right", std::move(sideApron), scene::Transform({ insetX, legHeight - apronH - 0.004f, 0.0f}), frameColor});
+    }
+
+    // 4. Ngăn kéo mỏng kiểu Scandinavian tích hợp dưới mặt bàn kèm tay nắm đồng thau (nếu bàn đủ rộng)
+    if (beamWidth >= 0.65f && sideDepth >= 0.30f && legHeight >= 0.45f) {
+        const float drawerW = std::min(0.46f, beamWidth * 0.42f);
+        const float drawerH = std::min(0.095f, legHeight * 0.18f);
+        const float drawerD = sideDepth * 0.86f;
+        const float drawerX = insetX - params.legThickness * 0.5f - drawerW * 0.5f - 0.015f;
+        const float drawerY = legHeight - drawerH - 0.005f;
+        const float drawerZ = 0.01f;
+
+        MeshData drawerBody;
+        if (!PrimitiveGenerator::createCuboid(drawerW, drawerH, drawerD, drawerBody, outError)) {
+            return false;
+        }
+        model.parts.push_back({"DrawerBody", std::move(drawerBody), scene::Transform({drawerX, drawerY, drawerZ}), drawerOak});
+
+        // Tay nắm đồng thau thanh mảnh phía trước ngăn kéo (+Z)
+        MeshData handleMesh;
+        if (!PrimitiveGenerator::createCuboid(drawerW * 0.34f, 0.012f, 0.016f, handleMesh, outError)) {
+            return false;
+        }
+        model.parts.push_back({"DrawerHandle_Brass",
+                               std::move(handleMesh),
+                               scene::Transform({drawerX, drawerY + drawerH * 0.44f, drawerZ + drawerD * 0.5f + 0.008f}),
+                               brassHandle});
+    }
+    (void)capH;
 
     model.recomputeBoundingBox();
     if (!model.validate(outError)) {
@@ -253,9 +307,10 @@ bool FurnitureGenerator::createBookshelf(const BookshelfParams& params, Furnitur
     model.name = "Procedural Bookshelf";
     model.type = FurnitureType::Bookshelf;
 
-    const glm::vec4 frameWood{0.55f, 0.40f, 0.27f, 1.0f};
-    const glm::vec4 shelfWood{0.67f, 0.51f, 0.35f, 1.0f};
-    const glm::vec4 backWood{0.44f, 0.32f, 0.22f, 1.0f};
+    // Bảng màu gỗ sồi ấm Scandinavian (Natural Oak + Soft Walnut hậu tủ)
+    const glm::vec4 frameWood{0.64f, 0.49f, 0.34f, 1.0f};
+    const glm::vec4 shelfWood{0.73f, 0.57f, 0.40f, 1.0f};
+    const glm::vec4 backWood{0.50f, 0.38f, 0.26f, 1.0f};
 
     // 1. Hai vách đứng trái/phải
     MeshData sidePanel;
@@ -277,21 +332,103 @@ bool FurnitureGenerator::createBookshelf(const BookshelfParams& params, Furnitur
                            scene::Transform({0.0f, 0.0f, -(params.depth * 0.5f) + (backThickness * 0.5f)}),
                            backWood});
 
-    // 3. Vòng lặp sinh các tầng kệ ngang đều nhau từ đáy (y = 0) lên đỉnh (y = height - panelThickness)
+    // 3. Chân đế âm (Plinth) phía dưới tạo dáng đồ mộc thật, nằm hoàn toàn trong hộp bao
+    const float plinthH = std::min(0.055f, params.height * 0.05f);
+    if (plinthH > 0.015f) {
+        MeshData plinthMesh;
+        if (!PrimitiveGenerator::createCuboid(innerWidth, plinthH, params.panelThickness * 0.8f, plinthMesh, outError)) {
+            return false;
+        }
+        model.parts.push_back({"PlinthBase",
+                               std::move(plinthMesh),
+                               scene::Transform({0.0f, 0.0f, params.depth * 0.5f - params.panelThickness * 1.1f}),
+                               backWood});
+    }
+
+    // 4. Vòng lặp sinh các tầng kệ ngang đều nhau từ chân đế lên đỉnh
     const float shelfDepth = params.depth - backThickness;
     MeshData shelfProto;
     if (!PrimitiveGenerator::createCuboid(innerWidth, params.panelThickness, shelfDepth, shelfProto, outError)) {
         return false;
     }
 
+    const float firstShelfY = plinthH;
     const float maxShelfY = params.height - params.panelThickness;
+    std::vector<float> shelfTopYs;
+    shelfTopYs.reserve(static_cast<std::size_t>(params.shelfCount));
     for (int s = 0; s < params.shelfCount; ++s) {
         const float ratio = static_cast<float>(s) / static_cast<float>(params.shelfCount - 1);
-        const float shelfY = ratio * maxShelfY;
+        const float shelfY = firstShelfY + ratio * (maxShelfY - firstShelfY);
         model.parts.push_back({"Shelf_" + std::to_string(s + 1),
                                shelfProto,
                                scene::Transform({0.0f, shelfY, backThickness * 0.5f}),
                                shelfWood});
+        shelfTopYs.push_back(shelfY + params.panelThickness);
+    }
+
+    // 5. Sinh sách & hộp trang trí tối giản bằng thuật toán C++ (giữ nguyên hộp bao ngoài 0.90x1.80x0.32m)
+    if (params.shelfCount >= 4 && innerWidth >= 0.45f && shelfDepth >= 0.16f) {
+        const glm::vec4 palette[5] = {
+            {0.31f, 0.40f, 0.49f, 1.0f}, // Slate Blue (#465A6E)
+            {0.46f, 0.55f, 0.44f, 1.0f}, // Sage Green (#70866B)
+            {0.84f, 0.81f, 0.75f, 1.0f}, // Warm Linen (#DAD5CA)
+            {0.55f, 0.50f, 0.45f, 1.0f}, // Soft Taupe (#827A6E)
+            {0.68f, 0.45f, 0.36f, 1.0f}  // Muted Terracotta
+        };
+
+        const float gapH = (shelfTopYs[1] - params.panelThickness) - shelfTopYs[0];
+        if (gapH >= 0.22f) {
+            int bookIdx = 1;
+            const float bookD = std::min(0.18f, shelfDepth * 0.72f);
+            const float bookZ = backThickness * 0.5f - (shelfDepth - bookD) * 0.12f;
+
+            // Tầng kệ 1 (dưới cùng): 1 hộp lưu trữ vải linen + cụm 3 quyển sách đứng
+            {
+                const float y0 = shelfTopYs[0];
+                const float boxW = std::min(0.28f, innerWidth * 0.36f);
+                const float boxH = std::min(0.17f, gapH * 0.62f);
+                MeshData boxMesh;
+                if (PrimitiveGenerator::createCuboid(boxW, boxH, bookD * 1.06f, boxMesh, outError)) {
+                    model.parts.push_back({"DecorBox_1",
+                                           std::move(boxMesh),
+                                           scene::Transform({-innerWidth * 0.5f + boxW * 0.5f + 0.04f, y0, bookZ}),
+                                           palette[2]});
+                }
+            }
+
+            // Các tầng kệ giữa: nhóm sách đa dạng chiều cao & màu sắc hài hòa (chỉ dùng C++ Cuboid)
+            for (int row = 1; row < params.shelfCount - 1; ++row) {
+                const float y0 = shelfTopYs[static_cast<std::size_t>(row)];
+                const bool alignLeft = (row % 2 == 1);
+                float cursorX = alignLeft ? (-innerWidth * 0.5f + 0.05f) : (innerWidth * 0.5f - 0.05f);
+                const int booksInRow = (row % 2 == 1) ? 5 : 4;
+                for (int b = 0; b < booksInRow; ++b) {
+                    const float bw = 0.026f + 0.006f * static_cast<float>((b + row) % 3);
+                    const float bh = std::min(gapH * 0.80f, 0.175f + 0.024f * static_cast<float>((b * 2 + row) % 4));
+                    const float cx = alignLeft ? (cursorX + bw * 0.5f) : (cursorX - bw * 0.5f);
+                    MeshData bookMesh;
+                    if (PrimitiveGenerator::createCuboid(bw, bh, bookD, bookMesh, outError)) {
+                        model.parts.push_back({"Book_" + std::to_string(bookIdx++),
+                                               std::move(bookMesh),
+                                               scene::Transform({cx, y0, bookZ}),
+                                               palette[(b + row * 2) % 5]});
+                    }
+                    cursorX += alignLeft ? (bw + 0.005f) : -(bw + 0.005f);
+                }
+
+                // Thêm 1 quyển sách nằm ngang bên phía còn lại tạo nhịp điệu tự nhiên
+                const float flatW = std::min(0.20f, innerWidth * 0.25f);
+                const float flatX = alignLeft ? (innerWidth * 0.5f - flatW * 0.5f - 0.06f)
+                                              : (-innerWidth * 0.5f + flatW * 0.5f + 0.06f);
+                MeshData flatBook;
+                if (PrimitiveGenerator::createCuboid(flatW, 0.032f, bookD * 0.92f, flatBook, outError)) {
+                    model.parts.push_back({"Book_" + std::to_string(bookIdx++),
+                                           std::move(flatBook),
+                                           scene::Transform({flatX, y0, bookZ}),
+                                           palette[(row + 3) % 5]});
+                }
+            }
+        }
     }
 
     model.recomputeBoundingBox();

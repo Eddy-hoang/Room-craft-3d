@@ -1,0 +1,32 @@
+# Blender 5.2.3 LTS MTL File: 'gaming_chair.blend' (RC2.4 Material Palette Calibrated)
+# www.blender.org
+
+newmtl GamingChairAccentBlue
+Ns 52.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.300000 0.420000 0.580000
+Ks 0.140000 0.150000 0.170000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl GamingChairCharcoal
+Ns 44.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.120000 0.120000 0.130000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd chair_charcoal.png
+
+newmtl GamingChairMetal
+Ns 180.000000
+Ka 0.600000 0.600000 0.600000
+Kd 0.160000 0.180000 0.210000
+Ks 0.420000 0.440000 0.480000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3

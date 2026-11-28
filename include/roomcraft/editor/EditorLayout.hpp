@@ -64,7 +64,7 @@ public:
 private:
     float m_leftWidth = 272.0f;
     float m_rightWidth = 316.0f;
-    float m_hierarchyRatio = 0.36f;
+    float m_hierarchyRatio = 0.43f;
     float m_uiScale = 1.0f;
 };
 

@@ -175,3 +175,21 @@ Nếu hai cạnh gần song song ($\|\mathbf{u}_{A,i}\times \mathbf{u}_{B,j}\| \
    - Tính độ lệch góc chống shadow acne mà vẫn hạn chế peter-panning:
      $$\text{bias} = \max\big(b_0 (1 - \max(\mathbf{n}\cdot\mathbf{l}, 0)) \cdot 2.2,\; 0.45\,b_0\big)$$
    - Lấy trung bình 9 mẫu lân cận 3×3 quanh tọa độ texel (**Percentage-Closer Filtering**) để thu hệ số thấy sáng $s \in [0, 1]$, chỉ nhân lên thành phần ánh sáng hướng $\mathbf{L}_{sun}$ nhằm giữ nguyên ánh sáng môi trường (ambient + corner AO).
+
+
+---
+
+## Bổ sung Kỹ thuật Đồ họa — M9 Visual Quality Refinement (`v1.0.0-rc2`)
+
+### 1. Hardware Bilinear Shadow Comparison (`sampler2DShadow`) & Texel-Snapped Ortho Frustum (`RC2.1`)
+- Depth texture cấu hình `GL_TEXTURE_COMPARE_MODE = GL_COMPARE_REF_TO_TEXTURE`, `GL_TEXTURE_COMPARE_FUNC = GL_LEQUAL`, `GL_LINEAR`. Mỗi lần lấy mẫu `texture(uShadowMap, vec3(uv, refDepth))` thực hiện nội suy PCF 2×2 bằng phần cứng GPU.
+- Kết hợp lưới 5-tap xoay (tâm trọng số 2 + 4 góc chéo `±0.90 texel` → 20 mẫu thực tế), frustum chiếu vuông đẳng hướng có **texel-snapping** (chống rung bóng khi orbit/zoom), **Normal-Offset Bias** theo kích thước texel thế giới thực (`uShadowTexelSize * (0.40 + 1.10 * (1 - N·L))`), `glPolygonOffset(1.4, 1.8)` và `GL_FRONT` culling chỉ áp dụng riêng cho 4 tường hộp kín (giữ double-sided cho nội thất mỏng/hở).
+
+### 2. Đường ống Màu Tuyến tính & ACES Filmic Tone Mapping (`RC2.2`)
+- Mọi texture diffuse tải ở định dạng `GL_SRGB8` / `GL_SRGB8_ALPHA8`, màu vật liệu giải mã tuyến tính bằng `linearColor()`.
+- Phép chiếu sáng thực hiện trong không gian float tuyến tính không giới hạn (HDR in-shader), sau đó nén dải động bằng đường cong **ACES Filmic** (Narkowicz 2015, `exposure = 0.88`) trước khi thực hiện **đúng một lần** chuyển tuyến tính → sRGB (`displayColor()`). Dear ImGui, gizmo và khung dây debug không đi qua ACES.
+
+### 3. Energy-Aware Blinn-Phong + Schlick Fresnel & Bounded Soft Contact Grounding (`RC2.4`)
+- Thành phần phản xạ chuẩn hóa năng lượng `(Ns + 8) / (8π)` kết hợp Fresnel Schlick nhẹ `F = F0 + (F90 - F0)(1 - V·H)^5` giúp phân biệt rõ vải/thảm mờ, gỗ satin, gốm men và kim loại.
+- Bóng tiếp xúc trên sàn (`computeFloorContactShadow`) dùng khoảng cách có dấu `sdBox` theo OBB xoay XZ của tối đa 16 món nội thất đứng sàn (`minY ≤ 0.05 m`, `height ≥ 0.14 m`), chỉ tác động lên thành phần ambient (`clamp ≥ 0.62`) để không tối đúp với Directional Shadow Map và không tạo bóng giả cho vật đặt trên bàn.
+- *Giới hạn*: Cả `computeRoomCornerAO` (theo `uVisibleWalls` và `uIsRoomSurface`) lẫn `computeFloorContactShadow` đều là xấp xỉ phân tích nhẹ thay cho Global Illumination vật lý.

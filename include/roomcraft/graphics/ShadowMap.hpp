@@ -30,7 +30,19 @@ public:
     static void unbind();
     void bindDepthTexture(unsigned int textureUnit) const;
 
-    // Tính ma trận biến đổi Light Space (Orthographic View * Projection) bao khít hộp bao căn phòng
+    // Thông tin frustum trực giao dùng cho normal-offset bias chính xác theo kích thước texel thế giới
+    struct FrustumInfo {
+        glm::mat4 lightSpaceMatrix{1.0f};
+        float texelWorldSize = 0.01f;
+        float depthSpan = 10.0f;
+    };
+
+    // Tính ma trận biến đổi Light Space (Orthographic View * Projection) có texel-snapping ổn định
+    static FrustumInfo computeDirectionalLightFrustum(const glm::vec3& lightDirection,
+                                                      const math::BoundingBox& sceneBounds,
+                                                      int shadowResolution = 1024);
+
+    // Giữ nguyên API cũ cho tương thích ngược
     static glm::mat4 computeDirectionalLightSpaceMatrix(const glm::vec3& lightDirection,
                                                         const math::BoundingBox& sceneBounds);
 

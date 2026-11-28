@@ -1817,7 +1817,7 @@ void Application::renderProductDialogs()
     }
     if (ImGui::BeginPopupModal("System Information", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         const auto& gpu = m_window.getGpuInfo();
-        ImGui::Text("Application : RoomCraft 3D v1.0.0-rc1");
+        ImGui::Text("Application : RoomCraft 3D v1.0.0-rc2");
         ImGui::Text("Graphics API: OpenGL %d.%d %s", gpu.majorVersion, gpu.minorVersion, gpu.profile.c_str());
         ImGui::Text("GPU         : %s (%s)", gpu.renderer.c_str(), gpu.vendor.c_str());
         ImGui::Text("GLSL        : %s", gpu.glslVersion.c_str());
@@ -1833,7 +1833,7 @@ void Application::renderProductDialogs()
         m_showAboutModal = false;
     }
     if (ImGui::BeginPopupModal("About RoomCraft 3D", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::TextColored(editor::tokens::kPrimary, "RoomCraft 3D — v1.0.0-rc1 (Release Candidate)");
+        ImGui::TextColored(editor::tokens::kPrimary, "RoomCraft 3D — v1.0.0-rc2 (Release Candidate)");
         ImGui::TextUnformatted("Desktop 3D Interior Design & Room Planner");
         ImGui::Separator();
         ImGui::TextWrapped("Built with C++17, Modern OpenGL 3.3 Core Profile, FreeGLUT, GLAD, GLM, Dear ImGui, Assimp, stb_image, and Hybrid Modeling (Procedural C++ + Blender Assets).");
@@ -3695,8 +3695,86 @@ bool Application::runM9IntegrationSuiteOnce()
     }
     report("M9-GPU-04", "Directional Shadow Mapping compatible with MSAA 4x multisampled framebuffer", shadowWithMsaaOk);
 
+    // 3. RC2 GPU Regression Invariants: Shadow Compare Mode, Overexposure Reduction & Wall Acne Freedom
+    bool shadowCompareModeOk = false;
+    bool overexposureCleanOk = false;
+    bool wallAcneCleanOk = false;
+    {
+        const auto& sm = m_roomEditor.getSceneRenderer().getShadowMap();
+        if (sm.isValid()) {
+            glBindTexture(GL_TEXTURE_2D, sm.getDepthTextureId());
+            GLint cmpMode = 0, minFilt = 0;
+            glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, &cmpMode);
+            glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &minFilt);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            shadowCompareModeOk = (cmpMode == GL_COMPARE_REF_TO_TEXTURE) && (minFilt == GL_LINEAR);
+        }
+
+        graphics::Framebuffer fbo;
+        if (fbo.create(512, 512)) {
+            m_roomEditor.initialize(m_assetManager, m_camera);
+            m_roomEditor.showGrid = false;
+            m_roomEditor.showAxes = false;
+            m_roomEditor.showSelectedBBox = false;
+            m_roomEditor.showMoveGizmo = false;
+            m_camera.setAspectRatio(1.0f);
+            m_roomEditor.setPerspective3DCamera(m_camera);
+
+            auto readFrame = [&](graphics::LightingPreset preset, bool shadowsOn) -> std::vector<unsigned char> {
+                m_roomEditor.setLightingPreset(preset);
+                m_roomEditor.getLightingSettings().shadowsEnabled = shadowsOn;
+                m_roomEditor.getLightingSettings().shadowMapSize = 1024;
+                m_roomEditor.renderSceneToFramebuffer(m_assetManager, m_camera, fbo, m_renderer,
+                                                      m_meshShader, m_gridShader,
+                                                      m_axisXMesh, m_axisYMesh, m_axisZMesh,
+                                                      m_clearColor, 0.35f, &m_shadowShader);
+                std::vector<unsigned char> px(512u * 512u * 4u, 0);
+                fbo.bind();
+                glReadPixels(0, 0, 512, 512, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+                graphics::Framebuffer::unbind();
+                return px;
+            };
+
+            // Warm Interior: kiểm tra cháy sáng (< 0.5% pixel bão hòa >= 248)
+            const auto warmPx = readFrame(graphics::LightingPreset::WarmInterior, true);
+            std::size_t clipped = 0;
+            for (std::size_t i = 0; i < warmPx.size(); i += 4) {
+                if (warmPx[i] >= 248 || warmPx[i + 1] >= 248 || warmPx[i + 2] >= 248) {
+                    ++clipped;
+                }
+            }
+            const double clipPct = 100.0 * static_cast<double>(clipped) / (512.0 * 512.0);
+            overexposureCleanOk = (clipPct < 0.5);
+
+            // Kiểm tra không có wall shadow acne trên tường trống phía trên trong Daylight (Off vs On)
+            const auto dayOff = readFrame(graphics::LightingPreset::Daylight, false);
+            const auto dayOn  = readFrame(graphics::LightingPreset::Daylight, true);
+            // Vùng tường Tây phía trên (x in [80..150], y in [290..350] trong gốc OpenGL dưới-trái)
+            double wallDiffSum = 0.0;
+            std::size_t wallCount = 0;
+            for (int y = 295; y < 345; ++y) {
+                for (int x = 85; x < 145; ++x) {
+                    const std::size_t idx = (static_cast<std::size_t>(y) * 512u + static_cast<std::size_t>(x)) * 4u;
+                    const double dR = std::fabs(static_cast<double>(dayOff[idx]) - static_cast<double>(dayOn[idx]));
+                    const double dG = std::fabs(static_cast<double>(dayOff[idx + 1]) - static_cast<double>(dayOn[idx + 1]));
+                    const double dB = std::fabs(static_cast<double>(dayOff[idx + 2]) - static_cast<double>(dayOn[idx + 2]));
+                    wallDiffSum += (dR + dG + dB) / 3.0;
+                    ++wallCount;
+                }
+            }
+            const double meanWallDiff = (wallCount > 0) ? (wallDiffSum / static_cast<double>(wallCount)) : 99.0;
+            wallAcneCleanOk = (meanWallDiff < 1.5);
+            std::cout << "[RC2-TEST] WarmInterior Clipped=" << std::fixed << std::setprecision(3) << clipPct
+                      << "% | UpperWestWall ShadowAcneMeanDiff=" << meanWallDiff << std::endl;
+            fbo.destroy();
+        }
+    }
+    report("RC2-GPU-01", "Shadow depth texture configured with GL_COMPARE_REF_TO_TEXTURE + GL_LINEAR", shadowCompareModeOk);
+    report("RC2-GPU-02", "ACES tone mapping & lighting calibration keep WarmInterior clipped pixels < 0.5%", overexposureCleanOk);
+    report("RC2-GPU-03", "Unobstructed upper wall exhibits zero significant shadow acne (mean diff < 1.5)", wallAcneCleanOk);
+
     drainAndCheckOpenGlErrors();
-    report("M9-GPU-05", "Zero unexpected OpenGL errors across M9 GPU suite", !m_glErrorDetected);
+    report("M9-GPU-05", "Zero unexpected OpenGL errors across M9/RC2 GPU suite", !m_glErrorDetected);
     return allPassed;
 }
 
@@ -3713,7 +3791,7 @@ bool Application::runM9BenchmarkSuiteOnce()
     std::cout << "GPU Renderer : " << gpu.renderer << " (" << gpu.vendor << ")" << std::endl;
     std::cout << "OpenGL       : " << gpu.glVersion << " | " << gpu.profile << std::endl;
     std::cout << "Viewport     : 1280 x 720 (off-screen FBO; no swapBuffers VSync stall during off-screen measurement)" << std::endl;
-    std::cout << "Methodology  : 10 warm-up frames + 50 measured frames; CPU submit vs GL_TIME_ELAPSED GPU vs Wall-Clock" << std::endl;
+    std::cout << "Methodology  : 8-15 warm-up frames + 60-300 measured frames (300 frames on 30-obj defaults); CPU submit vs GL_TIME_ELAPSED GPU vs Wall-Clock" << std::endl;
 
     graphics::Framebuffer fbo;
     if (!fbo.create(1280, 720)) {
@@ -3854,15 +3932,46 @@ bool Application::runM9BenchmarkSuiteOnce()
                   << " | Coll=" << std::setprecision(3) << collisionMs << "ms" << std::endl;
     };
 
-    runRenderScenario("30 obj | MSAA Off | Shadows Off",  30, 0, false, 1024, false, false, 10, 50);
-    runRenderScenario("30 obj | MSAA Off | Shadows 1024", 30, 0, true,  1024, false, false, 10, 50);
-    runRenderScenario("30 obj | MSAA 2x  | Shadows 1024", 30, 1, true,  1024, false, false, 10, 50);
-    runRenderScenario("30 obj | MSAA 4x  | Shadows 1024", 30, 2, true,  1024, false, false, 10, 50);
+    runRenderScenario("30 obj | MSAA Off | Shadows Off",  30, 0, false, 1024, false, false, 10, 60);
+    runRenderScenario("30 obj | MSAA Off | Shadows 512",  30, 0, true,  512,  false, false, 10, 60);
+    runRenderScenario("30 obj | MSAA Off | Shadows 1024", 30, 0, true,  1024, false, false, 15, 300);
+    runRenderScenario("30 obj | MSAA Off | Shadows 2048", 30, 0, true,  2048, false, false, 10, 60);
+    runRenderScenario("30 obj | MSAA 2x  | Shadows 1024", 30, 1, true,  1024, false, false, 10, 60);
+    runRenderScenario("30 obj | MSAA 4x  | Shadows 1024", 30, 2, true,  1024, false, false, 15, 300);
     runRenderScenario("100 obj | MSAA Off | Shadows 1024",100, 0, true, 1024, false, false, 10, 40);
     runRenderScenario("250 obj | MSAA Off | Shadows 1024",250, 0, true, 1024, false, false, 8,  25);
-    runRenderScenario("30 obj | Camera Orbit/Zoom",       30, 0, true,  1024, true,  false, 8,  40);
-    runRenderScenario("30 obj | Interactive Gizmo Drag",  30, 0, true,  1024, false, true,  8,  40);
-    runRenderScenario("30 obj | Stability (240 frames)",  30, 0, true,  1024, true,  false, 10, 240);
+    runRenderScenario("30 obj | Camera Orbit/Zoom",       30, 0, true,  1024, true,  false, 8,  60);
+    runRenderScenario("30 obj | Interactive Gizmo Drag",  30, 0, true,  1024, false, true,  8,  60);
+
+    // Complete Editor Frame benchmark (full Dear ImGui UI + 3D Viewport render, 1280x720, 100 frames)
+    {
+        populateNObjects(30);
+        m_roomEditor.setMsaaSampleIndex(2); // 4x MSAA + Shadows 1024
+        m_roomEditor.getLightingSettings().shadowsEnabled = true;
+        m_roomEditor.getLightingSettings().shadowMapSize = 1024;
+        graphics::Framebuffer editorFbo;
+        if (editorFbo.create(1280, 720)) {
+            for (int i = 0; i < 10; ++i) {
+                renderInteractiveFrame(&editorFbo);
+                glFinish();
+            }
+            std::vector<double> edWall;
+            edWall.reserve(100);
+            for (int i = 0; i < 100; ++i) {
+                glFinish();
+                const auto t0 = std::chrono::steady_clock::now();
+                renderInteractiveFrame(&editorFbo);
+                glFinish();
+                edWall.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+            }
+            const double avg = std::accumulate(edWall.begin(), edWall.end(), 0.0) / static_cast<double>(edWall.size());
+            const double p95 = percentile(edWall, 0.95);
+            std::cout << "[BENCH] Complete Editor Frame (30 obj, ImGui+4x+1024) | Wall(avg/p95)="
+                      << std::fixed << std::setprecision(2) << avg << "/" << p95 << "ms"
+                      << " | FPS=" << std::setprecision(1) << (avg > 1e-6 ? 1000.0 / avg : 0.0) << std::endl;
+            editorFbo.destroy();
+        }
+    }
 
     // Asset Reload latency
     {
@@ -4010,11 +4119,44 @@ bool Application::runM9CaptureEvidenceOnce()
     m_roomEditor.setLightingPreset(graphics::LightingPreset::Evening);
     ok &= captureFullWindowPng("07_lighting_evening.png");
 
-    // 12. So sánh Shadows Off trên Modern Bedroom (Daylight)
+    // 12-15. So sánh Shadows Off / 512 / 1024 / 2048 trên Modern Bedroom (Daylight & Evening)
     m_roomEditor.setLightingPreset(graphics::LightingPreset::Daylight);
     m_roomEditor.getLightingSettings().shadowsEnabled = false;
     ok &= captureFullWindowPng("12_shadows_off_comparison.png");
+
     m_roomEditor.getLightingSettings().shadowsEnabled = true;
+    m_roomEditor.getLightingSettings().shadowMapSize = 512;
+    ok &= captureFullWindowPng("13_shadow_512.png");
+
+    m_roomEditor.getLightingSettings().shadowMapSize = 1024;
+    ok &= captureFullWindowPng("14_shadow_1024.png");
+
+    m_roomEditor.getLightingSettings().shadowMapSize = 2048;
+    ok &= captureFullWindowPng("15_shadow_2048.png");
+    m_roomEditor.getLightingSettings().shadowMapSize = 1024;
+
+    // 16. Isometric View (Orthographic) trên Modern Bedroom
+    m_roomEditor.setIsometricCamera(m_camera);
+    ok &= captureFullWindowPng("16_isometric_view.png");
+
+    // 17. Room Settings Panel + Grid On trên Modern Bedroom (Perspective)
+    m_roomEditor.setPerspective3DCamera(m_camera);
+    m_roomEditor.showGrid = true;
+    m_roomEditor.focusRoomSettingsTab();
+    ok &= captureFullWindowPng("17_room_settings_grid_on.png");
+    m_roomEditor.showGrid = false;
+
+    // 18. Cận cảnh Procedural Desk + Bookshelf + Materials (Gaming Workspace)
+    m_roomEditor.applyPresetImmediateForAutomation(scene::ScenePresetType::GamingWorkspace, m_assetManager, m_camera);
+    m_roomEditor.setLightingPreset(graphics::LightingPreset::Daylight);
+    m_roomEditor.getLightingSettings().shadowsEnabled = true;
+    m_roomEditor.getLightingSettings().shadowMapSize = 1024;
+    m_roomEditor.showGrid = false;
+    m_roomEditor.getSelection().clearSelection();
+    m_roomEditor.getNotifications().clear();
+    m_camera.lookAt({0.85f, 1.38f, 1.45f}, {-0.65f, 0.88f, -0.80f}, {0.0f, 1.0f, 0.0f});
+    m_roomEditor.getCameraController().syncFromCamera(m_camera);
+    ok &= captureFullWindowPng("18_desk_bookshelf_closeup.png");
 
     // 8. Geometry Lab (Procedural Curved Chair Bézier)
     switchWorkspace(InteractiveWorkspace::GeometryLab);

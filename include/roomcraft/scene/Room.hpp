@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace roomcraft::scene {
 
@@ -34,6 +35,12 @@ public:
     // Phạm vi tổng thể bao gồm cả độ dày tường và sàn (dùng cho Camera Fit Room)
     math::BoundingBox getExteriorBounds() const;
 
+    // Phạm vi chỉ gồm các bề mặt thực tế đang hiển thị (bỏ tường ẩn & khoảng không Cutaway)
+    math::BoundingBox getVisibleBounds() const;
+
+    // Tập hợp các đỉnh góc 3D của các bề mặt phòng đang hiển thị để căn khung camera chính xác
+    std::vector<glm::vec3> collectVisibleCornerPoints() const;
+
     const geometry::MeshData& getFloorMesh() const { return m_floorMesh; }
     const geometry::MeshData& getNorthWallMesh() const { return m_northWallMesh; }
     const geometry::MeshData& getSouthWallMesh() const { return m_southWallMesh; }
@@ -41,6 +48,14 @@ public:
     const geometry::MeshData& getWestWallMesh() const { return m_westWallMesh; }
     const geometry::MeshData& getCeilingMesh() const { return m_ceilingMesh; }
     const geometry::MeshData& getGridMesh() const { return m_gridMesh; }
+
+    // Chi tiết kiến trúc bổ sung (RC2.5): len chân tường theo từng tường & cửa sổ trang trí tường Bắc
+    const geometry::MeshData& getNorthBaseboardMesh() const { return m_northBaseboardMesh; }
+    const geometry::MeshData& getSouthBaseboardMesh() const { return m_southBaseboardMesh; }
+    const geometry::MeshData& getEastBaseboardMesh() const { return m_eastBaseboardMesh; }
+    const geometry::MeshData& getWestBaseboardMesh() const { return m_westBaseboardMesh; }
+    const geometry::MeshData& getWindowFrameMesh() const { return m_windowFrameMesh; }
+    const geometry::MeshData& getWindowGlassMesh() const { return m_windowGlassMesh; }
 
     // Số phiên bản hình học tăng mỗi khi mesh CPU thay đổi để SceneRenderer đồng bộ lên GPU đúng lúc
     std::uint64_t getGeometryRevision() const { return m_geometryRevision; }
@@ -67,6 +82,12 @@ private:
     geometry::MeshData m_westWallMesh;
     geometry::MeshData m_ceilingMesh;
     geometry::MeshData m_gridMesh;
+    geometry::MeshData m_northBaseboardMesh;
+    geometry::MeshData m_southBaseboardMesh;
+    geometry::MeshData m_eastBaseboardMesh;
+    geometry::MeshData m_westBaseboardMesh;
+    geometry::MeshData m_windowFrameMesh;
+    geometry::MeshData m_windowGlassMesh;
     std::uint64_t m_geometryRevision = 0;
 };
 

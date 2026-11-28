@@ -292,6 +292,7 @@ bool ProjectSerializer::toJsonString(const ProjectData& data,
     room.set("showWestWall", data.room.showWestWall);
     room.set("showCeiling", data.room.showCeiling);
     room.set("showGrid", data.room.showGrid);
+    room.set("showWindow", data.room.showWindow);
     root.set("room", std::move(room));
 
     // 2. Scene Objects (IDs dưới dạng chuỗi thập phân lossless)
@@ -437,6 +438,14 @@ bool ProjectSerializer::fromJsonString(const std::string& jsonText,
     if (!wallModeFromJsonString(wallModeStr, parsed.room.wallVisibilityMode)) {
         if (outError != nullptr) *outError = "Invalid wallVisibilityMode: '" + wallModeStr + "'.";
         return false;
+    }
+    // Trường tùy chọn RC2.5: tương thích ngược hoàn toàn với tệp .roomcraft từ M8/RC1
+    if (const auto* winVal = roomObj->find("showWindow")) {
+        if (!winVal->isBool()) {
+            if (outError != nullptr) *outError = "Room section error: invalid 'showWindow'.";
+            return false;
+        }
+        parsed.room.showWindow = winVal->asBool();
     }
 
     // 2. Objects

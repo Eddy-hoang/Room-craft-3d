@@ -73,6 +73,8 @@ int runAssetCatalogTests()
     {
         const auto blenderEntries = catalog.filter(roomcraft::assets::AssetSourceType::Imported, std::nullopt, "");
         bool mappedAluminum = false;
+        bool materialSpecificityOk = true;
+        int checkedDistinctMaterials = 0;
         bool allBlenderLoaded = (blenderEntries.size() == 8);
         const std::filesystem::path rootDir(ROOMCRAFT_SOURCE_DIR);
 
@@ -99,11 +101,32 @@ int runAssetCatalogTests()
                 if (mat.name == "ComputerAluminum") {
                     mappedAluminum = std::fabs(mat.shininess - 490.0f) < 0.01f &&
                                      std::fabs(mat.specularColor.r - 0.50f) < 0.001f;
+                } else if (mat.name == "ScandiRugWeave" || mat.name == "PlantSoilDark") {
+                    materialSpecificityOk &= (mat.specularColor.r <= 0.05f && mat.shininess <= 16.0f);
+                    ++checkedDistinctMaterials;
+                } else if (mat.name == "BedDuvetLinen" || mat.name == "SofaFabricBeige" || mat.name == "FloorLampLinenShade") {
+                    materialSpecificityOk &= (mat.specularColor.r <= 0.06f && mat.shininess <= 24.0f);
+                    ++checkedDistinctMaterials;
+                } else if (mat.name == "WardrobeMatteWhite") {
+                    materialSpecificityOk &= (mat.specularColor.r <= 0.10f);
+                    ++checkedDistinctMaterials;
+                } else if (mat.name == "FloorLampBrass") {
+                    materialSpecificityOk &= (mat.specularColor.r >= 0.45f && mat.shininess >= 150.0f);
+                    ++checkedDistinctMaterials;
                 }
             }
             const glm::vec3 sz = loaded.localBounds.getSize();
             const bool pivotOnFloor = (std::fabs(loaded.localBounds.min.y) < 1e-3f);
-            allBlenderLoaded &= pivotOnFloor && loaded.getTotalTriangleCount() > 0;
+            const bool dimConsistent =
+                std::fabs(sz.x - entry->defaultDimensions.x) <= 0.03f &&
+                std::fabs(sz.y - entry->defaultDimensions.y) <= 0.03f &&
+                std::fabs(sz.z - entry->defaultDimensions.z) <= 0.03f;
+            if (!dimConsistent) {
+                std::cerr << "    [FAIL] Catalog dimension mismatch for " << entry->assetId
+                          << ": catalog=(" << entry->defaultDimensions.x << "," << entry->defaultDimensions.y << "," << entry->defaultDimensions.z
+                          << ") actual=(" << sz.x << "," << sz.y << "," << sz.z << ")" << std::endl;
+            }
+            allBlenderLoaded &= pivotOnFloor && loaded.getTotalTriangleCount() > 0 && dimConsistent;
 
             std::cout << "    [BlenderAsset] " << entry->assetId
                       << " | subMeshes=" << loaded.subMeshes.size()
@@ -116,6 +139,8 @@ int runAssetCatalogTests()
         }
 
         check("M7-T09 imported aluminum retains Ks and Ns from MTL", mappedAluminum);
+        check("RC2-P1-MAT Blender MTL palette differentiates fabric/soil/matte/brass (no uniform Ks=0.5)",
+              materialSpecificityOk && checkedDistinctMaterials >= 7);
         check("TC-M3-23 All 8 Blender OBJ/MTL furniture assets imported & normalized (y=0)", allBlenderLoaded);
     }
 

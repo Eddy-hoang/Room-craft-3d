@@ -538,7 +538,7 @@ void RoomEditor::setLightingPreset(graphics::LightingPreset preset)
 
 void RoomEditor::fitCameraToRoom(graphics::Camera& camera)
 {
-    m_cameraController.fitBoundingBox(m_scene.getRoom().getExteriorBounds(), camera, 1.22f);
+    m_cameraController.fitRoomView(m_scene.getRoom(), camera, 1.07f);
 }
 
 void RoomEditor::fitCameraToSelected(assets::AssetManager& assetManager, graphics::Camera& camera)
@@ -564,12 +564,12 @@ void RoomEditor::fitCameraToSelected(assets::AssetManager& assetManager, graphic
 
 void RoomEditor::setPerspective3DCamera(graphics::Camera& camera)
 {
-    m_cameraController.setPerspectivePreset(m_scene.getRoom().getExteriorBounds(), camera);
+    m_cameraController.setPerspectiveRoomPreset(m_scene.getRoom(), camera);
 }
 
 void RoomEditor::setIsometricCamera(graphics::Camera& camera)
 {
-    m_cameraController.setIsometricPreset(m_scene.getRoom().getExteriorBounds(), camera);
+    m_cameraController.setIsometricRoomPreset(m_scene.getRoom(), camera);
 }
 
 void RoomEditor::setTopViewCamera(graphics::Camera& camera)
@@ -663,6 +663,8 @@ void RoomEditor::renderSceneToFramebuffer(assets::AssetManager& assetManager,
     opts.showAxes = showAxes;
     opts.showSelectedBoundingBox = showSelectedBBox;
     opts.showMoveGizmo = showMoveGizmo && (m_interactionState.activeTool == systems::TransformMode::Move);
+    opts.useStudioBackground = true;
+    opts.useToneMapping = true;
     opts.activeGizmoAxis = (m_interactionState.phase == systems::InteractionPhase::Moving)
                                ? m_interactionState.axisConstraint
                                : systems::AxisConstraint::None;
@@ -1284,6 +1286,40 @@ void RoomEditor::renderViewportOverlays(const PanelRect& rect, graphics::Camera&
     }
     ImGui::PopStyleColor();
 
+    // 2b. Compact Passive Viewport Orientation Indicator (RC2.6) ở góc trên-phải dưới cụm nút Solid/Grid
+    {
+        const ImVec2 center(rect.x + rect.width - 34.0f, rect.y + 66.0f);
+        const float axisLen = 20.0f;
+        dl->AddCircleFilled(center, 25.0f, IM_COL32(22, 26, 34, 175), 24);
+        dl->AddCircle(center, 25.0f, EditorTheme::toU32(tokens::kBorder, 0.65f), 24, 1.0f);
+
+        const glm::mat3 viewRot(camera.getViewMatrix());
+        struct AxisItem {
+            glm::vec3 dir;
+            const char* label;
+            ImU32 color;
+            float depth;
+        };
+        AxisItem axes[3] = {
+            {viewRot * glm::vec3(1.0f, 0.0f, 0.0f), "X", IM_COL32(232, 92, 92, 245), 0.0f},
+            {viewRot * glm::vec3(0.0f, 1.0f, 0.0f), "Y", IM_COL32(96, 206, 126, 245), 0.0f},
+            {viewRot * glm::vec3(0.0f, 0.0f, 1.0f), "Z", IM_COL32(94, 158, 240, 245), 0.0f}
+        };
+        for (auto& a : axes) a.depth = a.dir.z;
+        std::sort(std::begin(axes), std::end(axes), [](const AxisItem& a, const AxisItem& b) {
+            return a.depth < b.depth; // Vẽ trục xa trước, trục gần đè lên trên
+        });
+        for (const auto& a : axes) {
+            const ImVec2 tip(center.x + a.dir.x * axisLen, center.y - a.dir.y * axisLen);
+            dl->AddLine(center, tip, a.color, 2.0f);
+            dl->AddCircleFilled(tip, 3.0f, a.color, 10);
+            const ImVec2 lblPos(center.x + a.dir.x * (axisLen + 7.5f) - 3.5f,
+                                center.y - a.dir.y * (axisLen + 7.5f) - 6.0f);
+            dl->AddText(lblPos, a.color, a.label);
+        }
+        dl->AddCircleFilled(center, 2.5f, IM_COL32(215, 222, 232, 230), 10);
+    }
+
     // 3. Góc dưới-trái: Pill hiển thị công cụ & đối tượng đang chọn
     std::string modeBadge = std::string(systems::transformModeToString(m_interactionState.activeTool));
     if (m_selection.hasSelection()) {
@@ -1794,6 +1830,7 @@ void RoomEditor::renderRoomSettingsContent(assets::AssetManager& assetManager)
     if (ImGui::CollapsingHeader("Collision & Placement", ImGuiTreeNodeFlags_DefaultOpen)) {
         static constexpr const char* kModeLabels[] = {"Off", "Warning Only", "Prevent Invalid"};
         int modeIdx = static_cast<int>(m_placementMode);
+        ImGui::SetNextItemWidth(std::max(110.0f, ImGui::GetContentRegionAvail().x * 0.56f));
         if (ImGui::Combo("Validation Mode", &modeIdx, kModeLabels, 3)) {
             setPlacementValidationMode(static_cast<systems::PlacementValidationMode>(modeIdx));
         }
@@ -1891,6 +1928,7 @@ void RoomEditor::renderRoomSettingsContent(assets::AssetManager& assetManager)
         ImGui::Checkbox("Show Ceiling", &m_roomDraft.showCeiling);
     }
     ImGui::Checkbox("Show Room Grid", &m_roomDraft.showGrid);
+    ImGui::Checkbox("Show Decorative Window", &m_roomDraft.showWindow);
 
     ImGui::Spacing();
     if (ImGui::Button("Apply Changes", ImVec2(124.0f, 26.0f))) {

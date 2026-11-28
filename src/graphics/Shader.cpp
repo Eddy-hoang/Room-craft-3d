@@ -99,6 +99,21 @@ bool Shader::loadFromSource(const std::string& vertexSource,
     destroy();
     m_programId = program;
     m_uniformCache.clear();
+
+    // Tách riêng texture unit mặc định cho uDiffuseMap (0) và uShadowMap (1) ngay khi link
+    // để tránh xung đột kiểu sampler2D vs sampler2DShadow cùng nằm trên unit 0 theo chuẩn OpenGL 3.3 Core.
+    const GLint shadowLoc = glGetUniformLocation(m_programId, "uShadowMap");
+    if (shadowLoc >= 0) {
+        GLint prevProgram = 0;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &prevProgram);
+        glUseProgram(m_programId);
+        const GLint diffuseLoc = glGetUniformLocation(m_programId, "uDiffuseMap");
+        if (diffuseLoc >= 0) {
+            glUniform1i(diffuseLoc, 0);
+        }
+        glUniform1i(shadowLoc, 1);
+        glUseProgram(static_cast<GLuint>(prevProgram));
+    }
     return true;
 }
 

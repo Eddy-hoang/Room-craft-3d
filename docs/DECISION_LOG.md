@@ -21,3 +21,13 @@
 - **Chấp thuận Directional Shadow Mapping (M9.4)**: Sau khi đo benchmark Release trên Intel UHD Graphics cho thấy chi phí Directional Shadow Map `1024×1024` (3×3 PCF) chỉ là **`+0.61 ms`** (`2.12 ms → 2.73 ms`, giữ **`366.5 FPS`**, tương thích MSAA 4× ở **`292.2 FPS`**) và tăng rõ rệt chất lượng thị giác, quyết định giữ bật mặc định kèm công tắc & tùy chọn `512/1024/2048` trong `Room Settings`. `M7_LightingGpu` vẫn pass 100% nhờ mặc định shader `uShadowEnabled = 0`.
 - **Tách biệt `preferences.json` khỏi `.roomcraft`**: Tùy chọn UI (`PreferencesManager`) lưu riêng theo người dùng tại `%APPDATA%\RoomCraft3D\preferences.json`, tắt `imgui.ini` để không làm bẩn thư mục làm việc hoặc gói portable chỉ đọc.
 - **Giữ `Rotate/Scale Visual Gizmos` (`M9-F18`) ở trạng thái `DEFERRED`**: Không đánh đổi tiến độ và độ ổn định của Release Candidate vì tương tác `R`/`S` + trục `X/Y/Z` + Inspector đã đầy đủ và kiểm chứng.
+
+
+---
+
+## Quyết định Kiến trúc — M9 Visual Quality Refinement (`v1.0.0-rc2`)
+
+- **DEC-RC2-01 (In-Shader ACES Tone Mapping thay vì HDR FBO riêng)**: Thực hiện ACES Filmic Tone Mapping trên biến `vec3 rgb` float tuyến tính ngay trong `mesh.frag` trước `displayColor()` giúp xử lý đầy đủ HDR không clipping mà không tốn thêm pass resolve `GL_RGBA16F` trên Intel UHD, giữ nguyên tương thích MSAA 2×/4× và không tác động lên Dear ImGui/gizmo/M7 linear tests (`uToneMapEnabled = 0` mặc định).
+- **DEC-RC2-02 (Front-Face Culling có chọn lọc cho tường đặc + Double-Sided cho nội thất)**: Chỉ bật `GL_CULL_FACE(GL_FRONT)` cho 4 khối hộp tường đặc khép kín trong shadow pass để triệt tiêu wall shadow acne mà không làm mất bóng của chi tiết nội thất mỏng/hở (chụp đèn, lá cây).
+- **DEC-RC2-03 (Analytical Floor Contact Grounding thay cho SSAO toàn màn hình)**: Dùng OBB signed distance trên sàn `Y = 0` (tối đa 16 vật thể đứng sàn, chỉ giảm nhẹ ambient) để giữ nhẹ trên Intel UHD, tránh quầng đen và tránh bóng giả dưới đèn bàn/máy tính.
+- **DEC-RC2-04 (Giữ ổn định 14 Asset ID & Schema v1)**: Chỉ rút gọn `displayName` hiển thị cho 6 mẫu C++, thêm `room.showWindow` tùy chọn để bảo đảm tương thích ngược 100% với tệp `.roomcraft` từ M8 và RC1.

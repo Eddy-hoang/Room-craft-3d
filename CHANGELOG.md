@@ -4,6 +4,29 @@ Tất cả các thay đổi đáng chú ý của dự án được ghi nhận tr
 
 ## [Unreleased]
 
+## [1.0.0-rc2] - 2026-11-28 (Milestone M9 Visual Quality Refinement — Release Candidate 2)
+### Added
+- **Hardware Bilinear Shadow Mapping & Texel-Snapped Frustum (`RC2.1`)**: Chuyển `ShadowMap` sang `GL_COMPARE_REF_TO_TEXTURE` + `GL_LINEAR` (`sampler2DShadow`), frustum chiếu vuông có texel-snapping, 5-tap bilinear PCF, normal-offset bias theo kích thước texel thế giới, `glPolygonOffset(1.4, 1.8)` và `GL_FRONT` culling riêng cho 4 tường hộp kín.
+- **ACES Filmic Tone Mapping & Balanced Lighting (`RC2.2`)**: Bổ sung ACES Filmic (Narkowicz 2015) trong không gian float tuyến tính trước bước chuyển sRGB duy nhất (`uToneMapEnabled` bảo toàn 100% M7 linear tests), ánh sáng bán cầu 2 tông màu + soft bounce fill, hiệu chỉnh lại 4 lighting presets (`Daylight`, `Warm Interior`, `Neutral Studio`, `Evening`).
+- **Studio Viewport Presentation & Exact Room Framing (`RC2.3`)**: Thêm `Room::getVisibleBounds()` / `collectVisibleCornerPoints()`, `CameraController::fitRoomView()` căn tâm NDC 3 vòng (không cắt phòng, tăng độ phủ silhouette lên `45.8%–55.4%`), shader nền Studio Radial Gradient (`studio_bg.vert/frag` kèm dither + fallback nhúng), ẩn mặc định Grid & Axes khi trình bày.
+- **Material Differentiation, Anisotropic Filtering & Soft Contact Grounding (`RC2.4`)**: Energy-aware Blinn-Phong + Schlick Fresnel, truy vấn mở rộng `GL_EXT_texture_filter_anisotropic` an toàn theo OpenGL 3.3 Core (`glGetStringi`, tối đa `8×`), Soft Floor Contact Grounding Shadows (OBB XZ tối đa 16 vật đứng sàn chỉ tác động ambient).
+- **Room Architecture & Procedural Modeling (`RC2.5`)**: Thêm Baseboards 4 tường, Cửa sổ kiến trúc trang trí trên tường Bắc (`room.showWindow`, tương thích ngược `.roomcraft` M8/RC1), chống moiré vân ván sàn gỗ bằng `fwidth()`, nâng cấp `Procedural Desk` (mặt bàn vát cạnh 2 lớp, yếm, ngăn kéo & tay nắm đồng) và `Procedural Bookshelf` (plinth, sách đa màu & hộp vải linen sinh bằng C++).
+- **Editor Presentation (`RC2.6`)**: Thêm **Passive 3D Orientation Indicator** góc trên-phải viewport, nâng cấp thumbnail framing (`1.16f` + studio tone map), tăng tỷ lệ `Scene Hierarchy` mặc định lên `0.43`.
+- **RC2 Regression Coverage, Benchmark & Documentation**: Bổ sung các kiểm thử hồi quy `RC2-P0-PRESET`, `RC2-P0-CAM`, `RC2-P0-DIM`, `RC2-P1-MAT`, `RC2-P1-ARCH`, `RC2-GPU-01..03`, benchmark 300 khung hình + Complete Editor Frame, `18` ảnh GPU thật + `4` bảng so sánh RC1 vs RC2 (`docs/evidence/rc2/`), và các tài liệu `docs/RC2_IMPLEMENTATION_PLAN.md`, `docs/RC2_VISUAL_QUALITY_REPORT.md`, `docs/RC2_DELIVERY.md`.
+
+### Fixed
+- **BUG-01 / BUG-03 (Shadow Acne & Aliasing)**: Triệt tiêu vân Moiré đồng tâm trên tường (`UpperWestWall meanDiff = 0.938 < 1.5`) và lỗi răng cưa/peter-panning bóng ở `Evening`.
+- **BUG-02 (Wall Overexposure)**: Giảm số pixel cháy sáng (`≥ 248`) từ `8.47%` (`Warm Interior`) và `5.98%` (`Gaming Workspace`) xuống **`0.00%`**.
+- **BUG-04 / BUG-06 (Gaming Workspace Warnings & Indoor Plant Metadata)**: Đồng bộ `defaultDimensions` cả 8 Blender assets theo bounding box chuẩn hóa thực tế (`Indoor Plant`: `0.89 × 1.08 × 0.87 m`) và chỉnh bố cục `Gaming Workspace` đạt `0` va chạm / `0` vượt biên trên cả `3/3` phòng mẫu.
+- **BUG-05 (Uniform `Ks = 0.50`)**: Hiệu chỉnh `Ks/Ns` riêng biệt cho toàn bộ 8 file `.mtl` (vải, thảm, đất, gỗ, gốm, kim loại; giữ nguyên `ComputerAluminum`).
+- **BUG-07 (`computeRoomCornerAO`)**: Giới hạn chỉ áp lên bề mặt phòng (`uIsRoomSurface`) và tôn trọng mặt nạ tường hiển thị (`uVisibleWalls`), loại bỏ tối giả ở mép sàn Cutaway trống và đồ nội thất.
+- **BUG-08 (Truncated Card Labels & Combo Label)**: Rút gọn tên hiển thị 6 mẫu C++ hết cắt chữ (giữ nguyên `assetId` 100%) và căn rộng combo `Validation Mode`.
+
+### Verified
+- **Release (`mingw-x64-release`)**: `0` errors, `0` project warnings, **`19/19` CTest PASS (`5.95 s`)**; `Complete Editor Frame (30 obj + ImGui + MSAA 4× + Shadows 1024)` đạt **`112.0 FPS` (`8.93 ms` avg / `11.78 ms` p95)** trên Intel UHD Graphics.
+- **Debug (`mingw-x64-debug`)**: `0` errors, `0` project warnings, **`19/19` CTest PASS (`6.62 s`)**.
+- **Portable Package**: `dist/RoomCraft3D-v1.0.0-rc2-win64.zip` kèm `SHA256SUMS.txt` (giữ nguyên gói `v1.0.0-rc1` để đối chiếu), đã kiểm chứng thực thi từ thư mục Unicode ngoài repo (`PORTABLE_CLEAN_EXIT=0`, `OpenGL errors: NONE`).
+
 ## [1.0.0-rc1] - 2026-11-28 (Milestone M9: Testing, Optimization, Polish, Shadow Mapping & Portable Packaging — Release Candidate)
 ### Added
 - **Directional Shadow Mapping & Architectural Shading (`roomcraft_engine` — M9.4)**:
